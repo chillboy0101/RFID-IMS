@@ -1,0 +1,841 @@
+--- PAGE 1 ---
+i 
+ 
+ 
+FACULTY OF INFORMATION TECHNOLOGY AND 
+COMMUNICATION STUDIES 
+ 
+DEPARTMENT OF INFORMATION TECHNOLOGY STUDIES 
+ 
+UNDERGRADUATE WORK 
+PROPOSAL 
+Development of an Internet of things-based Inventory Management System for Vanessa 
+Derrick Logistics (VDL) Fulfillment 
+BY 
+BOAKYE-YIADOM KWEKU -10298655 
+HAYFORD PRINCE CHARLES – 10299689 
+JOANITA SAKORDIE ADDO -10303523 
+PHILOMINA ESI DZIFA AGBOADO 10303724 
+GROUP: 75 
+ 
+ 
+ 
+
+
+--- PAGE 2 ---
+i 
+ 
+ 
+ 
+THIS PROJECT PROPOSAL IS SUBMITTED TO THE DEPARTMENT OF 
+INFORMATION TECHNOLOGY STUDIES OF THE FACULTY OF 
+INFORMATION TECHNOLOGY AND COMMUNICATION STUDIES OF THE 
+UNIVERSITY OF PROFESSIONAL STUDIES, ACCRA, IN PARTIAL 
+FULFILLMENT FOR A BACHELOR OF SCIENCE DEGREE IN INFORMATION 
+TECHNOLOGY MANAGEMENT 
+ 
+ 
+ 
+NOVEMBER 2025 
+ 
+  
+
+--- PAGE 3 ---
+ii 
+ 
+TABLE OF CONTENTS 
+ 
+TABLE OF CONTENTS ................................................................................................................ ii 
+ABSTRACT ................................................................................................................................... iv 
+CHAPTER ONE ............................................................................................................................. 1 
+1.0 Introduction ............................................................................................................................... 1 
+1.1 Background ............................................................................................................................... 1 
+1.2 Problem Statement .................................................................................................................... 2 
+1.3 Study Objective ......................................................................................................................... 3 
+1.3.1 General Objective .................................................................................................................. 3 
+1.3.2 Specific Objective .................................................................................................................. 3 
+1.4 Scope of the Project .................................................................................................................. 4 
+1.5 Significance of the Study (Non-IT and IT related) ................................................................... 5 
+1.6 Limitations of the Project.......................................................................................................... 5 
+1.7 Structure of the Study ............................................................................................................... 6 
+CHAPTER TWO ............................................................................................................................ 7 
+LITERATURE REVIEW ............................................................................................................... 7 
+2.1 Introduction ............................................................................................................................... 7 
+2.2 Theoretical Review ................................................................................................................... 7 
+2.3 Review of Research Variables .................................................................................................. 8 
+2.4 Contextual background of the study area ................................................................................ 10 
+2.5 Review of Existing Systems and Technologies ...................................................................... 11 
+2.6 Proposed System ..................................................................................................................... 11 
+2.7 Chapter Summary ................................................................................................................... 12 
+
+--- PAGE 4 ---
+iii 
+ 
+CHAPTER THREE ...................................................................................................................... 13 
+RESEARCH METHODOLODY .................................................................................................. 13 
+3.1 INTRODUCTION .................................................................................................................. 13 
+3.2 Research Design...................................................................................................................... 13 
+3.3 Population ............................................................................................................................... 14 
+3.4 Sample and Sampling Techniques .......................................................................................... 14 
+3.5 Data Collection and Instruments ............................................................................................. 15 
+3.6 System Development Methodology ........................................................................................ 15 
+3.7 Crystallization of the Problem ................................................................................................ 18 
+3.8 Requirements of the Proposed System ................................................................................... 19 
+3.9 Design of the System .............................................................................................................. 23 
+3.9.1 System Architecture ............................................................................................................. 23 
+3.9.2 System Modules ................................................................................................................... 24 
+3.9.3 Data Flow Summary ............................................................................................................ 26 
+3.9 PROJECT TIMELINE ............................................................................................................ 27 
+3.11 Project Budget ....................................................................................................................... 28 
+4.0 REFERENCES ....................................................................................................................... 29 
+ 
+ 
+  
+
+--- PAGE 5 ---
+iv 
+ 
+ABSTRACT 
+This study presents the development of an Internet of Things technology based for inventory 
+management for the Dome Branch of Vanessa Derrick Logistics (VDL) Fulfilment. The branch 
+uses traditional  stock counting to  manage inventory which  result in frequent inaccuracies, 
+operational delays and a lack of reliable data on stock. The research employed a system 
+development and descriptive research methodology to identify current operational challenges and 
+create an Internet of Things system tailored to the company's situation. Data were gathered from 
+warehouse employees and administrators through interviews, questionnaires, observations, and 
+detailed requirements analysis. The  new system incorporates Radio Frequency Identification 
+technology, various sensors, and a real time monitoring dashboard to automate stock detection. 
+Key capabilities of the system include automatic item identification, instant inventory updates, low 
+stock notifications, anomaly alerts, and improved item picking routes. The Technology 
+Acceptance Model (TAM) is used to evaluate user acceptance and the system’s usability by 
+assessing its perceived usefulness and ease of use.  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+--- PAGE 6 ---
+1 
+ 
+CHAPTER ONE 
+1.0 Introduction 
+1.1 Background 
+In today’s global marketplace, inventory management has become a vital backbone of every 
+organization. It involves the process of tracking, controlling, and monitoring goods from 
+procurement to final sale. According to Atnafu (2018), inventory management systems ensure that 
+the right quantity of items is available at the right time, minimizing waste, cost, and delays. 
+Globally, industries have realized that poor inventory management causes stock outs, 
+overstocking, and customer dissatisfaction (Mashayekhy, 2022). 
+Production management module of the system can manage product categories of system 
+production; Warehouse management (Huynh et al., 2014) includes inventory management and out 
+of storage management functi on, the former monitoring products in stock information, the latter 
+shipment handling according to processed orders. Internet of Things allows organizations to track 
+stock levels in real -time, monitor environmental conditions, and predict demand with high 
+accuracy (Ugbebor, 2024). Based on the data about the inventory quantity and location, machine 
+learning, a component of IoT-based inventory management solution architecture (Lin, 2012; Gubbi 
+et al., 2013), can forecast the number of raw materials needed for the upcoming production cycle. 
+ However, inventory  systems are not without challenges. The good side includes real -time 
+visibility, faster delivery, and better decision -making (Kawa, 2021), while the bad  side involves 
+high setup cost, network reliability issues, and a shortage of technical skills (Mashayekhy, 2022) 
+From a global perspective, large economies such as the USA, China, and Germany are already 
+implementing smart inventory systems integrated with robotics and cloud computing. In Africa, 
+several countries like Kenya, South Africa, and Nigeria are experimenting with Internet of Things 
+
+--- PAGE 7 ---
+2 
+ 
+adoption in logistics and warehouse management, although challenges such as poor infrastructure 
+and internet connectivity persist (Ugbebor, 2024). In Ghana, most firms still rely on manual or 
+semi-automated systems, which limit e fficiency and transparency. Studies reveal that poor 
+inventory management practices contribute to loss of revenue, delays in order fulfilment, and 
+reduced customer satisfaction (Opoku et al., 2021). 
+Therefore, designing and implementing a smart inventory management system leveraging Internet 
+of Things is crucial for Ghanaian firms especially VANESSA DERRICK LOGISTICS Fulfilment. 
+ 
+1.2 Problem Statement 
+Inventory management is a critical function in every organization, as it ensures that the right 
+quantity of products is available to meet customer demand while minimizing waste and costs.  
+Traditional inventory systems often rely on manual data entry and periodic stock counts, which 
+are prone to human error and delay  (Mashayekhy, 2022 ). While these systems can h elp track 
+goods, they fail to provide real -time updates, resulting in poor decision -making, financial losses, 
+and reduced customer satisfaction. An analysis of issues involved in assessing inventory 
+management systems reveals that inventory management ofte n holds a process, planning, 
+information and organizational dimension (Corbey and Jansen, 1993; Alfaro and Tribo, 2003; 
+Abdul-Jalbar et al., 2003; Lutz et al., 2003). Internet of Things devices can automatically sense, 
+track, and report inventory movement,  enabling real -time visibility and automation (Ugbebor, 
+2024).  
+In Africa these challenges are even more pronounced. Most organizations continue to use semi -
+automated or paper-based inventory systems that make it difficult to synchronize stock information 
+across suppliers and customers (Ugbebor, 2024). As a result, firms often experience late deliveries, 
+
+--- PAGE 8 ---
+3 
+ 
+inaccurate records, and inefficiencies that reduces competitiveness in African supply chain (Opoku 
+et al.,2021; Adjei & Mensah, 2022). 
+In Ghana,= companies rely on manual spreadsheets or outdated software that cannot provide real-
+time visibility into vendor stock levels. This gap makes it difficult to ensure efficient coordination 
+between vendors, warehouses, and customers. 
+To address this persistent gap, th is study proposes the design and implementation of a smart 
+inventory management system leveraging Internet of Things technology, called “Inventory Eye”.  
+ 
+1.3 Study Objective 
+1.3.1 General Objective 
+To design a smart inventory management system leveraging Internet of Things technology for 
+VDL Fulfilment. 
+1.3.2 Specific Objective 
+Based on general objectives this study has four specific objectives 
+a. To assess the current inventory management system of VDL Fulfilment to identity prospect 
+and challenges of VDL Fulfilment’s existing inventory management system. 
+ 
+b. To develop administrative policies and procedures that support the smooth integration of an 
+Internet of Things based inventory system (Inventory Eye) into daily operations. 
+ 
+c. To design an Internet of Things based system that can automatically monitor and update 
+inventory information in real time. 
+ 
+
+--- PAGE 9 ---
+4 
+ 
+d. To test the performance and reliability of the “Inventory Eye” system in improving inventory 
+management operations. 
+ 
+1.4 Scope of the Project 
+This study focuses on the design and implementation of a smart inventory management 
+ system, known as Inventory Eye, which leverages Internet of Things technology to 
+ enhance operational efficiency. The research will primarily cover both administrative and 
+ technical aspects of inventory management. Administratively, the study will examine the existing 
+inventory management practices, identify operational challenges, an d evaluate how smart 
+technologies can improve efficiency, coordination, and decision-making. The focus will be on how 
+management policies and  employee readiness influence the adoption and success of digital 
+inventory systems. 
+ The technical scope will cover system architecture design, 
+software development, testing, and of performance in terms of speed, reliability,  
+accuracy. 
+Geographically, the study will be conducted in Ghana, focusing on VANESSA 
+DERRICK LOGISTICS Fulfilment. The study will not cover the entire supply chain but will limit 
+itself to inventory monitoring, vendor coordination, and order fulfilment processes. The time scope 
+will focus on system design and testing within a defined operational period. Internet of Things 
+sensors like radio frequency identification systems, sensors for tracking items or product and quick 
+response codes for real -time stock tracking, automated alerts, and a central database for 
+synchronizing inventory information between vendors and logistics units. The technical scope will 
+cover system architecture design, software development, testing, and of  performance in terms of 
+
+--- PAGE 10 ---
+5 
+ 
+speed, reliability, and accuracy. 
+ 
+1.5 Significance of the Study (Non-IT and IT related) 
+a. The study will help ensure that inventory recorded are accurate by minimizing the variation 
+between the quantity of goods stored in the warehouse and the quantity of goods recorded in the 
+system.   
+b. The study will improve the efficiency of staff by reducing delays caused by tradi tional stock 
+counting.  
+c. The system will automatically monitor inventory as well as give update on stock levels with the 
+use of Internet of Things (IoT) devices such as RFID tags and sensors.  
+d. The system will provide a flexible technology base that the company can easily expand and add 
+new feature to suit future technology initiatives. 
+ 
+1.6 Limitations of the Project 
+This study has drawbacks despite its significance. First and foremost, the use of Internet  
+Things technology such as Radio Frequency identification tags, sensors, and network  
+equipment may require capital for purchase, which could affect the full implementation of  
+the system.  
+Moreover, the system’s performance depends on a good internet connectivity. In areas  
+with poor network, data will not be effectively generated 
+In addition, the study will be limited by the technical skills of staffs.  Employees must  
+acquire training before they can use the system comfortably. Finally, the study focuses  
+mainly on a particular branch. This means that study is restricted to the Dome branch and  
+
+--- PAGE 11 ---
+6 
+ 
+the findings represent work challenges related to inventory management. 
+ 
+1.7 Structure of the Study 
+The study is grouped into five main chapters, each chapter focusing on a specific part of the study. 
+Chapter One presents the introduction of the study, which include background, problem statement, 
+research objectives, research question, scope of the study, significance of the study, and limitations 
+of the study.  
+Chapter Two highlights  relevant literatur e, including theoretical review, research variables, 
+contextual background of the study area, existing systems, and technological as well as proposed 
+systems.  
+Chapter Three outlines the research design, population, sampling and sampling technique, data 
+collection instrument, and system development methodology, crystallization of the problem, 
+requirements of the proposed system and design of the system 
+Chapter Four discusses the implementation of the proposed systems and testing.  
+Chapter Five presents the summary, conclusions, and recommendations. 
+ 
+ 
+ 
+ 
+  
+
+--- PAGE 12 ---
+7 
+ 
+CHAPTER TWO 
+LITERATURE REVIEW 
+2.1 Introduction 
+The integration of technology into inventory management has revolutionized operational 
+efficiency in logistics and the IoT played a crucial raise in it.  This chapter is focused on the 
+application of the Technology Acceptance Model (TAM) and other technology adoption theories 
+to the Inventory Eye IoT -based system which aims to address continuous challenges within the 
+Vanessa Derrick Logistics (VDL) Dome branch. 
+ 
+2.2 Theoretical Review 
+ The theoretical review outlines the core concepts that guides the design and implementation of a 
+smart inventory management system for VDL. The key theory relevant to this theory is the 
+Technology Acceptance Model (TAM). 
+Technology Acceptance Model  
+The Technology Acceptance Model, developed by Davis (1989), is one of the most widely used 
+theories to explain how users accept and use new technologies. According to TAM, there are two 
+main factors that determine user acceptance. Thus, Perceived Usefulness (PU), the degree to which 
+a person believes that using a system will improve their job performance and Perceived Ease of 
+Use (PEOU), the degree to which a person believes that using a system will be free of effort. In 
+the context of this study, TAM helps to explain how administrators and warehouse staff are likely 
+to adopt and use the Inventory Eye system. Consequently, the more employees realize that the 
+system will make their task to easier to perform; the higher is the probabili ty that they will use it 
+and accept the technology as being useful (Dillon & Morris, 1996). If it helps them monitor stock 
+
+--- PAGE 13 ---
+8 
+ 
+in real time, reduces manual work and easy to operate, they are more likely to accept and 
+continuously use it. Researchers such as (Venkatesh & Davis, 2000) & (Gefen, 2003) have shown 
+that perceived usefulness strongly predicts technology adoption in organizational environments  
+By applying this theory, this study ensures that the system design prioritizes user satisfaction, 
+efficiency, and simplicity, making technology adoption smoother in a developing country context. 
+Despite its frequent use, leading the original proposers to  attempt to redefine it several times. 
+Criticisms of TAM as a “ theory” include its questionable estimation value, limited explanatory 
+and predictive power, unimportant, and lack of any practical value.  
+ 
+2.3 Review of Research Variables 
+This chapter presents a comprehensive review of existing academic literature on inventory 
+management practices, the integration o f Internet of Things (IoT) technologies in warehousing, 
+and the application of intelligent systems within supply chain operations. It also explores the major 
+theoretical frameworks that explain how organizations adopt, implement, and utilize technological 
+innovations in Supply Chain Management (SCM). Together, these strands of literature form the 
+foundation for understanding the relevance and potential impact of an IoT -based intelligent 
+inventory management system. 
+ 
+The review begins with traditional and contemporary inventory management approaches, 
+examining how organizations maintain stock accuracy, minimize operational inefficiencies, and 
+improve service delivery. It highlights common limitations of manual and pape r-based systems 
+such as errors, delays, and limited visibility which are directly reflected in the operational 
+workflow of the VDL Dome Branch. These limitations are seen in the branch’s dependence on 
+
+--- PAGE 14 ---
+9 
+ 
+physical stock-taking, slow updates, and inconsistencie s between recorded and actual inventory 
+levels. 
+ 
+Next, the literature on IoT enabled warehousing is surveyed, emphasizing how technologies such 
+as RFID tags, sensors, barcode automation, wireless networks, and cloud platforms transform 
+inventory operations. Scholars consistently show that IoT improves real-time visibility, enhances 
+tracking, reduces human error, and supports predictive decision -making. These benefits strongly 
+align with the needs of the VDL Dome Branch, where the absence of real -time monito ring 
+contributes to stock discrepancies, slow fulfilment cycles, and disrupt the flow of goods or services 
+resulting in delays and inefficiencies  
+ 
+The review also examines intelligent systems such as automated data analytics, machine learning, 
+and smart dashboards which help organizations interpret warehouse data and optimize decisions. 
+For a facility like the VDL Dome Branch, these technologies can provide timely alerts, automate 
+routine tasks, and ensure accurate reporting, eventually strengthening the  branch’s fulfilment 
+reliability. 
+ 
+Finally, the chapter assesses technology adoption theories, including the Technology Acceptance 
+Model (TAM), Diffusion of Innovation (DOI), and the Technology Organization Environment 
+(TOE) framework. These theories help ex plain the factors influencing the willingness and 
+readiness of an organization like the VDL Dome Branch to adopt an IoT -based solution. 
+Understanding these factors such as perceived usefulness, organizational capacity, staff readiness, 
+and environmental pressures helps identify potential barriers and enablers to implementation. 
+
+--- PAGE 15 ---
+10 
+ 
+Through this review, the chapter identifies a clear research gap: although IoT and intelligent 
+systems have been widely studied globally, there is limited localized research on their application 
+within medium-scale logistics facilities in Ghana, particularly in operational contexts similar to 
+the VDL Dome Branch. Addressing this gap justifies the need for developing an IoT -based 
+intelligent inventory management system tailored to the branch’s operational challenges. 
+ 
+2.4 Contextual background of the study area  
+ Vanessa Derrick Logistics (VDL) Fulfilment is a limited company founded in the year 2019 by 
+Vanessa Omari. It has over 5 branches in Ghana and operates  as a m edium-scale logistics and 
+warehousing facility serving customers in Ghana . The warehouse stores a diverse range of 
+products including fast moving consumer goods and bulky goods  for both retail and wholesale 
+shops. The 500 square meter warehouse has over 90  shelves and has the capacity to store over 
+2000 goods. Current operations involve manual stock -taking and paper -based processes, which 
+contribute to common challenges such as inaccurate stock records, slow fulfilment, and limited 
+visibility of real -time i nventory status. Before  items are brought into the warehouse, vendors 
+contact VDL through email or calls to verify whether there’s enough space for the storage of their 
+products before they are sent in.  While items leaving the warehouse are delivered based  on a 
+customer’s contact via email or call. As a result of the inaccuracy and manual stock-taking of 
+records, VDL Fulfillment faces stockouts often and become slow during peak hours. Due to the 
+increase of incoming goods, orders and handling of different varieties of goods, there is a need for 
+a change in the operational structure of VDL  Fulfillment. The introduction of an inventory 
+management system will be used to communicate with vendors and customers on incoming and 
+outgoing products, take stock-counting and records of available products and delivered products. 
+
+--- PAGE 16 ---
+11 
+ 
+ 
+2.5 Review of Existing Systems and Technologies 
+These are some types of systems that businesses use to manage their stock: 
+a. Manual Systems: Writing things down in books or using Ex cel and this actually slows down 
+work. 
+b. Barcode Systems: some businesses use barcodes to scan items. This is a cheaper way of 
+managing stock 
+c. RFID Systems: business use tags that can be read automatically without scanning one by one. 
+This technology is fast and accurate, but it’s very expensive. 
+d. Warehouse Management Systems (WMS): This is a big software tools like Odoo that help 
+manage warehouse operations. 
+ 
+2.6 Proposed System 
+   The solution is to build a smart inventory system using Internet of Th ings (IoT) technology to     
+help manage stock at Vanessa Derrick Logistics. 
+Main things our system will do:  
+a. Automatically detect items using RFID tags. 
+b. The system will show a real-time information on a dashboard for staff and managers. 
+c. ⁠The system will send alerts when stock is low, close to expiry, or if something unusual happens. 
+d. ⁠Help staff pick items faster by suggesting the best route in the warehouse.    
+ 
+
+--- PAGE 17 ---
+12 
+ 
+2.7 Chapter Summary 
+This chapter reviewed relevant literature to designing an Internet of Things based technology for 
+Inventory Management. The chapter relies on the Technology Acceptance Model, which explains 
+how users adopt new technology based on perceived usefulness and ease of use. Technolog y 
+Acceptance Model helped predict how Vanessa Derrick Logistics Fulfilment warehouse staff and 
+managers would accept the proposed “Inventory Eye” system, especially if it is beneficial, easy to 
+operate, and improves work efficiency. 
+The review also examine d key research variables. Studies on inventory management shows the 
+challenges of manual stock counting which include errors, delays, and stock inconsistencies at 
+Vanessa Derrick Logistics Fulfilment Dome branch. It then explored Internet of Things 
+technologies which include sensors, Radio Frequency Identification tags and wireless networks. 
+These tools provide real time visibility, improve tracking accuracy, reduce manual work, and 
+support predictive decision making. 
+Intelligent systems like smart dashboar ds, automated analytics, and alert-based monitoring were 
+discussed to show how they can enhance warehouse decision making and streamline operations. 
+Such technologies are especially relevant for Vanessa Derrick Logistics Fulfilment Dome Branch, 
+to manage stock accurately 
+  
+
+--- PAGE 18 ---
+13 
+ 
+CHAPTER THREE 
+RESEARCH METHODOLODY 
+3.1 INTRODUCTION 
+This chapter describes the steps that need to be taken to develop and evaluate the "Inventory Eye" 
+Intelligent Inventory Management System based on the Internet of Things (IoT) for Vanes sa 
+Derrick Logistics (VDL) Fulfillment . The methodology describes the steps, instruments and 
+methods used to make sure that the study  is carried out in a systematic manner, as well as 
+consistent with the project’s aims.  In this  chapter, research design, po pulation and sampling 
+techniques, data collection processes and the system development methodology are described. It 
+also offers a crystallized understanding in the operation of VDL Fulfillment, which form the 
+foundation for defining the system requirement s and design architecture . The combination of  
+qualitative inquiry with an Agile software development methodology,  is intended to create a 
+comprehensive investigation of the organizational challenge as well technological innovation that 
+is being developed to solve the problem. 
+ 
+3.2 Research Design 
+The study will adopt a Qualitative Research Approach, A qualitative approach is chosen because 
+the core objective is to gain an in -depth understanding and rich description of a specific, 
+contemporary phenomenon (the business need/problem) within its real -life context (Yin, 2018). 
+Unlike quantitative research, which focuses on statistical generalization, this approach prioritizes 
+the contextual depth necessary to formulate actionable and tailored business solutions. The 
+research design that will be adopted in the study is interview. Interview will help us gather in depth 
+information about inventory management at Vanessa Derrick Logistics, Fulfilment. Information 
+
+--- PAGE 19 ---
+14 
+ 
+will include the company's specific inventory practice and workflow, user experience, current 
+problems faced by the company, challenges relating to potential implementation of the study. 
+ 
+3.3 Population  
+The target population is defined as the complete group of individuals, objects or events that share 
+a common characteristic, which the researcher aims to study and analyze in order to draw 
+conclusions (Jilcha Sileyew, 2020; Garg, 2016).  
+Due to its size, it employs between 75 and 100 people in a variety of roles. Twenty employees will 
+be the study's target population because of their roles in VDL. 
+ 
+3.4 Sample and Sampling Techniques 
+A purposive sampling technique will be employed to select participants. This non-probability 
+sampling method allows the researcher to deliberately choose individuals who possess 
+specialized knowledge or experience concerning the study topic (Creswell & Poth, 2018). 
+The sample size will consist of approximately participants, distributed as follows: 20 
+CEO 1 
+IT OFFICER 1 
+LOGISTICS OFFICER1 
+INVENTORY SUPERVISOR 1  
+INVENTORY ASSOCIATE  3 
+
+--- PAGE 20 ---
+15 
+ 
+VENDOR RELATIONS OFFICER 1 
+CUSTOMER SERVICE OFFICER 2 
+ACCOUNTS OFFICER 1 
+RIDERS  4 
+DRIVERS  4 
+Purposive sampling is suitable because not every employee is directly involved in inventory 
+management or Internet of Things technology integration. Selecting only those with relevant 
+roles ensures the quality and reliability of responses. 
+ 
+3.5 Data Collection and Instruments 
+The study will employ both primary and secondary data collection instruments 
+3.6 System Development Methodology 
+In developing a system for VANESSA DERRICK LOGISTICS, the software development 
+approach to be used is an Agile m ethodology due to its emphasis on flexibility, 
+engagement and quality assurance. The methodology details the steps, techniques and 
+tools that will be used achieve the specific objectives of the project. 
+a. Requirements gathering  
+Objective: For the system to meet the needs of stakeholders, their requirements need to be 
+captured 
+Method: Conduct stakeholder interviews and workshops  
+
+--- PAGE 21 ---
+16 
+ 
+Tools/Technology:    
+Google forms: For collecting feedback and wants from various stakeholders  
+b. Design and Prototyping  
+Objective: To design and prototype the architecture and features of the system  
+Method: View system architecture which includes IoT and user interfaces  
+Tools/Technology: 
+Prototyping tools: InVision and Axure 
+c. Iteration Planning  
+Objective: Arrange the development process into feasible increment for better delivery  
+Method: Develop a product backlog so that prioritized list of tasks to be completed would 
+be known  
+Tools/Technology: 
+            Agile management tools: ClickUp and Jira to organize task and workflows  
+d. Development  
+Objective: Build system features in phases, ensuring continuous integration and 
+functionality  
+Method: Conducting code reviews often as well as integrate testing  
+Tools/Technology: 
+Version contr ol: Using either git or GitHub for source code management and 
+maintenance  
+
+--- PAGE 22 ---
+17 
+ 
+e. Testing and Validation  
+Objective: Ensuring software quality systematic testing of component and overall system 
+performance  
+Method: Undergo unit tests, integration tests and user acceptance testing (UAT) with 
+stakeholders’ collaboration  
+Tools/Technology:  
+Testing frameworks (Jest): This makes it possible for a unit test to be conducted  
+Appium: This makes it possible for an integration testing to be conducted  
+User testing: This makes it possible to gather user feedback during UAT  
+f. Deployment  
+Objective: Launch the system gradually to users while making sure it meets system 
+standards  
+Method: Roll out features gradually by monitoring system performance, post deployment 
+for user feedback and issue identification  
+Tools/Technology:  
+Cloud Service: Using Microsoft Azure for hosting and deployment activities          
+                     Monitoring tools: Use Prometheus or Grafana for tracking performance and usage. 
+Feedback tools:  Use Google Analytics to analyze user behavior through feedbacks 
+g. Maintenance and Evolution  
+Objective: Keep improving the system based on user feedback and technological 
+
+--- PAGE 23 ---
+18 
+ 
+advancement  
+Method: Regulate frequent updates, bug fixes and enhancements based on user insights 
+and performance data  
+Tools/Technology:  
+Collaboration tool: Microsoft Teams for regular or often communication  
+ 
+3.7 Crystallization of the Problem 
+The inventory management sector faces significant challenges, particularly for VANESSA 
+DERRICK LOGISTICS Fulfilment, a medium -scale logistics provider in Ghana. Traditional 
+inventory management systems have proven inadequate in addressing the complexities of modern 
+supply chains, and this crys tallization identifies key issues that impact inventory management at 
+VDL Fulfilment. 
+Key Issues Identified 
+Three main challenges stand out. First, the reliance on traditional inventory management processes 
+leads to inefficiencies. VDL Fulfilment's depende nce on manual stock counts and data entry not 
+only consumes time but also increases the likelihood of human error, thereby hindering real -time 
+tracking and decision-making. 
+Secondly, there are frequent discrepancies between actual stock levels and recorded data, resulting 
+in inaccurate stock records. This inconsistency can lead to problems such as stock outs or 
+overstocking, which ultimately affect operational efficiency and customer satisfaction. 
+
+--- PAGE 24 ---
+19 
+ 
+Finally, a lack of real -time visibility exacerbates these ch allenges. Without immediate access to 
+inventory updates, the logistical team struggles to respond effectively to customer demands, 
+leading to delays in order fulfillment and a decline in service quality. 
+Proposed Solutions 
+To address these challenges, two pivotal solutions have been proposed. The first is the 
+implementation of the "Inventory Eye" system, which leverages Internet of Things (IoT) 
+technologies like RFID tags and sensors. This system would automate stock monitoring and 
+provide real-time updates on inventory levels and locations, thereby eliminating discrepancies and 
+improving accuracy. 
+The second solution focuses on enhancing workforce readiness through training and support. By 
+equipping staff with the necessary skills to effectively use the new  system, VDL Fulfilment can 
+ensure a smoother transition and better integration of the technology, ultimately leading to 
+improved operational efficiency and customer satisfaction. 
+By tackling these key issues with targeted solutions, VANESSA DERRICK LOGIST ICS 
+Fulfilment has the opportunity to transform its inventory management practices and enhance its 
+overall performance in the competitive logistics landscape. 
+ 
+3.8 Requirements of the Proposed System  
+The "Inventory Eye" system is designed to address the inventory management challenges faced by 
+VANESSA DERRICK LOGISTICS Fulfilment. Below are the key requirements categorized into 
+functional, technical, and operational aspects.  
+
+--- PAGE 25 ---
+20 
+ 
+Functional Requirements 
+a. Real-Time Inventory Tracking 
+o Utilize IoT technologies (e.g., RFID tags and sensors) to automatically detect and 
+update item quantities and locations in the warehouse. 
+b. Automated Alerts 
+o Generate notifications for low stock levels, items approaching expiration, and any 
+unusual inventory movements. 
+c. User Dashboard 
+o Provide a centralized dashboard that displays real -time inventory data, analytics, 
+and operational insights to staff and management. 
+d. Inventory History Logs 
+o Maintain detailed logs of all inventory movements, including additions, removals, 
+and adjustments, allowing for auditing and analysis. 
+e. Vendor Coordination 
+o Facilitate seamless communication between the inventory system and suppliers to 
+streamline reordering processes and improve stock management. 
+ 
+
+--- PAGE 26 ---
+21 
+ 
+f. Search and Reporting 
+o Implement search functionality for qu ick access to inventory information and 
+generate custom reports on stock levels and order fulfillment metrics. 
+g. User Role Management 
+o Allow for role -based access control, enabling different levels of permissions for 
+inventory staff, managers, and administrators. 
+h. Integration with Existing Systems 
+o Ensure compatibility with existing logistics and inventory management software 
+used by VDL Fulfilment for data synchronization and operational continuity. 
+Non-Functional Requirements 
+a. Performance 
+o The system must be abl e to handle a minimum number of concurrent users and 
+transactions per second without degrading performance. 
+o Response times for user actions (e.g., data retrieval, updates) should not exceed a 
+predefined threshold (e.g., 2 seconds). 
+b. Scalability 
+o The architecture must support scalability to accommodate future growth in 
+inventory size, transaction volume, and additional features or functionalities. 
+
+--- PAGE 27 ---
+22 
+ 
+c. Reliability and Availability 
+o The system should have an uptime of 99.9%, ensuring it is constantly available for 
+users, with minimal downtime for maintenance. 
+d. Security 
+o Implement robust security measures to protect sensitive inventory data, including 
+data encryption, secure user authentication, and regular security audits. 
+e. Usability 
+o The user interface should be intuitive and easy to navigate, minimizing the learning 
+curve for staff and promoting efficient interaction with the system. 
+f. Compatibility 
+The system must be compatible with various devices and browsers to ensure accessibility 
+for all users, including mobile devices used on the warehouse floor. 
+g. Maintainability 
+o The system should be designed for easy maintenance and updates, allowing for 
+regular enhancements and bug fixes without significant downtime. 
+h. Data Integrity 
+o Ensure that data entered into the system is  accurate and consistent, with 
+mechanisms in place to detect and prevent errors during data entry and processing. 
+
+--- PAGE 28 ---
+23 
+ 
+3.9 Design of the System 
+The "Inventory Eye" system is designed to modernize inventory management for VANESSA 
+DERRICK LOGISTICS Fulfilment. Wi th a web -based architecture using React Native for the 
+front end and Node.js for the back end, the platform ensures a user -friendly experience for staff 
+and administrators. The system consists of modular components to facilitate efficient inventory 
+tracking, management, and reporting. 
+3.9.1 System Architecture 
+The proposed platform follows a three-tier architecture structure: 
+a. Presentation Layer (Front-End) 
+o User Interface (UI):  Interactive dashboards for both inventory staff and 
+administrators. 
+o Inventory Overview Pages: Displays current stock levels, locations, and alerts. 
+o Order Management Pages: Allows for tracking and managing orders. 
+o Login and Registration Forms: Secure access for staff and admin roles. 
+o Technologies Used:  Built using React Native for cr oss-platform compatibility, 
+ensuring a seamless experience on both web and mobile devices. 
+b. Application Layer (Back-End) 
+o Authentication Logic: Manages login and access controls. 
+o Inventory Management Logic:  Handles inventory updates, alerts, and tracking 
+processes. 
+o Order Processing Logic: Manages the flow of orders from initiation to fulfillment. 
+
+--- PAGE 29 ---
+24 
+ 
+o Analytics and Reporting: Provides insights on inventory levels and user activities. 
+o Technologies Used:  Developed using Node.js, utilizing Express as the web 
+framework for efficient server-side logic and API management. 
+c.  Data Layer (Database) 
+o User Accounts: Stores login credentials and role-based access information. 
+o Inventory Data: Stores details of items, quantities, locations, and status. 
+o Order Records: Maintains logs of orders placed and their status. 
+o Analytical Data: Stores analytics for user activity and inventory performance. 
+o Database Implementation: Utilized MongoDB for flexible data storage, enabling 
+easy access and manipulation of JSON-like data structures. 
+3.9.2 System Modules 
+a. User Authentication Module 
+o Allows both staff and administrators to register, log in, and securely access the 
+system. 
+b. Dashboard Module 
+o Displays vital information including:  
+▪ Current inventory levels 
+▪ Alerts for low stock and expiration 
+▪ Notifications for orders and issues 
+c. Inventory Management Module 
+
+--- PAGE 30 ---
+25 
+ 
+o Contains structured content such as:  
+▪ Detailed views of inventory items 
+▪ Information on item locations and quantities 
+▪ Alerts for stock discrepancies and reporting capabilities 
+d. Order Processing Module 
+o Facilitates:  
+▪ Creation and tracking of orders 
+▪ Updates on order status 
+▪ Notifications for fulfillment 
+e. Progress Tracking Module 
+o Monitors:  
+▪ Completed inventory updates 
+▪ Order fulfillment progress 
+▪ Time spent on tasks 
+f. Admin Management Module 
+o Provides administrators with the capability to:  
+▪ Update inventory and order data 
+▪ Monitor system performance and user activity 
+▪ Manage user accounts and permissions 
+ 
+
+--- PAGE 31 ---
+26 
+ 
+g. Feedback and Evaluation Module 
+o Allows users to submit feedback on:  
+▪ System usability 
+▪ Inventory data accuracy 
+▪ Any encountered issues or suggestions for improvement 
+3.9.3 Data Flow Summary 
+A simplified flow of how data moves within the system: 
+a. User logs into the system → System checks credentials against the database. 
+b. User accesses dashboard → Inventory data is retrieved from the database. 
+c. User adds or updates inventory → The system saves changes and alerts are generated 
+if necessary. 
+d. User processes an order  → Order details are stored in the database and notifications 
+are sent. 
+e. Admin updates inventory data → Changes reflect immediately across the platform for 
+all users. 
+f. User provides feedback → Feedback is captured and stored for future improvement. 
+ 
+ 
+
+--- PAGE 32 ---
+27 
+ 
+3.9 PROJECT TIMELINE 
+The proposed time timeline for the project is as follows; 
+ 
+GANNT CHART       
+Activities Nov,2025 Dec,2025 Jan,2026 Feb,2026 Mar,2026 Apr,2026 May,2026 Jun,2026 
+Proposal 
+Dev/Submission 
+        
+Interview 
+Adminstaration 
+        
+Data Analysis           
+System Development         
+Submission of draft 
+thesis  
+        
+Final Submission          
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+--- PAGE 33 ---
+28 
+ 
+3.11 Project Budget 
+Item Cost Estimated (GHS) 
+Material and Documentation printing 180 
+Transportation Expenses 100 
+Miscellaneous 200 
+Internet Bundle 400 
+TOTAL 880 
+ 
+  
+  
+
+--- PAGE 34 ---
+29 
+ 
+4.0 REFERENCES 
+Afum, E., Issau, K., Agyabeng -Mensah, Y., Baah, C., Dacosta, E., Essandoh, E., & Agyenim 
+Boateng, E. (2023). The missing links of sustainable supply chain management and green 
+radical product innovation between sustainable entrepreneurship orientation and 
+sustainability performance. Journal of Engineering, Design and Technology, 21(1), 167 -
+187. https://doi.org/10.1108/JEDT-05-2021-0267 
+Atnafu, D., & Balda, A. (2018). The impact of inventory managemen t practice on firms’ 
+competitiveness and organizational performance: Empirical evidence from micro and 
+small enterprises in Ethiopia.  Cogent Business &amp; Management , 5(1). 
+https://doi.org/10.1080/23311975.2018.1503219 
+Baxter, Pamela & Jack, Susan. (2010). Qualitative Case Study Methodology: Study Design and 
+Implementation for Novice Researchers. Qualitative Report. 13. 10.46743/2160 -
+3715/2008.1573. https://doi.org/10.46743/2160-3715/2008.1573 
+Garg, R. (2016). Methodology for research I. Indian Journal of Anaesthesia, 60(9), 640. 
+https://doi.org/10.4103/0019-5049.190619 
+Jilcha Sil eyew, K. (2020). Research Design and Methodology. In Cyberspace. 
+https://doi.org/10.5772/intechopen.85731 
+Opoku, R. K., Fiati, H. M., Kaku, G., Ankomah, J., & Agyemang, F. O. (2020). Inventory 
+management practices and operational performance of manufacturing firms in Ghana. 
+Advances in Research, 21(10), 1-18.https://doi.org/10.4102/jtscm.v16i0.609 
+Palinkas, L.A., Horwitz, S.M., Green, C.A. et al. Purposeful Sampling for Qualitative Data 
+Collection and Analysis in Mixed Method Implementation Research. Adm Policy Ment 
+Health 42, 533–544 (2015).  https://doi.org/10.1007/s10488-013-0528-y 
+Tejesh, B. & Neeraja, S... (2018). Warehouse inventory management system using IoT and open-
+source framework. Alexandria Engineering Journal. 57. 10.1016/j.aej.2018.02.003. 
+https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=citation+on+inventory+ma
+nagement+system+using+IoT+devices+&btnG=#d=gs_qabs&t=1764020979265&u=%2
+3p%3DbJZNBrEmRZkJ 
+ 

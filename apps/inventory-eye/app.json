@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "inventory-eye",
+    "slug": "inventory-eye",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.equalizerjr.inventoryeye"
+    },
+    "android": {
+      "package": "com.equalizerjr.inventoryeye",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "name": "inventory-eye",
+      "shortName": "InventoryEye",
+      "display": "standalone",
+      "themeColor": "#0B0F17"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "2ac40f77-bc72-40aa-8567-635ede2711af"
+      }
+    },
+    "owner": "inventory-eye"
+  }
+}

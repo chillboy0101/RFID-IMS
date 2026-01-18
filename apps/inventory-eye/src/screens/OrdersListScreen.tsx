@@ -1,0 +1,277 @@
+import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { FlatList, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
+
+import { apiRequest } from "../api/client";
+import { AuthContext } from "../auth/AuthContext";
+import type { OrdersStackParamList } from "../navigation/types";
+import { AppButton, Badge, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
+
+type Order = {
+  _id: string;
+  status: string;
+  createdAt: string;
+};
+
+type OrdersResponse = {
+  ok: true;
+  orders: Order[];
+};
+
+type Props = NativeStackScreenProps<OrdersStackParamList, "OrdersList">;
+
+export function OrdersListScreen({ navigation }: Props) {
+  const { token } = useContext(AuthContext);
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === "web" && width >= 900;
+  const isWeb = Platform.OS === "web";
+  const [q, setQ] = useState("");
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const filtered = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return orders;
+    return orders.filter((o) => {
+      const id = o._id.toLowerCase();
+      const status = o.status.toLowerCase();
+      const created = new Date(o.createdAt).toLocaleString().toLowerCase();
+      return id.includes(t) || id.slice(-6).includes(t) || status.includes(t) || created.includes(t);
+    });
+  }, [orders, q]);
+
+  const openCount = useMemo(() => filtered.filter((o) => o.status !== "fulfilled" && o.status !== "cancelled").length, [filtered]);
+
+  const load = useCallback(async () => {
+    if (!token) return;
+    setError(null);
+    const res = await apiRequest<OrdersResponse>("/orders", { method: "GET", token });
+    setOrders(res.orders);
+  }, [token]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await load();
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          await load();
+        } catch (e) {
+          if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [load])
+  );
+
+  return (
+    <Screen
+      title="Orders"
+      right={<AppButton title="New" onPress={() => navigation.navigate("OrderCreate")} variant="secondary" iconName="add" iconOnly />}
+    >
+      {error ? <ErrorText>{error}</ErrorText> : null}
+
+      {isDesktopWeb ? (
+        <View style={{ flex: 1, gap: theme.spacing.md }}>
+          <Card>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <TextField value={q} onChangeText={setQ} placeholder="Search: order ID or status" autoCapitalize="none" />
+              </View>
+              <View style={{ flexDirection: "row", flexWrap: "nowrap", gap: 10, justifyContent: "flex-end", alignItems: "center", flexShrink: 0 }}>
+                <Badge label={`Total: ${filtered.length}`} size="header" />
+                <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} size="header" />
+              </View>
+            </View>
+            <MutedText style={{ marginTop: 8 }}>Tip: click a row to open the order detail page.</MutedText>
+          </Card>
+
+          <Card style={{ padding: 0, flex: 1 }}>
+            <View
+              style={{
+                paddingHorizontal: theme.spacing.md,
+                paddingVertical: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: theme.colors.border,
+                backgroundColor: theme.colors.surface2,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 2 }]} numberOfLines={1}>
+                Order
+              </Text>
+              <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 2 }]} numberOfLines={1}>
+                Created
+              </Text>
+              <Text style={[theme.typography.label, { color: theme.colors.textMuted, width: 130, textAlign: "right" }]} numberOfLines={1}>
+                Status
+              </Text>
+            </View>
+
+            {isWeb ? (
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: theme.spacing.md, gap: 8 }} keyboardShouldPersistTaps="handled">
+                {filtered.length ? (
+                  filtered.map((item) => {
+                    const tone = item.status === "fulfilled" ? "success" : item.status === "cancelled" ? "danger" : "primary";
+                    return (
+                      <Pressable
+                        key={item._id}
+                        onPress={() => navigation.navigate("OrderDetail", { id: item._id })}
+                        style={(state) => {
+                          const pressed = state.pressed;
+                          const hovered = !!(state as any).hovered;
+                          return [
+                            {
+                              paddingVertical: 12,
+                              paddingHorizontal: theme.spacing.md,
+                              borderRadius: theme.radius.md,
+                              borderWidth: 1,
+                              borderColor: theme.colors.border,
+                              backgroundColor: pressed ? theme.colors.surface2 : hovered ? theme.colors.surface2 : theme.colors.surface,
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 12,
+                              ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null),
+                            },
+                            hovered && !pressed ? ({ transform: [{ translateY: -0.5 }] } as any) : null,
+                            pressed ? ({ transform: [{ translateY: 1 }] } as any) : null,
+                          ];
+                        }}
+                      >
+                        <Text style={[theme.typography.h3, { color: theme.colors.text, flex: 2 }]} numberOfLines={1}>
+                          #{item._id.slice(-6)}
+                        </Text>
+                        <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 2 }]} numberOfLines={1}>
+                          {new Date(item.createdAt).toLocaleString()}
+                        </Text>
+                        <View style={{ width: 130, alignItems: "flex-end" }}>
+                          <Badge label={item.status} tone={tone} />
+                        </View>
+                      </Pressable>
+                    );
+                  })
+                ) : (
+                  <MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>
+                )}
+              </ScrollView>
+            ) : (
+              <FlatList
+                style={{ flex: 1 }}
+                contentContainerStyle={{ padding: theme.spacing.md, gap: 8 }}
+                data={filtered}
+                keyExtractor={(o) => o._id}
+                ListEmptyComponent={<MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>}
+                renderItem={({ item }) => {
+                  const tone = item.status === "fulfilled" ? "success" : item.status === "cancelled" ? "danger" : "primary";
+                  return (
+                    <Pressable
+                      onPress={() => navigation.navigate("OrderDetail", { id: item._id })}
+                      style={(state) => {
+                        const pressed = state.pressed;
+                        const hovered = !!(state as any).hovered;
+                        return [
+                          {
+                            paddingVertical: 12,
+                            paddingHorizontal: theme.spacing.md,
+                            borderRadius: theme.radius.md,
+                            borderWidth: 1,
+                            borderColor: theme.colors.border,
+                            backgroundColor: pressed ? theme.colors.surface2 : hovered ? theme.colors.surface2 : theme.colors.surface,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 12,
+                            ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null),
+                          },
+                          hovered && !pressed ? ({ transform: [{ translateY: -0.5 }] } as any) : null,
+                          pressed ? ({ transform: [{ translateY: 1 }] } as any) : null,
+                        ];
+                      }}
+                    >
+                      <Text style={[theme.typography.h3, { color: theme.colors.text, flex: 2 }]} numberOfLines={1}>
+                        #{item._id.slice(-6)}
+                      </Text>
+                      <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 2 }]} numberOfLines={1}>
+                        {new Date(item.createdAt).toLocaleString()}
+                      </Text>
+                      <View style={{ width: 130, alignItems: "flex-end" }}>
+                        <Badge label={item.status} tone={tone} />
+                      </View>
+                    </Pressable>
+                  );
+                }}
+              />
+            )}
+          </Card>
+        </View>
+      ) : (
+        <>
+          <Card>
+            <TextField
+              value={q}
+              onChangeText={setQ}
+              placeholder="Search: order ID or status"
+              autoCapitalize="none"
+            />
+            <View style={{ height: 12 }} />
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+              <Badge label={`Total: ${filtered.length}`} />
+              <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} />
+            </View>
+          </Card>
+
+          {Platform.OS === "web" ? (
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled">
+              {filtered.length ? (
+                filtered.map((item) => (
+                  <ListRow
+                    key={item._id}
+                    title={`Order #${item._id.slice(-6)}`}
+                    subtitle={`Created: ${new Date(item.createdAt).toLocaleString()}`}
+                    right={<Badge label={item.status} tone={item.status === "fulfilled" ? "success" : item.status === "cancelled" ? "danger" : "primary"} />}
+                    onPress={() => navigation.navigate("OrderDetail", { id: item._id })}
+                  />
+                ))
+              ) : (
+                <MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>
+              )}
+            </ScrollView>
+          ) : (
+            <FlatList
+              style={{ flex: 1 }}
+              data={filtered}
+              keyExtractor={(o) => o._id}
+              ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+              ListEmptyComponent={<MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>}
+              renderItem={({ item }) => (
+                <ListRow
+                  title={`Order #${item._id.slice(-6)}`}
+                  subtitle={`Created: ${new Date(item.createdAt).toLocaleString()}`}
+                  right={<Badge label={item.status} tone={item.status === "fulfilled" ? "success" : item.status === "cancelled" ? "danger" : "primary"} />}
+                  onPress={() => navigation.navigate("OrderDetail", { id: item._id })}
+                />
+              )}
+            />
+          )}
+        </>
+      )}
+    </Screen>
+  );
+}
