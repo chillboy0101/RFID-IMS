@@ -86,6 +86,46 @@ export function AdminBranchesScreen({ navigation }: Props) {
     setAllUsers(Array.isArray(res.users) ? res.users : []);
   }, [isSuperAdmin, token]);
 
+  async function confirmAction(title: string, message: string): Promise<boolean> {
+    if (Platform.OS === "web") {
+      return !!(globalThis as any).confirm?.(`${title}\n\n${message}`);
+    }
+    return await new Promise<boolean>((resolve) => {
+      Alert.alert(title, message, [
+        { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+        { text: "Confirm", style: "destructive", onPress: () => resolve(true) },
+      ]);
+    });
+  }
+
+  async function updateGlobalRole(userId: string, role: UserRole) {
+    if (!token || !isSuperAdmin || busy) return;
+
+    const ok = await confirmAction(
+      "Change global role",
+      role === "admin"
+        ? "Promote this user to super-admin? This grants full access to all branches and global admin actions."
+        : "Remove super-admin from this user? They will only have access via branch membership roles."
+    );
+    if (!ok) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      await apiRequest<{ ok: true }>(`/admin/users/${userId}/role`, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({ role }),
+      });
+      await loadAllUsers();
+      await refreshTenants();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update global role");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function createInvite() {
     if (!token || !isBranchAdmin) return;
     if (!activeTenantId) {
@@ -168,6 +208,13 @@ export function AdminBranchesScreen({ navigation }: Props) {
   async function updateMemberRole(userId: string, role: UserRole) {
     if (!token || !isBranchAdmin) return;
     if (!activeTenantId) return;
+    if (busy) return;
+
+    const ok = await confirmAction(
+      "Change branch role",
+      role === "admin" ? "Promote this user to branch admin for the active branch?" : `Set this user's role to ${role} for the active branch?`
+    );
+    if (!ok) return;
 
     setBusy(true);
     setError(null);
@@ -470,10 +517,16 @@ export function AdminBranchesScreen({ navigation }: Props) {
                                 title={u.name || u.email}
                                 subtitle={u.email}
                                 right={
-                                  <Badge
-                                    label={(u.tenantCount ?? 0) === 0 ? "Unassigned" : `Branches: ${u.tenantCount}`}
-                                    tone={(u.tenantCount ?? 0) === 0 ? "warning" : "default"}
-                                  />
+                                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "flex-end" }}>
+                                    <Badge
+                                      label={u.role === "admin" ? "super_admin" : u.role}
+                                      tone={u.role === "admin" ? "warning" : u.role === "manager" ? "primary" : "default"}
+                                    />
+                                    <Badge
+                                      label={(u.tenantCount ?? 0) === 0 ? "Unassigned" : `Branches: ${u.tenantCount}`}
+                                      tone={(u.tenantCount ?? 0) === 0 ? "warning" : "default"}
+                                    />
+                                  </View>
                                 }
                               />
                               <View style={{ height: 10 }} />
@@ -492,6 +545,24 @@ export function AdminBranchesScreen({ navigation }: Props) {
                                 disabled={busy || !activeTenantId}
                                 variant="secondary"
                               />
+                              <View style={{ height: 10 }} />
+                              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                                {u.role === "admin" ? (
+                                  <AppButton
+                                    title="Remove super-admin"
+                                    onPress={() => updateGlobalRole(u.id, "inventory_staff")}
+                                    disabled={busy}
+                                    variant="secondary"
+                                  />
+                                ) : (
+                                  <AppButton
+                                    title="Make super-admin"
+                                    onPress={() => updateGlobalRole(u.id, "admin")}
+                                    disabled={busy}
+                                    variant="secondary"
+                                  />
+                                )}
+                              </View>
                               <View style={{ height: 10 }} />
                               <AppButton
                                 title="Delete user"
