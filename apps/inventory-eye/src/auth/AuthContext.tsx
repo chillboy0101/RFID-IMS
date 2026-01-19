@@ -218,6 +218,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [token, refreshMe, refreshTenants]);
 
   useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+
+    const id = setInterval(() => {
+      if (cancelled) return;
+      (async () => {
+        try {
+          const me = await refreshMe();
+          await refreshTenants(me?.role ?? undefined);
+        } catch {
+          // ignore
+        }
+      })();
+    }, 120_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [refreshMe, refreshTenants, token]);
+
+  useEffect(() => {
     if (apiPollingRef.current) return;
     apiPollingRef.current = true;
 

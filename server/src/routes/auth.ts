@@ -78,11 +78,6 @@ router.post("/register", async (req, res) => {
           throw new Error("Invite code is not for this email");
         }
 
-        if (invite.role) {
-          user[0]!.role = invite.role as any;
-          await user[0]!.save({ session });
-        }
-
         await TenantMembershipModel.findOneAndUpdate(
           { tenantId: invite.tenantId, userId: user[0]!._id },
           { $set: { role: (invite.role as any) ?? user[0]!.role } },

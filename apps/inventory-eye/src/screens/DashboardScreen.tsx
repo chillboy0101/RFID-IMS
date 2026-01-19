@@ -22,7 +22,7 @@ type Summary = {
 };
 
 export function DashboardScreen({ navigation }: any) {
-  const { token, user } = useContext(AuthContext);
+  const { token, user, effectiveRole, refreshTenants } = useContext(AuthContext);
   const [data, setData] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -30,8 +30,10 @@ export function DashboardScreen({ navigation }: any) {
   const isWide = Platform.OS === "web" && width >= 900;
   const isNarrowHeader = width < 380;
 
+  const roleLabel = user?.role === "admin" ? "super_admin" : effectiveRole ?? user?.role ?? "-";
+
   function RolePill({ role }: { role: string }) {
-    const tone: "default" | "primary" | "warning" = role === "admin" ? "warning" : role === "manager" ? "primary" : "default";
+    const tone: "default" | "primary" | "warning" = role === "admin" || role === "super_admin" ? "warning" : role === "manager" ? "primary" : "default";
     const bg =
       tone === "primary"
         ? theme.colors.primarySoft
@@ -242,8 +244,12 @@ export function DashboardScreen({ navigation }: any) {
 
   useFocusEffect(
     useCallback(() => {
-      load().catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
-    }, [load])
+      refreshTenants().catch(() => undefined);
+      setRefreshing(true);
+      load()
+        .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
+        .finally(() => setRefreshing(false));
+    }, [load, refreshTenants])
   );
 
   async function onRefresh() {
@@ -282,7 +288,7 @@ export function DashboardScreen({ navigation }: any) {
             >
               Welcome back {user.name}
             </Text>
-            <RolePill role={user.role} />
+            <RolePill role={roleLabel} />
           </View>
         ) : null
       }
@@ -292,7 +298,7 @@ export function DashboardScreen({ navigation }: any) {
           <Text style={{ color: theme.colors.text, fontWeight: "900", fontSize: 16, flex: 1 }} numberOfLines={2}>
             Welcome back {user.name}
           </Text>
-          <RolePill role={user.role} />
+          <RolePill role={roleLabel} />
         </View>
       ) : null}
       {error ? <ErrorText>{error}</ErrorText> : null}
