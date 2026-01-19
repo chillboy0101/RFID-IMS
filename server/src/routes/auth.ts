@@ -61,7 +61,6 @@ router.post("/register", async (req, res) => {
       );
 
       userId = user[0]!._id.toString();
-      userRole = user[0]!.role;
 
       const code = (inviteCode ?? "").trim();
       if (code) {
@@ -77,6 +76,11 @@ router.post("/register", async (req, res) => {
         }
         if (invite.email && invite.email.toLowerCase().trim() !== cleanEmail) {
           throw new Error("Invite code is not for this email");
+        }
+
+        if (invite.role) {
+          user[0]!.role = invite.role as any;
+          await user[0]!.save({ session });
         }
 
         await TenantMembershipModel.findOneAndUpdate(
@@ -98,6 +102,8 @@ router.post("/register", async (req, res) => {
           ).exec();
         }
       }
+
+      userRole = user[0]!.role;
     });
 
     if (!userId || !userRole) {

@@ -34,8 +34,8 @@ type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (name: string, email: string, password: string, inviteCode?: string) => Promise<void>;
   signOut: () => Promise<void>;
-  refreshMe: () => Promise<void>;
-  refreshTenants: () => Promise<void>;
+  refreshMe: () => Promise<AuthUser | null>;
+  refreshTenants: (roleOverride?: UserRole) => Promise<void>;
   setActiveTenantId: (id: string) => Promise<void>;
 };
 
@@ -53,7 +53,7 @@ export const AuthContext = createContext<AuthContextValue>({
   signIn: async () => undefined,
   signUp: async () => undefined,
   signOut: async () => undefined,
-  refreshMe: async () => undefined,
+  refreshMe: async () => null,
   refreshTenants: async () => undefined,
   setActiveTenantId: async () => undefined,
 });
@@ -76,8 +76,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [apiLastError, setApiLastError] = useState<string | null>(null);
   const apiPollingRef = useRef(false);
 
-  const refreshMe = useCallback(async () => {
-    if (!token) return;
+  const refreshMe = useCallback(async (): Promise<AuthUser | null> => {
+    if (!token) return null;
     const res = await apiRequest<{ ok: true; user: AuthUser; token?: string }>("/auth/me", {
       method: "GET",
       token,
@@ -87,12 +87,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       await setToken(res.token);
       setTokenState(res.token);
     }
+    return res.user;
   }, [token]);
 
-  const refreshTenants = useCallback(async () => {
+  const refreshTenants = useCallback(async (roleOverride?: UserRole) => {
     if (!token) return;
 
-    const endpoint = user?.role === "admin" ? "/tenants" : "/tenants/mine";
+    const effectiveRole = roleOverride ?? user?.role;
+    const endpoint = effectiveRole === "admin" ? "/tenants" : "/tenants/mine";
     const res = await apiRequest<{ ok: true; tenants: TenantInfo[] }>(endpoint, {
       method: "GET",
       token,
@@ -161,9 +163,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return;
       }
       try {
-        await refreshMe();
+        const me = await refreshMe();
         setTenantChosenThisSession(false);
-        await refreshTenants();
+        await refreshTenants(me?.role ?? undefined);
       } catch {
         if (cancelled) return;
         await clearToken();
@@ -226,7 +228,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     await setToken(res.token);
     setTokenState(res.token);
     setUser(res.user);
-    await refreshTenants();
+    await refreshTenants(res.user.role);
   }, [refreshTenants]);
 
   const signUp = useCallback(async (name: string, email: string, password: string, inviteCode?: string) => {
@@ -238,7 +240,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     await setToken(res.token);
     setTokenState(res.token);
     setUser(res.user);
-    await refreshTenants();
+    await refreshTenants(res.user.role);
   }, [refreshTenants]);
 
   const signOut = useCallback(async () => {
