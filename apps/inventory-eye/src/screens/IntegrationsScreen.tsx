@@ -360,7 +360,7 @@ export function IntegrationsScreen({ navigation }: Props) {
 
           <View style={{ height: 12 }} />
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-            <AppButton title={loading ? "Working..." : "Run export"} onPress={runExport} disabled={!canUse || loading} loading={loading} />
+            <AppButton title="Run export" onPress={runExport} disabled={!canUse || loading} loading={loading} />
             <AppButton
               title="Download CSV"
               onPress={() => downloadTextFile(`export-${exportType}.csv`, exportCsv, "text/csv")}
@@ -432,10 +432,10 @@ export function IntegrationsScreen({ navigation }: Props) {
 
           <View style={{ height: 12 }} />
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            <AppButton title={loading ? "Working..." : "Import CSV"} onPress={runImportInventoryCsv} disabled={!canUse || loading} loading={loading} />
+            <AppButton title="Import CSV" onPress={runImportInventoryCsv} disabled={!canUse || loading} loading={loading} />
             {Platform.OS !== "web" ? (
               <AppButton
-                title={loading ? "Working..." : "Import JSON"}
+                title="Import JSON"
                 onPress={runImportInventory}
                 disabled={!canUse || loading}
                 loading={loading}

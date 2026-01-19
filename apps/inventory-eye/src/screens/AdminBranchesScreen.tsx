@@ -531,7 +531,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
               <View style={{ height: 10 }} />
               <TextField value={slug} onChangeText={setSlug} placeholder="slug (e.g. dome)" autoCapitalize="none" />
               <View style={{ height: 12 }} />
-              <AppButton title={busy ? "Working..." : "Create"} onPress={createBranch} disabled={busy} />
+              <AppButton title="Create" onPress={createBranch} disabled={busy} loading={busy} />
             </>
           ) : (
             <View style={{ gap: 10 }}>
@@ -591,7 +591,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
                         ) : null}
                       </View>
                       <View style={{ height: 12 }} />
-                      <AppButton title={busy ? "Working..." : "Add user"} onPress={addMember} disabled={busy} variant="secondary" />
+                      <AppButton title="Add user" onPress={addMember} disabled={busy} loading={busy} variant="secondary" />
 
                       <View style={{ height: theme.spacing.lg }} />
                       <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Create user</Text>
@@ -627,7 +627,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
                         ) : null}
                       </View>
                       <View style={{ height: 12 }} />
-                      <AppButton title={busy ? "Working..." : "Create user"} onPress={createUserInActiveBranch} disabled={busy} variant="secondary" />
+                      <AppButton title="Create user" onPress={createUserInActiveBranch} disabled={busy} loading={busy} variant="secondary" />
                     </>
                   ) : null}
 
@@ -659,17 +659,11 @@ export function AdminBranchesScreen({ navigation }: Props) {
                         ) : null}
                       </View>
                       <View style={{ height: 12 }} />
-                      <AppButton title={busy ? "Working..." : "Create invite"} onPress={createInvite} disabled={busy} variant="secondary" />
+                      <AppButton title="Create invite" onPress={createInvite} disabled={busy} loading={busy} variant="secondary" />
                       {inviteCode ? (
                         <>
                           <View style={{ height: 12 }} />
-                          <Card style={{ backgroundColor: theme.colors.surface2 }}>
-                            <Text style={[theme.typography.label, { color: theme.colors.text }]}>Invite code</Text>
-                            <View style={{ height: 8 }} />
-                            <Text style={[theme.typography.body, { color: theme.colors.text }]} selectable>
-                              {inviteCode}
-                            </Text>
-                          </Card>
+                          <Text selectable style={[theme.typography.body, { color: theme.colors.text }]}>Invite code: {inviteCode}</Text>
                         </>
                       ) : null}
                     </>

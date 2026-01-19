@@ -138,7 +138,13 @@ export function Screen({ title, children, scroll, right, refreshControl, busy, c
                     borderRadius: theme.radius.lg,
                   }}
                 >
-                  <ActivityIndicator color={theme.colors.text} size="large" style={{ transform: [{ scale: 1.25 }] }} />
+                  <ActivityIndicator
+                    color={theme.colors.text}
+                    size="large"
+                    accessibilityRole="progressbar"
+                    accessibilityLabel="Loading"
+                    style={{ transform: [{ scale: 1.25 }] }}
+                  />
                 </View>
               </View>
             </View>
@@ -152,7 +158,13 @@ export function Screen({ title, children, scroll, right, refreshControl, busy, c
 export function FullScreenLoader() {
   return (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.bg }}>
-      <ActivityIndicator size="large" color={theme.colors.text} style={{ transform: [{ scale: 1.5 }] }} />
+      <ActivityIndicator
+        size="large"
+        color={theme.colors.text}
+        accessibilityRole="progressbar"
+        accessibilityLabel="Loading"
+        style={{ transform: [{ scale: 1.5 }] }}
+      />
     </View>
   );
 }
@@ -261,7 +273,7 @@ export function AppButton({ title, onPress, disabled, loading, variant = "primar
         ];
       }}
     >
-      {loading ? <ActivityIndicator color={textColor} /> : null}
+      {loading ? <ActivityIndicator color={textColor} accessibilityRole="progressbar" accessibilityLabel={`${title} loading`} /> : null}
       {!loading && iconName ? <Ionicons name={iconName} size={iconSize ?? 20} color={textColor} /> : null}
       {isIconOnly ? null : <Text style={{ color: textColor, fontWeight: "800" }}>{title}</Text>}
     </Pressable>
