@@ -9,8 +9,8 @@ import { ListRow, Screen } from "../ui";
 type Props = NativeStackScreenProps<MoreStackParamList, "MoreMenu">;
 
 export function MoreMenuScreen({ navigation }: Props) {
-  const { user } = useContext(AuthContext);
-  const isAdmin = user?.role === "admin";
+  const { effectiveRole } = useContext(AuthContext);
+  const isAdmin = effectiveRole === "admin";
 
   const { width } = useWindowDimensions();
   const isWideWeb = Platform.OS === "web" && width >= 900;
@@ -32,7 +32,7 @@ export function MoreMenuScreen({ navigation }: Props) {
       <ListRow title="Vendors" subtitle="Create, update, manage suppliers" onPress={() => navigation.navigate("Vendors")} />
       <ListRow title="Reorders" subtitle="Create and manage reorder requests" onPress={() => navigation.navigate("Reorders")} />
       <ListRow title="RFID Scanner" subtitle="Scanner hardware integration and test" onPress={() => navigation.navigate("RfidScanner")} />
-      <ListRow title="Integrations" subtitle="Export/import data" onPress={() => navigation.navigate("Integrations")} />
+      {isAdmin ? <ListRow title="Integrations" subtitle="Export/import data" onPress={() => navigation.navigate("Integrations")} /> : null}
       <ListRow
         title="Settings"
         subtitle="Account and app settings"

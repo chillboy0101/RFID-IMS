@@ -32,7 +32,7 @@ type OrderFulfillmentReport = {
 type Props = NativeStackScreenProps<MoreStackParamList, "Reports">;
 
 export function ReportsScreen({ navigation }: Props) {
-  const { token, user } = useContext(AuthContext);
+  const { token, effectiveRole } = useContext(AuthContext);
 
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
@@ -57,7 +57,7 @@ export function ReportsScreen({ navigation }: Props) {
   const [updating, setUpdating] = useState(false);
   const loadInFlightRef = useRef(false);
 
-  const canSeeFulfillment = user?.role === "manager" || user?.role === "admin";
+  const canSeeFulfillment = effectiveRole === "manager" || effectiveRole === "admin";
 
   const lowStockFiltered = React.useMemo(() => {
     const items = stock?.report.lowStockItems ?? [];

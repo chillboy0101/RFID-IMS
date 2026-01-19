@@ -27,7 +27,7 @@ type Order = {
 type Props = NativeStackScreenProps<OrdersStackParamList, "OrderDetail">;
 
 export function OrderDetailScreen({ navigation, route }: Props) {
-  const { token, user } = useContext(AuthContext);
+  const { token, effectiveRole } = useContext(AuthContext);
   const { id } = route.params;
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
@@ -49,7 +49,7 @@ export function OrderDetailScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
 
-  const canUpdateStatus = user?.role === "manager" || user?.role === "admin";
+  const canUpdateStatus = effectiveRole === "manager" || effectiveRole === "admin";
   const isClosed = order?.status === "fulfilled" || order?.status === "cancelled";
 
   const load = useCallback(async () => {

@@ -8,7 +8,7 @@ import { AuthContext } from "../auth/AuthContext";
 import { AppButton, Badge, Card, ErrorText, MutedText, Screen, theme, useThemeMode } from "../ui";
 
 export function SettingsScreen() {
-  const { user, signOut } = useContext(AuthContext);
+  const { user, signOut, effectiveRole, apiOnline, apiLastCheckedAt, apiLastError } = useContext(AuthContext);
   const navigation = useNavigation();
   const { mode, setMode, resolved } = useThemeMode();
 
@@ -59,8 +59,8 @@ export function SettingsScreen() {
             <MutedText style={{ marginTop: 6 }}>{user?.email ?? "-"}</MutedText>
           </View>
           <Badge
-            label={user?.role ?? "-"}
-            tone={user?.role === "admin" ? "warning" : user?.role === "manager" ? "primary" : "default"}
+            label={user?.role === "admin" ? "super_admin" : (effectiveRole ?? "-")}
+            tone={user?.role === "admin" ? "warning" : effectiveRole === "manager" ? "primary" : effectiveRole === "admin" ? "warning" : "default"}
           />
         </View>
 

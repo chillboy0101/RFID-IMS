@@ -22,7 +22,7 @@ type Vendor = {
 type Props = NativeStackScreenProps<MoreStackParamList, "VendorsEdit">;
 
 export function VendorsEditScreen({ navigation, route }: Props) {
-  const { token, user } = useContext(AuthContext);
+  const { token, effectiveRole } = useContext(AuthContext);
 
   const onBack = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -32,8 +32,8 @@ export function VendorsEditScreen({ navigation, route }: Props) {
     navigation.navigate("Vendors");
   }, [navigation]);
 
-  const canCreateOrEdit = user?.role === "manager" || user?.role === "admin";
-  const canDelete = user?.role === "admin";
+  const canCreateOrEdit = effectiveRole === "manager" || effectiveRole === "admin";
+  const canDelete = effectiveRole === "admin";
 
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [error, setError] = useState<string | null>(null);

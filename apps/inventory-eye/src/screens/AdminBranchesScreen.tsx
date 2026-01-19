@@ -36,8 +36,9 @@ type AdminUserRow = {
 const roles: UserRole[] = ["inventory_staff", "manager", "admin"];
 
 export function AdminBranchesScreen({ navigation }: Props) {
-  const { token, user, tenants, activeTenantId, setActiveTenantId, refreshTenants } = useContext(AuthContext);
-  const isAdmin = user?.role === "admin";
+  const { token, user, effectiveRole, tenants, activeTenantId, setActiveTenantId, refreshTenants } = useContext(AuthContext);
+  const isSuperAdmin = user?.role === "admin";
+  const isBranchAdmin = effectiveRole === "admin";
 
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
@@ -59,7 +60,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
 
   const loadMembers = useCallback(
     async (tenantId: string | null) => {
-      if (!token || !isAdmin) return;
+      if (!token || !isBranchAdmin) return;
       if (!tenantId) {
         setMembers([]);
         return;
@@ -67,17 +68,17 @@ export function AdminBranchesScreen({ navigation }: Props) {
       const res = await apiRequest<{ ok: true; members: BranchMember[] }>(`/tenants/${tenantId}/members`, { method: "GET", token });
       setMembers(Array.isArray(res.members) ? res.members : []);
     },
-    [isAdmin, token]
+    [isBranchAdmin, token]
   );
 
   const loadAllUsers = useCallback(async () => {
-    if (!token || !isAdmin) return;
+    if (!token || !isSuperAdmin) return;
     const res = await apiRequest<{ ok: true; users: AdminUserRow[] }>("/admin/users-with-memberships", { method: "GET", token });
     setAllUsers(Array.isArray(res.users) ? res.users : []);
-  }, [isAdmin, token]);
+  }, [isSuperAdmin, token]);
 
   async function createInvite() {
-    if (!token || !isAdmin) return;
+    if (!token || !isBranchAdmin) return;
     if (!activeTenantId) {
       setError("Select a branch first");
       return;
@@ -107,7 +108,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
   }
 
   async function deleteUser(userId: string, email: string) {
-    if (!token || !isAdmin) return;
+    if (!token || !isSuperAdmin) return;
 
     const message = `Delete ${email}? This cannot be undone.`;
     const confirmed =
@@ -133,7 +134,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
   }
 
   async function assignUserToActiveBranch(userId: string) {
-    if (!token || !isAdmin) return;
+    if (!token || !isSuperAdmin) return;
     if (!activeTenantId) {
       setError("Select a branch first");
       return;
@@ -156,7 +157,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
   }
 
   async function updateMemberRole(userId: string, role: UserRole) {
-    if (!token || !isAdmin) return;
+    if (!token || !isBranchAdmin) return;
     if (!activeTenantId) return;
 
     setBusy(true);
@@ -180,11 +181,13 @@ export function AdminBranchesScreen({ navigation }: Props) {
       if (!token) return;
       setError(null);
       refreshTenants().catch(() => undefined);
-      if (isAdmin) {
+      if (isBranchAdmin) {
         loadMembers(activeTenantId).catch(() => undefined);
+      }
+      if (isSuperAdmin) {
         loadAllUsers().catch(() => undefined);
       }
-    }, [activeTenantId, isAdmin, loadAllUsers, loadMembers, refreshTenants, token])
+    }, [activeTenantId, isBranchAdmin, isSuperAdmin, loadAllUsers, loadMembers, refreshTenants, token])
   );
 
   const onBack = useCallback(() => {
@@ -201,7 +204,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
       setError(null);
       try {
         await setActiveTenantId(tenantId);
-        if (isAdmin) {
+        if (isBranchAdmin) {
           await loadMembers(tenantId);
         }
       } catch (e) {
@@ -210,11 +213,11 @@ export function AdminBranchesScreen({ navigation }: Props) {
         setBusy(false);
       }
     },
-    [isAdmin, loadMembers, setActiveTenantId]
+    [isBranchAdmin, loadMembers, setActiveTenantId]
   );
 
   async function createBranch() {
-    if (!token || !isAdmin) return;
+    if (!token || !isSuperAdmin) return;
     const cleanName = name.trim();
     const cleanSlug = slug.trim().toLowerCase();
     if (!cleanName || !cleanSlug) {
@@ -241,7 +244,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
   }
 
   async function addMember() {
-    if (!token || !isAdmin) return;
+    if (!token || !isBranchAdmin) return;
     if (!activeTenantId) {
       setError("Select a branch first");
       return;
@@ -270,7 +273,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
   }
 
   async function removeMember(userId: string) {
-    if (!token || !isAdmin) return;
+    if (!token || !isBranchAdmin) return;
     if (!activeTenantId) return;
 
     setBusy(true);
@@ -322,16 +325,18 @@ export function AdminBranchesScreen({ navigation }: Props) {
           </View>
         </Card>
 
-        {isAdmin ? (
+        {isBranchAdmin ? (
           <>
-            <Card>
-              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Create branch</Text>
-              <TextField value={name} onChangeText={setName} placeholder="Branch name" autoCapitalize="words" />
-              <View style={{ height: 10 }} />
-              <TextField value={slug} onChangeText={setSlug} placeholder="slug (e.g. dome)" autoCapitalize="none" />
-              <View style={{ height: 12 }} />
-              <AppButton title={busy ? "Working..." : "Create"} onPress={createBranch} disabled={busy} />
-            </Card>
+            {isSuperAdmin ? (
+              <Card>
+                <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Create branch</Text>
+                <TextField value={name} onChangeText={setName} placeholder="Branch name" autoCapitalize="words" />
+                <View style={{ height: 10 }} />
+                <TextField value={slug} onChangeText={setSlug} placeholder="slug (e.g. dome)" autoCapitalize="none" />
+                <View style={{ height: 12 }} />
+                <AppButton title={busy ? "Working..." : "Create"} onPress={createBranch} disabled={busy} />
+              </Card>
+            ) : null}
 
             <Card>
               <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Users</Text>
@@ -343,7 +348,9 @@ export function AdminBranchesScreen({ navigation }: Props) {
                     <AppButton title="Members" onPress={() => setAdminTab("members")} variant={adminTab === "members" ? "primary" : "secondary"} />
                     <AppButton title="Add user" onPress={() => setAdminTab("add")} variant={adminTab === "add" ? "primary" : "secondary"} />
                     <AppButton title="Invites" onPress={() => setAdminTab("invites")} variant={adminTab === "invites" ? "primary" : "secondary"} />
-                    <AppButton title="All users" onPress={() => setAdminTab("users")} variant={adminTab === "users" ? "primary" : "secondary"} />
+                    {isSuperAdmin ? (
+                      <AppButton title="All users" onPress={() => setAdminTab("users")} variant={adminTab === "users" ? "primary" : "secondary"} />
+                    ) : null}
                   </View>
 
                   {adminTab === "add" ? (

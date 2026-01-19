@@ -86,8 +86,8 @@ function parseCsv(text: string): string[][] {
 }
 
 router.use(requireAuth);
-router.use(requireRole("admin"));
 router.use(requireTenant);
+router.use(requireRole("admin"));
 
 router.get("/", async (_req, res) => {
   res.json({

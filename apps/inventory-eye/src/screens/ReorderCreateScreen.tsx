@@ -22,9 +22,9 @@ type Reorder = {
 };
 
 export function ReorderCreateScreen({ navigation }: Props) {
-  const { token, user } = useContext(AuthContext);
+  const { token, effectiveRole } = useContext(AuthContext);
 
-  const canManage = user?.role === "manager" || user?.role === "admin";
+  const canManage = effectiveRole === "manager" || effectiveRole === "admin";
 
   const [itemId, setItemId] = useState("");
   const [vendorId, setVendorId] = useState("");

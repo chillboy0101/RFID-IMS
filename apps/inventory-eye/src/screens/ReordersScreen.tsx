@@ -25,7 +25,7 @@ type Props = NativeStackScreenProps<MoreStackParamList, "Reorders">;
 const statuses: Array<ReorderStatus | ""> = ["", "requested", "ordered", "received", "cancelled"];
 
 export function ReordersScreen({ navigation }: Props) {
-  const { token, user } = useContext(AuthContext);
+  const { token, effectiveRole } = useContext(AuthContext);
 
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
@@ -41,7 +41,7 @@ export function ReordersScreen({ navigation }: Props) {
     navigation.navigate("MoreMenu");
   }, [navigation]);
 
-  const canManage = user?.role === "manager" || user?.role === "admin";
+  const canManage = effectiveRole === "manager" || effectiveRole === "admin";
 
   const [status, setStatusFilter] = useState<ReorderStatus | "">("");
   const [q, setQ] = useState("");

@@ -32,7 +32,7 @@ type Response = { ok: true; item: InventoryItem };
 type Props = NativeStackScreenProps<InventoryStackParamList, "InventoryDetail">;
 
 export function InventoryDetailScreen({ navigation, route }: Props) {
-  const { token, user } = useContext(AuthContext);
+  const { token, effectiveRole } = useContext(AuthContext);
   const { id } = route.params;
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
@@ -92,7 +92,7 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
     }, [loadSafe])
   );
 
-  const canDelete = user?.role === "manager" || user?.role === "admin";
+  const canDelete = effectiveRole === "manager" || effectiveRole === "admin";
 
   const isLowStock = typeof item?.quantity === "number" && typeof item?.reorderLevel === "number" && item.quantity <= item.reorderLevel;
   const expiryLabel = item?.expiryDate ? new Date(item.expiryDate).toLocaleDateString() : "-";

@@ -22,7 +22,7 @@ type Vendor = {
 type Props = NativeStackScreenProps<MoreStackParamList, "Vendors">;
 
 export function VendorsScreen({ navigation }: Props) {
-  const { token, user } = useContext(AuthContext);
+  const { token, effectiveRole } = useContext(AuthContext);
 
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
@@ -45,7 +45,7 @@ export function VendorsScreen({ navigation }: Props) {
   const loadInFlightRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const canCreateOrEdit = user?.role === "manager" || user?.role === "admin";
+  const canCreateOrEdit = effectiveRole === "manager" || effectiveRole === "admin";
 
   const [q, setQ] = useState("");
   const lastTypingAtRef = useRef(0);

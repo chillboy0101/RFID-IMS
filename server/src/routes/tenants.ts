@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import crypto from "crypto";
 
 import { requireAuth, requireRole, type AuthRequest } from "../middleware/auth.js";
+import { requireTenant, type TenantRequest } from "../middleware/tenant.js";
 import { TenantModel } from "../models/Tenant.js";
 import { TenantAuditLogModel } from "../models/TenantAuditLog.js";
 import { TenantMembershipModel } from "../models/TenantMembership.js";
@@ -50,7 +51,7 @@ router.post("/", requireRole("admin"), async (req: AuthRequest, res) => {
   res.status(201).json({ ok: true, tenant: { id: doc._id.toString(), name: doc.name, slug: doc.slug } });
 });
 
-router.post("/:id/members", requireRole("admin"), async (req: AuthRequest, res) => {
+router.post("/:id/members", requireTenant, requireRole("admin"), async (req: TenantRequest, res) => {
   const auth = req.auth;
   if (!auth) {
     res.status(401).json({ ok: false, error: "Unauthorized" });
@@ -58,6 +59,12 @@ router.post("/:id/members", requireRole("admin"), async (req: AuthRequest, res) 
   }
 
   const { id } = req.params;
+  const tenantId = req.tenantId as string;
+  if (String(tenantId) !== String(id)) {
+    res.status(400).json({ ok: false, error: "X-Tenant-ID must match :id" });
+    return;
+  }
+
   if (!mongoose.isValidObjectId(id)) {
     res.status(400).json({ ok: false, error: "Invalid id" });
     return;
@@ -125,10 +132,13 @@ router.post("/:id/members", requireRole("admin"), async (req: AuthRequest, res) 
     });
   }
 
-  res.status(201).json({ ok: true, membership: { tenantId: String(membership.tenantId), userId: String(membership.userId), role: membership.role } });
+  res.status(201).json({
+    ok: true,
+    membership: { tenantId: String(membership.tenantId), userId: String(membership.userId), role: membership.role },
+  });
 });
 
-router.post("/:id/invites", requireRole("admin"), async (req: AuthRequest, res) => {
+router.post("/:id/invites", requireTenant, requireRole("admin"), async (req: TenantRequest, res) => {
   const auth = req.auth;
   if (!auth) {
     res.status(401).json({ ok: false, error: "Unauthorized" });
@@ -136,6 +146,12 @@ router.post("/:id/invites", requireRole("admin"), async (req: AuthRequest, res) 
   }
 
   const { id } = req.params;
+  const tenantId = req.tenantId as string;
+  if (String(tenantId) !== String(id)) {
+    res.status(400).json({ ok: false, error: "X-Tenant-ID must match :id" });
+    return;
+  }
+
   if (!mongoose.isValidObjectId(id)) {
     res.status(400).json({ ok: false, error: "Invalid id" });
     return;
@@ -181,8 +197,14 @@ router.post("/:id/invites", requireRole("admin"), async (req: AuthRequest, res) 
   });
 });
 
-router.get("/:id/members", requireRole("admin"), async (req: AuthRequest, res) => {
+router.get("/:id/members", requireTenant, requireRole("admin"), async (req: TenantRequest, res) => {
   const { id } = req.params;
+  const tenantId = req.tenantId as string;
+  if (String(tenantId) !== String(id)) {
+    res.status(400).json({ ok: false, error: "X-Tenant-ID must match :id" });
+    return;
+  }
+
   if (!mongoose.isValidObjectId(id)) {
     res.status(400).json({ ok: false, error: "Invalid id" });
     return;
@@ -214,7 +236,7 @@ router.get("/:id/members", requireRole("admin"), async (req: AuthRequest, res) =
   });
 });
 
-router.delete("/:id/members/:userId", requireRole("admin"), async (req: AuthRequest, res) => {
+router.delete("/:id/members/:userId", requireTenant, requireRole("admin"), async (req: TenantRequest, res) => {
   const auth = req.auth;
   if (!auth) {
     res.status(401).json({ ok: false, error: "Unauthorized" });
@@ -222,6 +244,12 @@ router.delete("/:id/members/:userId", requireRole("admin"), async (req: AuthRequ
   }
 
   const { id, userId } = req.params;
+  const tenantId = req.tenantId as string;
+  if (String(tenantId) !== String(id)) {
+    res.status(400).json({ ok: false, error: "X-Tenant-ID must match :id" });
+    return;
+  }
+
   if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(userId)) {
     res.status(400).json({ ok: false, error: "Invalid id" });
     return;

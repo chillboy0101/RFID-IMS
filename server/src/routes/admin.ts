@@ -231,6 +231,20 @@ router.patch("/users/:id/role", requireRole("admin"), async (req: AuthRequest, r
     return;
   }
 
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL ?? "equalizerjr@gmail.com").toLowerCase().trim();
+  const actor = await UserModel.findById(auth.id).select({ email: 1 }).exec();
+  const actorEmail = String(actor?.email ?? "").toLowerCase().trim();
+  if (!actor || !actorEmail || actorEmail !== superAdminEmail) {
+    res.status(403).json({ ok: false, error: "Forbidden" });
+    return;
+  }
+
   const { role } = req.body as { role?: UserRole };
   if (!role || !userRoles.includes(role)) {
     res.status(400).json({ ok: false, error: "Invalid role" });
@@ -242,8 +256,6 @@ router.patch("/users/:id/role", requireRole("admin"), async (req: AuthRequest, r
     res.status(404).json({ ok: false, error: "User not found" });
     return;
   }
-
-  await TenantMembershipModel.updateMany({ userId: user._id }, { $set: { role } }).exec();
 
   res.json({
     ok: true,
@@ -260,6 +272,14 @@ router.delete("/users/:id", requireRole("admin"), async (req: AuthRequest, res) 
   const auth = req.auth;
   if (!auth) {
     res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL ?? "equalizerjr@gmail.com").toLowerCase().trim();
+  const actor = await UserModel.findById(auth.id).select({ email: 1 }).exec();
+  const actorEmail = String(actor?.email ?? "").toLowerCase().trim();
+  if (!actor || !actorEmail || actorEmail !== superAdminEmail) {
+    res.status(403).json({ ok: false, error: "Forbidden" });
     return;
   }
 
@@ -281,7 +301,7 @@ router.delete("/users/:id", requireRole("admin"), async (req: AuthRequest, res) 
   }
 
   const email = String(user.email ?? "").toLowerCase().trim();
-  if (email === "equalizerjr@gmail.com") {
+  if (email === superAdminEmail) {
     res.status(403).json({ ok: false, error: "Forbidden" });
     return;
   }

@@ -10,9 +10,9 @@ import { AppButton, Card, ErrorText, MutedText, Screen, TextField } from "../ui"
 type Props = NativeStackScreenProps<MoreStackParamList, "VendorsCreate">;
 
 export function VendorsCreateScreen({ navigation }: Props) {
-  const { token, user } = useContext(AuthContext);
+  const { token, effectiveRole } = useContext(AuthContext);
 
-  const canCreateOrEdit = user?.role === "manager" || user?.role === "admin";
+  const canCreateOrEdit = effectiveRole === "manager" || effectiveRole === "admin";
 
   const [name, setName] = useState("");
   const [contactEmail, setContactEmail] = useState("");

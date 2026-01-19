@@ -60,8 +60,8 @@ function EnterpriseTabBar({ state, descriptors, navigation }: BottomTabBarProps)
   const isWideWeb = Platform.OS === "web" && width >= 900;
   const mobileBottom = Math.max(0, insets.bottom - theme.spacing.lg);
   const isCompactSidebar = isWideWeb && height < 820;
-  const { signOut, user, tenants, activeTenantId } = useContext(AuthContext);
-  const isAdmin = user?.role === "admin";
+  const { signOut, effectiveRole, tenants, activeTenantId } = useContext(AuthContext);
+  const isAdmin = effectiveRole === "admin";
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
 
   const activeTenantName = tenants.find((t) => t.id === activeTenantId)?.name ?? null;

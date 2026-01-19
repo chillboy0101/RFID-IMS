@@ -26,8 +26,8 @@ type Props = NativeStackScreenProps<MoreStackParamList, "AdminFeedback">;
 const statuses: FeedbackStatus[] = ["new", "reviewed", "resolved"];
 
 export function AdminFeedbackScreen({ navigation }: Props) {
-  const { token, user } = useContext(AuthContext);
-  const isAdmin = user?.role === "admin";
+  const { token, effectiveRole } = useContext(AuthContext);
+  const isAdmin = effectiveRole === "admin";
 
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;

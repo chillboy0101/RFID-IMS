@@ -24,6 +24,8 @@ type AuthContextValue = {
   loading: boolean;
   token: string | null;
   user: AuthUser | null;
+  activeTenantRole: UserRole | null;
+  effectiveRole: UserRole | null;
   tenants: TenantInfo[];
   tenantsLoaded: boolean;
   tenantChosenThisSession: boolean;
@@ -43,6 +45,8 @@ export const AuthContext = createContext<AuthContextValue>({
   loading: true,
   token: null,
   user: null,
+  activeTenantRole: null,
+  effectiveRole: null,
   tenants: [],
   tenantsLoaded: false,
   tenantChosenThisSession: false,
@@ -67,6 +71,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [token, setTokenState] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [tenants, setTenants] = useState<TenantInfo[]>([]);
+  const [membershipRolesByTenantId, setMembershipRolesByTenantId] = useState<Record<string, UserRole>>({});
   const [tenantsLoaded, setTenantsLoaded] = useState(false);
   const [tenantChosenThisSession, setTenantChosenThisSession] = useState(false);
   const [activeTenantId, setActiveTenantIdState] = useState<string | null>(null);
@@ -95,7 +100,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const effectiveRole = roleOverride ?? user?.role;
     const endpoint = effectiveRole === "admin" ? "/tenants" : "/tenants/mine";
-    const res = await apiRequest<{ ok: true; tenants: TenantInfo[] }>(endpoint, {
+    const res = await apiRequest<{ ok: true; tenants: TenantInfo[]; memberships?: Array<{ tenantId: string; role: UserRole }> }>(endpoint, {
       method: "GET",
       token,
     });
@@ -103,6 +108,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const list = Array.isArray(res.tenants) ? res.tenants : [];
     setTenants(list);
     setTenantsLoaded(true);
+
+    if (effectiveRole === "admin") {
+      const map: Record<string, UserRole> = {};
+      for (const t of list) {
+        map[t.id] = "admin";
+      }
+      setMembershipRolesByTenantId(map);
+    } else {
+      const map: Record<string, UserRole> = {};
+      for (const m of Array.isArray(res.memberships) ? res.memberships : []) {
+        if (m?.tenantId && m?.role) {
+          map[String(m.tenantId)] = m.role;
+        }
+      }
+      setMembershipRolesByTenantId(map);
+    }
 
     const stored = await getActiveTenantId();
     const preferred = activeTenantId ?? stored;
@@ -117,6 +138,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       await clearActiveTenantId();
     }
   }, [activeTenantId, token, user?.role]);
+
+  const activeTenantRole = useMemo<UserRole | null>(() => {
+    if (!activeTenantId) return null;
+    if (user?.role === "admin") return "admin";
+    return membershipRolesByTenantId[activeTenantId] ?? null;
+  }, [activeTenantId, membershipRolesByTenantId, user?.role]);
+
+  const effectiveRole = useMemo<UserRole | null>(() => {
+    return activeTenantRole;
+  }, [activeTenantRole]);
 
   const setActiveTenantId = useCallback(
     async (id: string) => {
@@ -156,6 +187,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (!token) {
         setUser(null);
         setTenants([]);
+        setMembershipRolesByTenantId({});
         setTenantsLoaded(false);
         setTenantChosenThisSession(false);
         setActiveTenantIdState(null);
@@ -173,6 +205,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setTokenState(null);
         setUser(null);
         setTenants([]);
+        setMembershipRolesByTenantId({});
         setTenantsLoaded(false);
         setTenantChosenThisSession(false);
         setActiveTenantIdState(null);
@@ -249,6 +282,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setTokenState(null);
     setUser(null);
     setTenants([]);
+    setMembershipRolesByTenantId({});
     setTenantsLoaded(false);
     setTenantChosenThisSession(false);
     setActiveTenantIdState(null);
@@ -260,6 +294,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       loading,
       token,
       user,
+      activeTenantRole,
+      effectiveRole,
       tenants,
       tenantsLoaded,
       tenantChosenThisSession,
@@ -278,6 +314,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       loading,
       token,
       user,
+      activeTenantRole,
+      effectiveRole,
       tenants,
       tenantsLoaded,
       tenantChosenThisSession,
