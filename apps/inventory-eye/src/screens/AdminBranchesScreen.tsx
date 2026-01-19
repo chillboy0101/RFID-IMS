@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useMemo, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Alert, Platform, Text, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
@@ -70,6 +70,15 @@ export function AdminBranchesScreen({ navigation }: Props) {
     },
     [isBranchAdmin, token]
   );
+
+  useEffect(() => {
+    if (!token) return;
+    if (!isBranchAdmin) {
+      setMembers([]);
+      return;
+    }
+    loadMembers(activeTenantId).catch(() => undefined);
+  }, [activeTenantId, isBranchAdmin, loadMembers, token]);
 
   const loadAllUsers = useCallback(async () => {
     if (!token || !isSuperAdmin) return;
