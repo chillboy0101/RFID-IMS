@@ -23,6 +23,8 @@ dotenv.config();
 
 const app = express();
 
+app.disable("etag");
+
 type MetricsSnapshot = {
   startedAtMs: number;
   httpRequestsTotal: number;
@@ -128,8 +130,34 @@ app.use(
   cors({
     origin: corsAllowed.length ? corsAllowed : isProd ? false : true,
     credentials: corsAllowed.length ? true : false,
+    maxAge: 60 * 60 * 24,
   })
 );
+
+app.use((req, res, next) => {
+  const isApiRequest =
+    req.path === "/health" ||
+    req.path === "/metrics" ||
+    req.path.startsWith("/auth") ||
+    req.path.startsWith("/admin") ||
+    req.path.startsWith("/tenants") ||
+    req.path.startsWith("/inventory") ||
+    req.path.startsWith("/orders") ||
+    req.path.startsWith("/dashboard") ||
+    req.path.startsWith("/alerts") ||
+    req.path.startsWith("/reports") ||
+    req.path.startsWith("/feedback") ||
+    req.path.startsWith("/progress") ||
+    req.path.startsWith("/rfid") ||
+    req.path.startsWith("/vendors") ||
+    req.path.startsWith("/reorders") ||
+    req.path.startsWith("/integrations");
+
+  if (isApiRequest) {
+    res.setHeader("cache-control", "no-store");
+  }
+  next();
+});
 
 app.use(rateLimit({ windowMs: 60_000, max: 300, keyPrefix: "global" }));
 

@@ -9,7 +9,7 @@ import { AppButton, Card, ErrorText, MutedText, Screen, TextField, theme } from 
 type Props = NativeStackScreenProps<AuthStackParamList, "Login">;
 
 export function LoginScreen({ navigation }: Props) {
-  const { signIn } = useContext(AuthContext);
+  const { signIn, authLastError } = useContext(AuthContext);
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
 
@@ -48,6 +48,12 @@ export function LoginScreen({ navigation }: Props) {
           }}
         >
           <Card>
+            {authLastError ? (
+              <>
+                <ErrorText>{authLastError}</ErrorText>
+                <View style={{ height: 12 }} />
+              </>
+            ) : null}
             <TextField
               label="Email"
               value={email}

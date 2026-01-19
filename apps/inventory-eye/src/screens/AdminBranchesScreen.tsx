@@ -33,6 +33,15 @@ type AdminUserRow = {
   tenants?: TenantInfo[];
 };
 
+type TenantSessionRow = {
+  jti: string;
+  userId: string;
+  lastSeenAt: string;
+  createdAt: string;
+  isCurrent?: boolean;
+  user: { id: string; name: string; email: string; role: UserRole } | null;
+};
+
 const roles: UserRole[] = ["inventory_staff", "manager", "admin"];
 
 export function AdminBranchesScreen({ navigation }: Props) {
@@ -47,12 +56,20 @@ export function AdminBranchesScreen({ navigation }: Props) {
   const [slug, setSlug] = useState("");
   const [email, setEmail] = useState("");
   const [memberRole, setMemberRole] = useState<UserRole>("inventory_staff");
+  const [memberMakeSuperAdmin, setMemberMakeSuperAdmin] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<UserRole>("inventory_staff");
+  const [inviteMakeSuperAdmin, setInviteMakeSuperAdmin] = useState(false);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [members, setMembers] = useState<BranchMember[]>([]);
   const [allUsers, setAllUsers] = useState<AdminUserRow[]>([]);
-  const [adminTab, setAdminTab] = useState<"members" | "add" | "invites" | "users">("members");
+  const [adminTab, setAdminTab] = useState<"members" | "add" | "invites" | "sessions" | "users">("members");
+  const [createUserName, setCreateUserName] = useState("");
+  const [createUserEmail, setCreateUserEmail] = useState("");
+  const [createUserPassword, setCreateUserPassword] = useState("");
+  const [createUserRole, setCreateUserRole] = useState<UserRole>("inventory_staff");
+  const [createUserMakeSuperAdmin, setCreateUserMakeSuperAdmin] = useState(false);
+  const [sessions, setSessions] = useState<TenantSessionRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,6 +102,88 @@ export function AdminBranchesScreen({ navigation }: Props) {
     const res = await apiRequest<{ ok: true; users: AdminUserRow[] }>("/admin/users-with-memberships", { method: "GET", token });
     setAllUsers(Array.isArray(res.users) ? res.users : []);
   }, [isSuperAdmin, token]);
+
+  const loadSessions = useCallback(
+    async (tenantId: string | null) => {
+      if (!token || !isBranchAdmin) return;
+      if (!tenantId) {
+        setSessions([]);
+        return;
+      }
+      const res = await apiRequest<{ ok: true; sessions: TenantSessionRow[] }>(`/tenants/${tenantId}/sessions`, { method: "GET", token });
+      setSessions(Array.isArray(res.sessions) ? res.sessions : []);
+    },
+    [isBranchAdmin, token]
+  );
+
+  async function createUserInActiveBranch() {
+    if (!token || !isBranchAdmin) return;
+    if (!activeTenantId) {
+      setError("Select a branch first");
+      return;
+    }
+
+    const cleanName = createUserName.trim();
+    const cleanEmail = createUserEmail.trim().toLowerCase();
+    const cleanPassword = createUserPassword;
+    if (!cleanName || !cleanEmail || !cleanPassword) {
+      setError("Name, email and password are required");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    try {
+      await apiRequest<{ ok: true }>(`/tenants/${activeTenantId}/users`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          name: cleanName,
+          email: cleanEmail,
+          password: cleanPassword,
+          role: createUserRole,
+          makeSuperAdmin: isSuperAdmin ? createUserMakeSuperAdmin : false,
+        }),
+      });
+      setCreateUserName("");
+      setCreateUserEmail("");
+      setCreateUserPassword("");
+      setCreateUserRole("inventory_staff");
+      setCreateUserMakeSuperAdmin(false);
+      await loadMembers(activeTenantId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create user");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revokeSession(jti: string, isCurrent?: boolean) {
+    if (!token || !activeTenantId || busy) return;
+
+    if (isCurrent) {
+      setError("Cannot sign out the current session");
+      return;
+    }
+
+    const ok = await confirmAction("Force sign-out", "Force sign-out this user from this branch?");
+    if (!ok) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      if (isSuperAdmin) {
+        await apiRequest<{ ok: true }>(`/admin/sessions/${encodeURIComponent(jti)}/revoke`, { method: "POST", token });
+      } else {
+        await apiRequest<{ ok: true }>(`/tenants/${activeTenantId}/sessions/${encodeURIComponent(jti)}/revoke`, { method: "POST", token });
+      }
+      await loadSessions(activeTenantId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to revoke session");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function confirmAction(title: string, message: string): Promise<boolean> {
     if (Platform.OS === "web") {
@@ -146,7 +245,11 @@ export function AdminBranchesScreen({ navigation }: Props) {
       const res = await apiRequest<{ ok: true; invite: { code: string } }>(`/tenants/${activeTenantId}/invites`, {
         method: "POST",
         token,
-        body: JSON.stringify({ email: clean, role: inviteRole }),
+        body: JSON.stringify({
+          email: clean,
+          role: inviteRole,
+          makeSuperAdmin: isSuperAdmin ? inviteMakeSuperAdmin : false,
+        }),
       });
       setInviteCode(res.invite.code);
     } catch (e) {
@@ -239,11 +342,12 @@ export function AdminBranchesScreen({ navigation }: Props) {
       refreshTenants().catch(() => undefined);
       if (isBranchAdmin) {
         loadMembers(activeTenantId).catch(() => undefined);
+        loadSessions(activeTenantId).catch(() => undefined);
       }
       if (isSuperAdmin) {
         loadAllUsers().catch(() => undefined);
       }
-    }, [activeTenantId, isBranchAdmin, isSuperAdmin, loadAllUsers, loadMembers, refreshTenants, token])
+    }, [activeTenantId, isBranchAdmin, isSuperAdmin, loadAllUsers, loadMembers, loadSessions, refreshTenants, token])
   );
 
   const onBack = useCallback(() => {
@@ -262,6 +366,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
         await setActiveTenantId(tenantId);
         if (isBranchAdmin) {
           await loadMembers(tenantId);
+          await loadSessions(tenantId);
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to switch branch");
@@ -269,7 +374,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
         setBusy(false);
       }
     },
-    [isBranchAdmin, loadMembers, setActiveTenantId]
+    [isBranchAdmin, loadMembers, loadSessions, setActiveTenantId]
   );
 
   async function createBranch() {
@@ -317,9 +422,15 @@ export function AdminBranchesScreen({ navigation }: Props) {
       await apiRequest<{ ok: true }>(`/tenants/${activeTenantId}/members`, {
         method: "POST",
         token,
-        body: JSON.stringify({ email: cleanEmail, role: memberRole }),
+        body: JSON.stringify({
+          email: cleanEmail,
+          role: memberRole,
+          makeSuperAdmin: isSuperAdmin ? memberMakeSuperAdmin : false,
+        }),
       });
       setEmail("");
+      setMemberRole("inventory_staff");
+      setMemberMakeSuperAdmin(false);
       await loadMembers(activeTenantId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to add member");
@@ -404,6 +515,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
                     <AppButton title="Members" onPress={() => setAdminTab("members")} variant={adminTab === "members" ? "primary" : "secondary"} />
                     <AppButton title="Add user" onPress={() => setAdminTab("add")} variant={adminTab === "add" ? "primary" : "secondary"} />
                     <AppButton title="Invites" onPress={() => setAdminTab("invites")} variant={adminTab === "invites" ? "primary" : "secondary"} />
+                    <AppButton title="Active sessions" onPress={() => setAdminTab("sessions")} variant={adminTab === "sessions" ? "primary" : "secondary"} />
                     {isSuperAdmin ? (
                       <AppButton title="All users" onPress={() => setAdminTab("users")} variant={adminTab === "users" ? "primary" : "secondary"} />
                     ) : null}
@@ -420,9 +532,53 @@ export function AdminBranchesScreen({ navigation }: Props) {
                         {roles.map((r) => (
                           <AppButton key={r} title={r} onPress={() => setMemberRole(r)} variant={memberRole === r ? "primary" : "secondary"} />
                         ))}
+                        {isSuperAdmin ? (
+                          <AppButton
+                            title="super_admin"
+                            onPress={() => setMemberMakeSuperAdmin((v) => !v)}
+                            variant={memberMakeSuperAdmin ? "primary" : "secondary"}
+                            disabled={busy}
+                          />
+                        ) : null}
                       </View>
                       <View style={{ height: 12 }} />
                       <AppButton title={busy ? "Working..." : "Add user"} onPress={addMember} disabled={busy} variant="secondary" />
+
+                      <View style={{ height: theme.spacing.lg }} />
+                      <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Create user</Text>
+                      <TextField value={createUserName} onChangeText={setCreateUserName} placeholder="Full name" autoCapitalize="words" />
+                      <View style={{ height: 10 }} />
+                      <TextField
+                        value={createUserEmail}
+                        onChangeText={setCreateUserEmail}
+                        placeholder="user@email.com"
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                      />
+                      <View style={{ height: 10 }} />
+                      <TextField value={createUserPassword} onChangeText={setCreateUserPassword} placeholder="Temporary password" secureTextEntry />
+                      <View style={{ height: 10 }} />
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                        {roles.map((r) => (
+                          <AppButton
+                            key={`create-${r}`}
+                            title={r}
+                            onPress={() => setCreateUserRole(r)}
+                            variant={createUserRole === r ? "primary" : "secondary"}
+                            disabled={busy}
+                          />
+                        ))}
+                        {isSuperAdmin ? (
+                          <AppButton
+                            title="super_admin"
+                            onPress={() => setCreateUserMakeSuperAdmin((v) => !v)}
+                            variant={createUserMakeSuperAdmin ? "primary" : "secondary"}
+                            disabled={busy}
+                          />
+                        ) : null}
+                      </View>
+                      <View style={{ height: 12 }} />
+                      <AppButton title={busy ? "Working..." : "Create user"} onPress={createUserInActiveBranch} disabled={busy} variant="secondary" />
                     </>
                   ) : null}
 
@@ -442,8 +598,16 @@ export function AdminBranchesScreen({ navigation }: Props) {
                       <View style={{ height: 10 }} />
                       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                         {roles.map((r) => (
-                          <AppButton key={`invite-${r}`} title={r} onPress={() => setInviteRole(r)} variant={inviteRole === r ? "primary" : "secondary"} />
+                          <AppButton key={r} title={r} onPress={() => setInviteRole(r)} variant={inviteRole === r ? "primary" : "secondary"} />
                         ))}
+                        {isSuperAdmin ? (
+                          <AppButton
+                            title="super_admin"
+                            onPress={() => setInviteMakeSuperAdmin((v) => !v)}
+                            variant={inviteMakeSuperAdmin ? "primary" : "secondary"}
+                            disabled={busy}
+                          />
+                        ) : null}
                       </View>
                       <View style={{ height: 12 }} />
                       <AppButton title={busy ? "Working..." : "Create invite"} onPress={createInvite} disabled={busy} variant="secondary" />
@@ -473,7 +637,12 @@ export function AdminBranchesScreen({ navigation }: Props) {
                               <ListRow
                                 title={m.user?.name || m.user?.email || m.userId}
                                 subtitle={m.user?.email || ""}
-                                right={<Badge label={m.role} tone={m.role === "admin" ? "primary" : "default"} />}
+                                right={
+                                  <Badge
+                                    label={m.user?.role === "admin" ? "super_admin" : m.role}
+                                    tone={m.user?.role === "admin" ? "warning" : m.role === "admin" ? "primary" : "default"}
+                                  />
+                                }
                               />
                               <View style={{ height: 10 }} />
                               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
@@ -486,6 +655,14 @@ export function AdminBranchesScreen({ navigation }: Props) {
                                     disabled={busy}
                                   />
                                 ))}
+                                {isSuperAdmin ? (
+                                  <AppButton
+                                    title={m.user?.role === "admin" ? "Remove super-admin" : "Make super-admin"}
+                                    onPress={() => updateGlobalRole(m.userId, m.user?.role === "admin" ? "inventory_staff" : "admin")}
+                                    disabled={busy}
+                                    variant="secondary"
+                                  />
+                                ) : null}
                               </View>
                               <View style={{ height: 10 }} />
                               <AppButton title="Remove" onPress={() => removeMember(m.userId)} variant="secondary" disabled={busy} />
@@ -493,6 +670,37 @@ export function AdminBranchesScreen({ navigation }: Props) {
                           ))
                         ) : (
                           <MutedText>No members found.</MutedText>
+                        )}
+                      </View>
+                    </>
+                  ) : null}
+
+                  {adminTab === "sessions" ? (
+                    <>
+                      <View style={{ height: theme.spacing.md }} />
+                      <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Active sessions</Text>
+                      <MutedText>{isSuperAdmin ? "Super-admin can sign out anyone." : "Branch admin can sign out users from this branch."}</MutedText>
+                      <View style={{ height: 12 }} />
+                      <View style={{ gap: 10 }}>
+                        {sessions.length ? (
+                          sessions.map((s) => (
+                            <Card key={s.jti}>
+                              <ListRow
+                                title={s.user?.name || s.user?.email || s.userId}
+                                subtitle={s.user?.email || ""}
+                                right={<Badge label="Active" tone="success" />}
+                              />
+                              <View style={{ height: 10 }} />
+                              <AppButton
+                                title="Force sign-out"
+                                onPress={() => revokeSession(s.jti, s.isCurrent)}
+                                disabled={busy || Boolean(s.isCurrent)}
+                                variant="secondary"
+                              />
+                            </Card>
+                          ))
+                        ) : (
+                          <MutedText>No active sessions found.</MutedText>
                         )}
                       </View>
                     </>
@@ -545,24 +753,6 @@ export function AdminBranchesScreen({ navigation }: Props) {
                                 disabled={busy || !activeTenantId}
                                 variant="secondary"
                               />
-                              <View style={{ height: 10 }} />
-                              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                                {u.role === "admin" ? (
-                                  <AppButton
-                                    title="Remove super-admin"
-                                    onPress={() => updateGlobalRole(u.id, "inventory_staff")}
-                                    disabled={busy}
-                                    variant="secondary"
-                                  />
-                                ) : (
-                                  <AppButton
-                                    title="Make super-admin"
-                                    onPress={() => updateGlobalRole(u.id, "admin")}
-                                    disabled={busy}
-                                    variant="secondary"
-                                  />
-                                )}
-                              </View>
                               <View style={{ height: 10 }} />
                               <AppButton
                                 title="Delete user"

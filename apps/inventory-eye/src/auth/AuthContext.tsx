@@ -12,6 +12,7 @@ export type AuthUser = {
   name: string;
   email: string;
   role: UserRole;
+  mustChangePassword?: boolean;
 };
 
 export type TenantInfo = {
@@ -24,6 +25,7 @@ type AuthContextValue = {
   loading: boolean;
   token: string | null;
   user: AuthUser | null;
+  authLastError: string | null;
   activeTenantRole: UserRole | null;
   effectiveRole: UserRole | null;
   tenants: TenantInfo[];
@@ -45,6 +47,7 @@ export const AuthContext = createContext<AuthContextValue>({
   loading: true,
   token: null,
   user: null,
+  authLastError: null,
   activeTenantRole: null,
   effectiveRole: null,
   tenants: [],
@@ -70,6 +73,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
   const [token, setTokenState] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [authLastError, setAuthLastError] = useState<string | null>(null);
   const [tenants, setTenants] = useState<TenantInfo[]>([]);
   const [membershipRolesByTenantId, setMembershipRolesByTenantId] = useState<Record<string, UserRole>>({});
   const [tenantsLoaded, setTenantsLoaded] = useState(false);
@@ -198,8 +202,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const me = await refreshMe();
         setTenantChosenThisSession(false);
         await refreshTenants(me?.role ?? undefined);
-      } catch {
+        setAuthLastError(null);
+      } catch (e) {
         if (cancelled) return;
+        setAuthLastError(e instanceof Error ? e.message : "Signed out");
         await clearToken();
         await clearActiveTenantId();
         setTokenState(null);
@@ -275,6 +281,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
+    setAuthLastError(null);
     const res = await apiRequest<{ ok: true; token: string; user: AuthUser }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
@@ -299,6 +306,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [refreshTenants]);
 
   const signOut = useCallback(async () => {
+    setAuthLastError(null);
     await clearToken();
     await clearActiveTenantId();
     setTokenState(null);
@@ -316,6 +324,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       loading,
       token,
       user,
+      authLastError,
       activeTenantRole,
       effectiveRole,
       tenants,
@@ -336,6 +345,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       loading,
       token,
       user,
+      authLastError,
       activeTenantRole,
       effectiveRole,
       tenants,

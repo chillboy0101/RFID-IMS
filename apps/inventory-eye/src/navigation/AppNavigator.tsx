@@ -28,6 +28,7 @@ import { ReportsScreen } from "../screens/ReportsScreen";
 import { FeedbackScreen } from "../screens/FeedbackScreen";
 import { AdminFeedbackScreen } from "../screens/AdminFeedbackScreen";
 import { AdminBranchesScreen } from "../screens/AdminBranchesScreen";
+import { ForcePasswordChangeScreen } from "../screens/ForcePasswordChangeScreen";
 import { ProgressScreen } from "../screens/ProgressScreen";
 import { VendorsScreen } from "../screens/VendorsScreen";
 import { VendorsCreateScreen } from "../screens/VendorsCreateScreen";
@@ -572,7 +573,7 @@ function AppTabs() {
 }
 
 export function AppNavigator() {
-  const { loading, token, tenants, tenantsLoaded, tenantChosenThisSession, activeTenantId } = useContext(AuthContext);
+  const { loading, token, user, tenants, tenantsLoaded, tenantChosenThisSession, activeTenantId } = useContext(AuthContext);
 
   if (loading) {
     return <FullScreenLoader />;
@@ -631,10 +632,14 @@ export function AppNavigator() {
     tenantsLoaded &&
     (tenants.length === 0 || !activeTenantId);
 
+  const mustChangePassword = Boolean(token && user?.mustChangePassword);
+
   return (
     <NavigationContainer linking={Platform.OS === "web" ? (linking as any) : undefined}>
       {token ? (
-        !tenantsLoaded ? (
+        mustChangePassword ? (
+          <ForcePasswordChangeScreen />
+        ) : !tenantsLoaded ? (
           <FullScreenLoader />
         ) : needsTenantSelection ? (
           <BranchSelectGateScreen />

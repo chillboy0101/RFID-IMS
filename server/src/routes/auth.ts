@@ -1,8 +1,10 @@
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import express from "express";
 import mongoose from "mongoose";
 
 import { requireAuth, signAccessToken, type AuthRequest } from "../middleware/auth.js";
+import { AuthSessionModel } from "../models/AuthSession.js";
 import { InviteModel } from "../models/Invite.js";
 import { TenantModel } from "../models/Tenant.js";
 import { TenantMembershipModel } from "../models/TenantMembership.js";
@@ -78,6 +80,11 @@ router.post("/register", async (req, res) => {
           throw new Error("Invite code is not for this email");
         }
 
+        if ((invite as any).makeSuperAdmin) {
+          user[0]!.role = "admin" as any;
+          await user[0]!.save({ session });
+        }
+
         await TenantMembershipModel.findOneAndUpdate(
           { tenantId: invite.tenantId, userId: user[0]!._id },
           { $set: { role: (invite.role as any) ?? user[0]!.role } },
@@ -106,7 +113,18 @@ router.post("/register", async (req, res) => {
       return;
     }
 
-    const token = signAccessToken({ id: userId, role: userRole as any });
+    const jti = crypto.randomUUID();
+    const now = new Date();
+    await AuthSessionModel.create({
+      userId,
+      jti,
+      createdAt: now,
+      lastSeenAt: now,
+      userAgent: req.header("user-agent") ?? undefined,
+      ip: req.ip ?? undefined,
+    });
+
+    const token = signAccessToken({ id: userId, role: userRole as any, jti });
 
     const user = await UserModel.findById(userId).exec();
     if (!user) {
@@ -122,6 +140,7 @@ router.post("/register", async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        mustChangePassword: Boolean((user as any).mustChangePassword),
       },
     });
   } catch (e) {
@@ -154,7 +173,18 @@ router.post("/login", async (req, res) => {
     return;
   }
 
-  const token = signAccessToken({ id: user._id.toString(), role: user.role });
+  const jti = crypto.randomUUID();
+  const now = new Date();
+  await AuthSessionModel.create({
+    userId: user._id.toString(),
+    jti,
+    createdAt: now,
+    lastSeenAt: now,
+    userAgent: req.header("user-agent") ?? undefined,
+    ip: req.ip ?? undefined,
+  });
+
+  const token = signAccessToken({ id: user._id.toString(), role: user.role, jti });
 
   res.json({
     ok: true,
@@ -164,6 +194,48 @@ router.post("/login", async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      mustChangePassword: Boolean((user as any).mustChangePassword),
+    },
+  });
+});
+
+router.post("/change-password", requireAuth, async (req: AuthRequest, res) => {
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const { oldPassword, newPassword } = req.body as { oldPassword?: string; newPassword?: string };
+  if (!oldPassword || !newPassword || newPassword.length < 6) {
+    res.status(400).json({ ok: false, error: "Invalid password" });
+    return;
+  }
+
+  const user = await UserModel.findById(auth.id).exec();
+  if (!user) {
+    res.status(404).json({ ok: false, error: "User not found" });
+    return;
+  }
+
+  const ok = await bcrypt.compare(oldPassword, user.passwordHash);
+  if (!ok) {
+    res.status(401).json({ ok: false, error: "Invalid credentials" });
+    return;
+  }
+
+  user.passwordHash = await bcrypt.hash(newPassword, 12);
+  (user as any).mustChangePassword = false;
+  await user.save();
+
+  res.json({
+    ok: true,
+    user: {
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      mustChangePassword: Boolean((user as any).mustChangePassword),
     },
   });
 });
@@ -188,6 +260,7 @@ router.get("/me", requireAuth, async (req: AuthRequest, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      mustChangePassword: Boolean((user as any).mustChangePassword),
     },
   });
 });

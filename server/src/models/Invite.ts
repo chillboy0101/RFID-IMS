@@ -8,6 +8,7 @@ const inviteSchema = new mongoose.Schema(
     tenantId: { type: mongoose.Schema.Types.ObjectId, ref: "Tenant", required: true, index: true },
     email: { type: String, required: false, lowercase: true, trim: true },
     role: { type: String, required: false, enum: userRoles },
+    makeSuperAdmin: { type: Boolean, required: false },
     createdByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     usedByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: false, index: true },
     usedAt: { type: Date, required: false },

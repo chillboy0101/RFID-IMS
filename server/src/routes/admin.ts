@@ -2,6 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 
 import { requireAuth, requireRole, type AuthRequest } from "../middleware/auth.js";
+import { AuthSessionModel } from "../models/AuthSession.js";
 import { FeedbackModel } from "../models/Feedback.js";
 import { InventoryItemModel } from "../models/InventoryItem.js";
 import { InventoryLogModel } from "../models/InventoryLog.js";
@@ -162,6 +163,101 @@ router.post("/bootstrap-tenancy", requireRole("admin"), async (_req: AuthRequest
       taskSessions: (sessions as any).modifiedCount ?? 0,
     },
   });
+});
+
+router.get("/sessions", requireRole("admin"), async (req: AuthRequest, res) => {
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL ?? "equalizerjr@gmail.com").toLowerCase().trim();
+  const actor = await UserModel.findById(auth.id).select({ email: 1 }).exec();
+  const actorEmail = String(actor?.email ?? "").toLowerCase().trim();
+  if (!actor || !actorEmail || actorEmail !== superAdminEmail) {
+    res.status(403).json({ ok: false, error: "Forbidden" });
+    return;
+  }
+
+  const since = new Date(Date.now() - 1000 * 60 * 60 * 24 * 7);
+  const sessions = await AuthSessionModel.find({ revokedAt: { $exists: false }, lastSeenAt: { $gte: since } })
+    .sort({ lastSeenAt: -1 })
+    .limit(400)
+    .exec();
+
+  const userIds = Array.from(new Set(sessions.map((s) => String(s.userId))));
+  const users = await UserModel.find({ _id: { $in: userIds } }).select({ name: 1, email: 1, role: 1 }).exec();
+  const userById = new Map(users.map((u) => [u._id.toString(), u]));
+
+  const tenantIds = Array.from(
+    new Set(
+      sessions
+        .map((s) => (s.lastSeenTenantId ? String(s.lastSeenTenantId) : null))
+        .filter(Boolean) as string[]
+    )
+  );
+  const tenants = await TenantModel.find({ _id: { $in: tenantIds } }).select({ name: 1, slug: 1 }).exec();
+  const tenantById = new Map(tenants.map((t) => [t._id.toString(), t]));
+
+  res.json({
+    ok: true,
+    sessions: sessions.map((s) => {
+      const u = userById.get(String(s.userId));
+      const t = s.lastSeenTenantId ? tenantById.get(String(s.lastSeenTenantId)) : null;
+      return {
+        jti: s.jti,
+        userId: String(s.userId),
+        lastSeenAt: s.lastSeenAt,
+        createdAt: s.createdAt,
+        isCurrent: Boolean(auth.jti && String(auth.jti) === String(s.jti)),
+        lastSeenTenant: t ? { id: t._id.toString(), name: t.name, slug: t.slug } : null,
+        user: u ? { id: u._id.toString(), name: u.name, email: u.email, role: u.role } : null,
+      };
+    }),
+  });
+});
+
+router.post("/sessions/:jti/revoke", requireRole("admin"), async (req: AuthRequest, res) => {
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL ?? "equalizerjr@gmail.com").toLowerCase().trim();
+  const actor = await UserModel.findById(auth.id).select({ email: 1 }).exec();
+  const actorEmail = String(actor?.email ?? "").toLowerCase().trim();
+  if (!actor || !actorEmail || actorEmail !== superAdminEmail) {
+    res.status(403).json({ ok: false, error: "Forbidden" });
+    return;
+  }
+
+  const jti = String(req.params.jti ?? "").trim();
+  if (!jti) {
+    res.status(400).json({ ok: false, error: "Invalid jti" });
+    return;
+  }
+
+  if (auth.jti && String(auth.jti) === String(jti)) {
+    res.status(400).json({ ok: false, error: "Cannot sign out the current session" });
+    return;
+  }
+
+  const session = await AuthSessionModel.findOne({ jti }).exec();
+  if (!session) {
+    res.status(404).json({ ok: false, error: "Session not found" });
+    return;
+  }
+
+  if (!session.revokedAt) {
+    session.revokedAt = new Date();
+    (session as any).revokedByUserId = auth.id;
+    (session as any).revokedByRole = "super_admin";
+    await session.save();
+  }
+
+  res.json({ ok: true });
 });
 
 router.get("/users", requireRole("admin"), async (_req: AuthRequest, res) => {

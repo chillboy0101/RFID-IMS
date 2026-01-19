@@ -1,11 +1,14 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 
+import mongoose from "mongoose";
+import { AuthSessionModel } from "../models/AuthSession.js";
 import { UserModel, userRoles, type UserRole } from "../models/User.js";
 
 export type AuthUser = {
   id: string;
   role: UserRole;
+  jti?: string;
 };
 
 export type AuthRequest = Request & { auth?: AuthUser };
@@ -42,20 +45,51 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
       return;
     }
 
-    const id = (decoded as Record<string, unknown>).id;
+    const decodedObj = decoded as Record<string, unknown>;
+    const id = decodedObj.id;
+    const jti = decodedObj.jti;
 
     if (typeof id !== "string") {
       res.status(401).json({ ok: false, error: "Unauthorized" });
       return;
     }
 
-    const user = await UserModel.findById(id).exec();
+    const user = await UserModel.findById(id).select({ role: 1 }).exec();
     if (!user || !userRoles.includes(user.role as UserRole)) {
       res.status(401).json({ ok: false, error: "Unauthorized" });
       return;
     }
 
-    req.auth = { id: user._id.toString(), role: user.role as UserRole };
+    const jtiStr = typeof jti === "string" && jti.trim() ? jti.trim() : null;
+    if (jtiStr) {
+      const update: Record<string, unknown> = { lastSeenAt: new Date() };
+      const tenantId = req.header("x-tenant-id") ?? "";
+      if (mongoose.isValidObjectId(tenantId)) {
+        update.lastSeenTenantId = tenantId;
+      }
+
+      const session = await AuthSessionModel.findOneAndUpdate(
+        { jti: jtiStr, revokedAt: { $exists: false } },
+        { $set: update },
+        { new: false }
+      )
+        .select({ _id: 1 })
+        .exec();
+
+      if (!session) {
+        const revoked = await AuthSessionModel.findOne({ jti: jtiStr }).select({ revokedAt: 1, revokedByRole: 1 }).exec();
+        if (revoked?.revokedAt) {
+          const by = String((revoked as any).revokedByRole ?? "admin");
+          const label = by === "super_admin" ? "super_admin" : "admin";
+          res.status(401).json({ ok: false, error: `Signed out by ${label}` });
+          return;
+        }
+        res.status(401).json({ ok: false, error: "Unauthorized" });
+        return;
+      }
+    }
+
+    req.auth = { id: user._id.toString(), role: user.role as UserRole, jti: jtiStr ?? undefined };
     next();
   } catch {
     res.status(401).json({ ok: false, error: "Unauthorized" });
