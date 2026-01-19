@@ -67,7 +67,7 @@ router.get("/:id/sessions", requireTenant, requireRole("admin"), async (req: Ten
   const since = new Date(Date.now() - 1000 * 60 * 60 * 24 * 7);
   const sessions = await AuthSessionModel.find({
     lastSeenTenantId: tenant._id,
-    revokedAt: { $exists: false },
+    $or: [{ revokedAt: { $exists: false } }, { revokedAt: null }],
     lastSeenAt: { $gte: since },
   })
     .sort({ lastSeenAt: -1 })

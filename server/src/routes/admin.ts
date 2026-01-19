@@ -181,7 +181,10 @@ router.get("/sessions", requireRole("admin"), async (req: AuthRequest, res) => {
   }
 
   const since = new Date(Date.now() - 1000 * 60 * 60 * 24 * 7);
-  const sessions = await AuthSessionModel.find({ revokedAt: { $exists: false }, lastSeenAt: { $gte: since } })
+  const sessions = await AuthSessionModel.find({
+    $or: [{ revokedAt: { $exists: false } }, { revokedAt: null }],
+    lastSeenAt: { $gte: since },
+  })
     .sort({ lastSeenAt: -1 })
     .limit(400)
     .exec();

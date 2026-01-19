@@ -45,7 +45,7 @@ type TenantSessionRow = {
 const roles: UserRole[] = ["inventory_staff", "manager", "admin"];
 
 export function AdminBranchesScreen({ navigation }: Props) {
-  const { token, user, effectiveRole, tenants, activeTenantId, setActiveTenantId, refreshTenants } = useContext(AuthContext);
+  const { token, user, effectiveRole, tenants, activeTenantId, setActiveTenantId, refreshMe, refreshTenants } = useContext(AuthContext);
   const isSuperAdmin = user?.role === "admin";
   const isBranchAdmin = effectiveRole === "admin";
 
@@ -63,6 +63,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [members, setMembers] = useState<BranchMember[]>([]);
   const [allUsers, setAllUsers] = useState<AdminUserRow[]>([]);
+  const [branchTab, setBranchTab] = useState<"list" | "create">("list");
   const [adminTab, setAdminTab] = useState<"members" | "add" | "invites" | "sessions" | "users">("members");
   const [createUserName, setCreateUserName] = useState("");
   const [createUserEmail, setCreateUserEmail] = useState("");
@@ -88,21 +89,6 @@ export function AdminBranchesScreen({ navigation }: Props) {
     [isBranchAdmin, token]
   );
 
-  useEffect(() => {
-    if (!token) return;
-    if (!isBranchAdmin) {
-      setMembers([]);
-      return;
-    }
-    loadMembers(activeTenantId).catch(() => undefined);
-  }, [activeTenantId, isBranchAdmin, loadMembers, token]);
-
-  const loadAllUsers = useCallback(async () => {
-    if (!token || !isSuperAdmin) return;
-    const res = await apiRequest<{ ok: true; users: AdminUserRow[] }>("/admin/users-with-memberships", { method: "GET", token });
-    setAllUsers(Array.isArray(res.users) ? res.users : []);
-  }, [isSuperAdmin, token]);
-
   const loadSessions = useCallback(
     async (tenantId: string | null) => {
       if (!token || !isBranchAdmin) return;
@@ -115,6 +101,55 @@ export function AdminBranchesScreen({ navigation }: Props) {
     },
     [isBranchAdmin, token]
   );
+
+  useEffect(() => {
+    if (!token) return;
+    if (!isBranchAdmin) {
+      setMembers([]);
+      return;
+    }
+    loadMembers(activeTenantId).catch(() => undefined);
+  }, [activeTenantId, isBranchAdmin, loadMembers, token]);
+
+  useEffect(() => {
+    if (!token) return;
+    if (!isBranchAdmin) {
+      setSessions([]);
+      return;
+    }
+    loadSessions(activeTenantId).catch(() => undefined);
+  }, [activeTenantId, isBranchAdmin, loadSessions, token]);
+
+  useEffect(() => {
+    if (!token) return;
+    if (!isBranchAdmin) return;
+    if (!activeTenantId) return;
+    if (adminTab !== "sessions") return;
+    loadSessions(activeTenantId).catch(() => undefined);
+  }, [activeTenantId, adminTab, isBranchAdmin, loadSessions, token]);
+
+  useEffect(() => {
+    if (!token) return;
+    if (!isBranchAdmin) return;
+    if (!activeTenantId) return;
+
+    const id = setInterval(() => {
+      if (adminTab === "sessions") {
+        loadSessions(activeTenantId).catch(() => undefined);
+      }
+      if (adminTab === "members") {
+        loadMembers(activeTenantId).catch(() => undefined);
+      }
+    }, 10_000);
+
+    return () => clearInterval(id);
+  }, [activeTenantId, adminTab, isBranchAdmin, loadMembers, loadSessions, token]);
+
+  const loadAllUsers = useCallback(async () => {
+    if (!token || !isSuperAdmin) return;
+    const res = await apiRequest<{ ok: true; users: AdminUserRow[] }>("/admin/users-with-memberships", { method: "GET", token });
+    setAllUsers(Array.isArray(res.users) ? res.users : []);
+  }, [isSuperAdmin, token]);
 
   async function createUserInActiveBranch() {
     if (!token || !isBranchAdmin) return;
@@ -350,6 +385,20 @@ export function AdminBranchesScreen({ navigation }: Props) {
     }, [activeTenantId, isBranchAdmin, isSuperAdmin, loadAllUsers, loadMembers, loadSessions, refreshTenants, token])
   );
 
+  useEffect(() => {
+    if (!token) return;
+
+    const id = setInterval(() => {
+      if (busy) return;
+      refreshTenants().catch(() => undefined);
+      if (isSuperAdmin && adminTab === "users") {
+        loadAllUsers().catch(() => undefined);
+      }
+    }, 15_000);
+
+    return () => clearInterval(id);
+  }, [adminTab, busy, isSuperAdmin, loadAllUsers, refreshTenants, token]);
+
   const onBack = useCallback(() => {
     if (navigation.canGoBack()) {
       navigation.goBack();
@@ -389,7 +438,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
     setBusy(true);
     setError(null);
     try {
-      await apiRequest<{ ok: true }>("/tenants", {
+      const res = await apiRequest<{ ok: true; tenant?: { id: string } }>("/tenants", {
         method: "POST",
         token,
         body: JSON.stringify({ name: cleanName, slug: cleanSlug }),
@@ -397,12 +446,32 @@ export function AdminBranchesScreen({ navigation }: Props) {
       setName("");
       setSlug("");
       await refreshTenants();
+      if (res?.tenant?.id) {
+        await setActiveTenantId(res.tenant.id);
+      }
+      setBranchTab("list");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create branch");
     } finally {
       setBusy(false);
     }
   }
+
+  const selectAdminTab = useCallback(
+    async (tab: "members" | "add" | "invites" | "sessions" | "users") => {
+      setAdminTab(tab);
+      if (tab === "sessions") {
+        await refreshMe().catch(() => undefined);
+      }
+      if (tab === "members") {
+        await loadMembers(activeTenantId).catch(() => undefined);
+      }
+      if (tab === "users" && isSuperAdmin) {
+        await loadAllUsers().catch(() => undefined);
+      }
+    },
+    [activeTenantId, isSuperAdmin, loadAllUsers, loadMembers, loadSessions, refreshMe]
+  );
 
   async function addMember() {
     if (!token || !isBranchAdmin) return;
@@ -474,37 +543,50 @@ export function AdminBranchesScreen({ navigation }: Props) {
             <Badge label={`Total: ${list.length}`} tone="default" />
             <Badge label={activeTenantId ? "Active: set" : "Active: not set"} tone={activeTenantId ? "success" : "warning"} />
           </View>
-          <View style={{ height: 12 }} />
-          <View style={{ gap: 10 }}>
-            {list.length ? (
-              list.map((t) => (
-                <ListRow
-                  key={t.id}
-                  title={t.name}
-                  subtitle={t.slug}
-                  right={t.id === activeTenantId ? <Badge label="Active" tone="success" /> : undefined}
-                  onPress={() => selectBranch(t.id)}
+          {isSuperAdmin ? (
+            <>
+              <View style={{ height: 12 }} />
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                <AppButton title="Branches" onPress={() => setBranchTab("list")} variant={branchTab === "list" ? "primary" : "secondary"} />
+                <AppButton
+                  title="Create branch"
+                  onPress={() => setBranchTab("create")}
+                  variant={branchTab === "create" ? "primary" : "secondary"}
+                  disabled={busy}
                 />
-              ))
-            ) : (
-              <MutedText>No branches found.</MutedText>
-            )}
-          </View>
+              </View>
+            </>
+          ) : null}
+          <View style={{ height: 12 }} />
+          {branchTab === "create" && isSuperAdmin ? (
+            <>
+              <TextField value={name} onChangeText={setName} placeholder="Branch name" autoCapitalize="words" />
+              <View style={{ height: 10 }} />
+              <TextField value={slug} onChangeText={setSlug} placeholder="slug (e.g. dome)" autoCapitalize="none" />
+              <View style={{ height: 12 }} />
+              <AppButton title={busy ? "Working..." : "Create"} onPress={createBranch} disabled={busy} />
+            </>
+          ) : (
+            <View style={{ gap: 10 }}>
+              {list.length ? (
+                list.map((t) => (
+                  <ListRow
+                    key={t.id}
+                    title={t.name}
+                    subtitle={t.slug}
+                    right={t.id === activeTenantId ? <Badge label="Active" tone="success" /> : undefined}
+                    onPress={() => selectBranch(t.id)}
+                  />
+                ))
+              ) : (
+                <MutedText>No branches found.</MutedText>
+              )}
+            </View>
+          )}
         </Card>
 
         {isBranchAdmin ? (
           <>
-            {isSuperAdmin ? (
-              <Card>
-                <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Create branch</Text>
-                <TextField value={name} onChangeText={setName} placeholder="Branch name" autoCapitalize="words" />
-                <View style={{ height: 10 }} />
-                <TextField value={slug} onChangeText={setSlug} placeholder="slug (e.g. dome)" autoCapitalize="none" />
-                <View style={{ height: 12 }} />
-                <AppButton title={busy ? "Working..." : "Create"} onPress={createBranch} disabled={busy} />
-              </Card>
-            ) : null}
-
             <Card>
               <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Users</Text>
               {!activeTenantId ? (
@@ -512,12 +594,12 @@ export function AdminBranchesScreen({ navigation }: Props) {
               ) : (
                 <>
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                    <AppButton title="Members" onPress={() => setAdminTab("members")} variant={adminTab === "members" ? "primary" : "secondary"} />
-                    <AppButton title="Add user" onPress={() => setAdminTab("add")} variant={adminTab === "add" ? "primary" : "secondary"} />
-                    <AppButton title="Invites" onPress={() => setAdminTab("invites")} variant={adminTab === "invites" ? "primary" : "secondary"} />
-                    <AppButton title="Active sessions" onPress={() => setAdminTab("sessions")} variant={adminTab === "sessions" ? "primary" : "secondary"} />
+                    <AppButton title="Members" onPress={() => selectAdminTab("members")} variant={adminTab === "members" ? "primary" : "secondary"} />
+                    <AppButton title="Add user" onPress={() => selectAdminTab("add")} variant={adminTab === "add" ? "primary" : "secondary"} />
+                    <AppButton title="Invites" onPress={() => selectAdminTab("invites")} variant={adminTab === "invites" ? "primary" : "secondary"} />
+                    <AppButton title="Active sessions" onPress={() => selectAdminTab("sessions")} variant={adminTab === "sessions" ? "primary" : "secondary"} />
                     {isSuperAdmin ? (
-                      <AppButton title="All users" onPress={() => setAdminTab("users")} variant={adminTab === "users" ? "primary" : "secondary"} />
+                      <AppButton title="All users" onPress={() => selectAdminTab("users")} variant={adminTab === "users" ? "primary" : "secondary"} />
                     ) : null}
                   </View>
 

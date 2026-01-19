@@ -69,7 +69,7 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
       }
 
       const session = await AuthSessionModel.findOneAndUpdate(
-        { jti: jtiStr, revokedAt: { $exists: false } },
+        { jti: jtiStr, $or: [{ revokedAt: { $exists: false } }, { revokedAt: null }] },
         { $set: update },
         { new: false }
       )

@@ -253,8 +253,24 @@ router.get("/me", requireAuth, async (req: AuthRequest, res) => {
     return;
   }
 
+  let token: string | undefined = undefined;
+  if (!auth.jti) {
+    const jti = crypto.randomUUID();
+    const now = new Date();
+    await AuthSessionModel.create({
+      userId: user._id.toString(),
+      jti,
+      createdAt: now,
+      lastSeenAt: now,
+      userAgent: req.header("user-agent") ?? undefined,
+      ip: req.ip ?? undefined,
+    });
+    token = signAccessToken({ id: user._id.toString(), role: user.role, jti });
+  }
+
   res.json({
     ok: true,
+    token,
     user: {
       id: user._id.toString(),
       name: user.name,
