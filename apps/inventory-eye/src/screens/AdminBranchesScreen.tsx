@@ -108,17 +108,9 @@ export function AdminBranchesScreen({ navigation }: Props) {
       setMembers([]);
       return;
     }
+    if (adminTab !== "members") return;
     loadMembers(activeTenantId).catch(() => undefined);
-  }, [activeTenantId, isBranchAdmin, loadMembers, token]);
-
-  useEffect(() => {
-    if (!token) return;
-    if (!isBranchAdmin) {
-      setSessions([]);
-      return;
-    }
-    loadSessions(activeTenantId).catch(() => undefined);
-  }, [activeTenantId, isBranchAdmin, loadSessions, token]);
+  }, [activeTenantId, adminTab, isBranchAdmin, loadMembers, token]);
 
   useEffect(() => {
     if (!token) return;
@@ -127,23 +119,6 @@ export function AdminBranchesScreen({ navigation }: Props) {
     if (adminTab !== "sessions") return;
     loadSessions(activeTenantId).catch(() => undefined);
   }, [activeTenantId, adminTab, isBranchAdmin, loadSessions, token]);
-
-  useEffect(() => {
-    if (!token) return;
-    if (!isBranchAdmin) return;
-    if (!activeTenantId) return;
-
-    const id = setInterval(() => {
-      if (adminTab === "sessions") {
-        loadSessions(activeTenantId).catch(() => undefined);
-      }
-      if (adminTab === "members") {
-        loadMembers(activeTenantId).catch(() => undefined);
-      }
-    }, 10_000);
-
-    return () => clearInterval(id);
-  }, [activeTenantId, adminTab, isBranchAdmin, loadMembers, loadSessions, token]);
 
   const loadAllUsers = useCallback(async () => {
     if (!token || !isSuperAdmin) return;
@@ -376,28 +351,20 @@ export function AdminBranchesScreen({ navigation }: Props) {
       setError(null);
       refreshTenants().catch(() => undefined);
       if (isBranchAdmin) {
-        loadMembers(activeTenantId).catch(() => undefined);
-        loadSessions(activeTenantId).catch(() => undefined);
+        if (adminTab === "members") {
+          loadMembers(activeTenantId).catch(() => undefined);
+        }
+        if (adminTab === "sessions") {
+          loadSessions(activeTenantId).catch(() => undefined);
+        }
       }
       if (isSuperAdmin) {
-        loadAllUsers().catch(() => undefined);
+        if (adminTab === "users") {
+          loadAllUsers().catch(() => undefined);
+        }
       }
-    }, [activeTenantId, isBranchAdmin, isSuperAdmin, loadAllUsers, loadMembers, loadSessions, refreshTenants, token])
+    }, [activeTenantId, adminTab, isBranchAdmin, isSuperAdmin, loadAllUsers, loadMembers, loadSessions, refreshTenants, token])
   );
-
-  useEffect(() => {
-    if (!token) return;
-
-    const id = setInterval(() => {
-      if (busy) return;
-      refreshTenants().catch(() => undefined);
-      if (isSuperAdmin && adminTab === "users") {
-        loadAllUsers().catch(() => undefined);
-      }
-    }, 15_000);
-
-    return () => clearInterval(id);
-  }, [adminTab, busy, isSuperAdmin, loadAllUsers, refreshTenants, token]);
 
   const onBack = useCallback(() => {
     if (navigation.canGoBack()) {
