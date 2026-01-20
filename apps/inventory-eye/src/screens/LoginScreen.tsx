@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Text, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
@@ -12,6 +12,13 @@ export function LoginScreen({ navigation }: Props) {
   const { signIn, authLastError } = useContext(AuthContext);
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
+
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const Form: any = Platform.OS === "web" ? "form" : View;
 
@@ -29,8 +36,16 @@ export function LoginScreen({ navigation }: Props) {
     try {
       await signIn(email.trim(), password);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Login failed");
-      setLoading(false);
+      const msg = e instanceof Error ? e.message : "Login failed";
+      if (msg === "Request timeout") {
+        setError("Server not responding. Please try again in a moment.");
+      } else if (msg.toLowerCase().includes("network")) {
+        setError("Network error. Check your connection and try again.");
+      } else {
+        setError(msg);
+      }
+    } finally {
+      if (mountedRef.current) setLoading(false);
     }
   }
 

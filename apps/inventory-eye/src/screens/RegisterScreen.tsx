@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Text, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
@@ -12,6 +12,13 @@ export function RegisterScreen({ navigation }: Props) {
   const { signUp } = useContext(AuthContext);
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
+
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const Form: any = Platform.OS === "web" ? "form" : View;
 
@@ -35,7 +42,8 @@ export function RegisterScreen({ navigation }: Props) {
       await signUp(name.trim(), email.trim(), password, inviteCode.trim() || undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Registration failed");
-      setLoading(false);
+    } finally {
+      if (mountedRef.current) setLoading(false);
     }
   }
 

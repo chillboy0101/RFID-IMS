@@ -8,9 +8,9 @@ export type ApiError = {
 
 export async function apiRequest<T>(
   path: string,
-  options: RequestInit & { token?: string | null } = {}
+  options: RequestInit & { token?: string | null; timeoutMs?: number } = {}
 ): Promise<T> {
-  const { token, ...init } = options;
+  const { token, timeoutMs = 20000, ...init } = options;
 
   const headers = new Headers(init.headers);
   if (!headers.has("Content-Type") && init.body) {
@@ -25,7 +25,42 @@ export async function apiRequest<T>(
     headers.set("X-Tenant-ID", tenantId);
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let controller: AbortController | null = null;
+
+  const doFetch = async () => {
+    const url = `${API_BASE_URL}${path}`;
+
+    if (!init.signal && typeof AbortController !== "undefined") {
+      controller = new AbortController();
+      timeoutId = setTimeout(() => controller?.abort(), timeoutMs);
+      return fetch(url, { ...init, headers, signal: controller.signal });
+    }
+
+    if (timeoutMs > 0) {
+      return (await Promise.race([
+        fetch(url, { ...init, headers }),
+        new Promise<Response>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error("Request timeout")), timeoutMs);
+        }),
+      ])) as Response;
+    }
+
+    return fetch(url, { ...init, headers });
+  };
+
+  let res: Response;
+  try {
+    res = await doFetch();
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      throw new Error("Request timeout");
+    }
+    throw e instanceof Error ? e : new Error("Network error");
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+
   const text = await res.text();
 
   let data: unknown = null;

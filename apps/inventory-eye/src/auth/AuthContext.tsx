@@ -284,6 +284,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setAuthLastError(null);
     const res = await apiRequest<{ ok: true; token: string; user: AuthUser }>("/auth/login", {
       method: "POST",
+      timeoutMs: 25000,
       body: JSON.stringify({ email, password }),
     });
 
@@ -296,6 +297,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signUp = useCallback(async (name: string, email: string, password: string, inviteCode?: string) => {
     const res = await apiRequest<{ ok: true; token: string; user: AuthUser }>("/auth/register", {
       method: "POST",
+      timeoutMs: 25000,
       body: JSON.stringify({ name, email, password, inviteCode: inviteCode ? inviteCode.trim() : undefined }),
     });
 
