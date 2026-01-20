@@ -212,15 +212,17 @@ export function AlertsScreen({ navigation }: Props) {
                 <MutedText style={{ marginTop: 8 }}>Items below reorder level</MutedText>
 
                 <View style={{ height: 12 }} />
-                {lowStockFiltered.length ? (
-                  <View style={{ gap: 10 }}>
-                    {lowStockFiltered.slice(0, 8).map((it) => (
-                      <ListRow key={it._id} title={it.name} subtitle={`SKU: ${it.sku}`} meta={`Qty: ${it.quantity} / Reorder: ${it.reorderLevel}`} />
-                    ))}
-                  </View>
-                ) : (
-                  <MutedText>{q.trim() ? "No matching low stock items" : "No low stock items"}</MutedText>
-                )}
+                <View style={{ minHeight: 200, justifyContent: lowStockFiltered.length ? "flex-start" : "center" }}>
+                  {lowStockFiltered.length ? (
+                    <View style={{ gap: 10 }}>
+                      {lowStockFiltered.slice(0, 8).map((it) => (
+                        <ListRow key={it._id} title={it.name} subtitle={`SKU: ${it.sku}`} meta={`Qty: ${it.quantity} / Reorder: ${it.reorderLevel}`} />
+                      ))}
+                    </View>
+                  ) : (
+                    <MutedText>{q.trim() ? "No matching low stock items" : "No low stock items"}</MutedText>
+                  )}
+                </View>
               </Card>
             </View>
 
@@ -236,15 +238,22 @@ export function AlertsScreen({ navigation }: Props) {
                 <MutedText style={{ marginTop: 8 }}>Within {data?.alerts.expiringSoon.expiryDays ?? "-"} days</MutedText>
 
                 <View style={{ height: 12 }} />
-                {expiringFiltered.length ? (
-                  <View style={{ gap: 10 }}>
-                    {expiringFiltered.slice(0, 8).map((it) => (
-                      <ListRow key={it._id} title={it.name} subtitle={`SKU: ${it.sku}`} meta={it.expiryDate ? new Date(it.expiryDate).toLocaleDateString() : "-"} />
-                    ))}
-                  </View>
-                ) : (
-                  <MutedText>{q.trim() ? "No matching expiring items" : "No expiring items"}</MutedText>
-                )}
+                <View style={{ minHeight: 200, justifyContent: expiringFiltered.length ? "flex-start" : "center" }}>
+                  {expiringFiltered.length ? (
+                    <View style={{ gap: 10 }}>
+                      {expiringFiltered.slice(0, 8).map((it) => (
+                        <ListRow
+                          key={it._id}
+                          title={it.name}
+                          subtitle={`SKU: ${it.sku}`}
+                          meta={it.expiryDate ? new Date(it.expiryDate).toLocaleDateString() : "-"}
+                        />
+                      ))}
+                    </View>
+                  ) : (
+                    <MutedText>{q.trim() ? "No matching expiring items" : "No expiring items"}</MutedText>
+                  )}
+                </View>
               </Card>
             </View>
 
@@ -262,20 +271,22 @@ export function AlertsScreen({ navigation }: Props) {
                 </MutedText>
 
                 <View style={{ height: 12 }} />
-                {movementFiltered.length ? (
-                  <View style={{ gap: 10 }}>
-                    {movementFiltered.slice(0, 8).map((l) => (
-                      <ListRow
-                        key={l._id}
-                        title={`Delta: ${typeof l.delta === "number" ? l.delta : "-"}`}
-                        subtitle={`Action: ${l.action ?? "-"}${l.reason ? `\nReason: ${l.reason}` : ""}`}
-                        meta={l.createdAt ? new Date(l.createdAt).toLocaleString() : "-"}
-                      />
-                    ))}
-                  </View>
-                ) : (
-                  <MutedText>{q.trim() ? "No matching movement logs" : "No unusual movements"}</MutedText>
-                )}
+                <View style={{ minHeight: 200, justifyContent: movementFiltered.length ? "flex-start" : "center" }}>
+                  {movementFiltered.length ? (
+                    <View style={{ gap: 10 }}>
+                      {movementFiltered.slice(0, 8).map((l) => (
+                        <ListRow
+                          key={l._id}
+                          title={`Delta: ${typeof l.delta === "number" ? l.delta : "-"}`}
+                          subtitle={`Action: ${l.action ?? "-"}${l.reason ? `\nReason: ${l.reason}` : ""}`}
+                          meta={l.createdAt ? new Date(l.createdAt).toLocaleString() : "-"}
+                        />
+                      ))}
+                    </View>
+                  ) : (
+                    <MutedText>{q.trim() ? "No matching movement logs" : "No unusual movements"}</MutedText>
+                  )}
+                </View>
               </Card>
             </View>
           </View>

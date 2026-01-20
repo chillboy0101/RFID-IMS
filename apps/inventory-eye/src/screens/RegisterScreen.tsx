@@ -93,7 +93,7 @@ export function RegisterScreen({ navigation }: Props) {
             <View style={{ height: 12 }} />
 
             <AppButton
-              title={loading ? "Creating..." : "Create account"}
+              title="Create account"
               onPress={onSubmit}
               disabled={!canSubmit || loading}
               loading={loading}

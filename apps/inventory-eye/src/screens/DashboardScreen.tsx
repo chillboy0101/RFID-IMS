@@ -345,30 +345,32 @@ export function DashboardScreen({ navigation }: any) {
                 <Badge label={`Total ${data?.inventory.totalItems ?? "-"}`} tone="primary" />
               </View>
 
-              {typeof data?.inventory.totalItems === "number" ? (
-                (() => {
-                  const total = data.inventory.totalItems;
-                  const low = data.inventory.lowStockCount;
-                  const exp = data.inventory.expiringSoonCount;
-                  const healthy = Math.max(0, total - low - exp);
-                  const slices: PieSlice[] = [
-                    { label: "Healthy", value: healthy, color: theme.colors.success },
-                    { label: "Low stock", value: low, color: theme.colors.warning },
-                    { label: `Expiring (${data.inventory.expiryDays}d)`, value: exp, color: theme.colors.primary },
-                  ];
+              <View style={{ minHeight: 170, justifyContent: typeof data?.inventory.totalItems === "number" ? "flex-start" : "center" }}>
+                {typeof data?.inventory.totalItems === "number" ? (
+                  (() => {
+                    const total = data.inventory.totalItems;
+                    const low = data.inventory.lowStockCount;
+                    const exp = data.inventory.expiringSoonCount;
+                    const healthy = Math.max(0, total - low - exp);
+                    const slices: PieSlice[] = [
+                      { label: "Healthy", value: healthy, color: theme.colors.success },
+                      { label: "Low stock", value: low, color: theme.colors.warning },
+                      { label: `Expiring (${data.inventory.expiryDays}d)`, value: exp, color: theme.colors.primary },
+                    ];
 
-                  return (
-                    <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
-                      <DonutChart slices={slices} size={150} />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <ChartLegend slices={slices} />
+                    return (
+                      <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+                        <DonutChart slices={slices} size={150} />
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <ChartLegend slices={slices} />
+                        </View>
                       </View>
-                    </View>
-                  );
-                })()
-              ) : (
-                <MutedText>Loading inventory summary...</MutedText>
-              )}
+                    );
+                  })()
+                ) : (
+                  <MutedText>Loading inventory summary...</MutedText>
+                )}
+              </View>
             </Card>
 
             <Card style={{ flex: 1 }}>
@@ -382,36 +384,38 @@ export function DashboardScreen({ navigation }: any) {
                 />
               </View>
 
-              {data?.orders.recent?.length ? (
-                (() => {
-                  const recent = data.orders.recent.slice(0, 50);
-                  const counts = recent.reduce(
-                    (acc, o) => {
-                      acc[o.status] = (acc[o.status] ?? 0) + 1;
-                      return acc;
-                    },
-                    {} as Record<string, number>
-                  );
+              <View style={{ minHeight: 170, justifyContent: data?.orders.recent?.length ? "flex-start" : "center" }}>
+                {data?.orders.recent?.length ? (
+                  (() => {
+                    const recent = data.orders.recent.slice(0, 50);
+                    const counts = recent.reduce(
+                      (acc, o) => {
+                        acc[o.status] = (acc[o.status] ?? 0) + 1;
+                        return acc;
+                      },
+                      {} as Record<string, number>
+                    );
 
-                  const slices: PieSlice[] = [
-                    { label: "Created", value: counts.created ?? 0, color: theme.colors.primary },
-                    { label: "Picking", value: counts.picking ?? 0, color: theme.colors.warning },
-                    { label: "Fulfilled", value: counts.fulfilled ?? 0, color: theme.colors.success },
-                    { label: "Cancelled", value: counts.cancelled ?? 0, color: theme.colors.danger },
-                  ];
+                    const slices: PieSlice[] = [
+                      { label: "Created", value: counts.created ?? 0, color: theme.colors.primary },
+                      { label: "Picking", value: counts.picking ?? 0, color: theme.colors.warning },
+                      { label: "Fulfilled", value: counts.fulfilled ?? 0, color: theme.colors.success },
+                      { label: "Cancelled", value: counts.cancelled ?? 0, color: theme.colors.danger },
+                    ];
 
-                  return (
-                    <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
-                      <DonutChart slices={slices} size={150} />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <ChartLegend slices={slices} />
+                    return (
+                      <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+                        <DonutChart slices={slices} size={150} />
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <ChartLegend slices={slices} />
+                        </View>
                       </View>
-                    </View>
-                  );
-                })()
-              ) : (
-                <MutedText>No recent orders</MutedText>
-              )}
+                    );
+                  })()
+                ) : (
+                  <MutedText>No recent orders</MutedText>
+                )}
+              </View>
             </Card>
           </View>
 
@@ -447,30 +451,32 @@ export function DashboardScreen({ navigation }: any) {
               <Badge label={`Total ${data?.inventory.totalItems ?? "-"}`} tone="primary" />
             </View>
 
-            {typeof data?.inventory.totalItems === "number" ? (
-              (() => {
-                const total = data.inventory.totalItems;
-                const low = data.inventory.lowStockCount;
-                const exp = data.inventory.expiringSoonCount;
-                const healthy = Math.max(0, total - low - exp);
-                const slices: PieSlice[] = [
-                  { label: "Healthy", value: healthy, color: theme.colors.success },
-                  { label: "Low stock", value: low, color: theme.colors.warning },
-                  { label: `Expiring (${data.inventory.expiryDays}d)`, value: exp, color: theme.colors.primary },
-                ];
+            <View style={{ minHeight: 260, justifyContent: typeof data?.inventory.totalItems === "number" ? "flex-start" : "center" }}>
+              {typeof data?.inventory.totalItems === "number" ? (
+                (() => {
+                  const total = data.inventory.totalItems;
+                  const low = data.inventory.lowStockCount;
+                  const exp = data.inventory.expiringSoonCount;
+                  const healthy = Math.max(0, total - low - exp);
+                  const slices: PieSlice[] = [
+                    { label: "Healthy", value: healthy, color: theme.colors.success },
+                    { label: "Low stock", value: low, color: theme.colors.warning },
+                    { label: `Expiring (${data.inventory.expiryDays}d)`, value: exp, color: theme.colors.primary },
+                  ];
 
-                return (
-                  <View style={{ flexDirection: "column", gap: 12, alignItems: "center" }}>
-                    <DonutChart slices={slices} size={170} />
-                    <View style={{ width: "100%" }}>
-                      <ChartLegend slices={slices} />
+                  return (
+                    <View style={{ flexDirection: "column", gap: 12, alignItems: "center" }}>
+                      <DonutChart slices={slices} size={170} />
+                      <View style={{ width: "100%" }}>
+                        <ChartLegend slices={slices} />
+                      </View>
                     </View>
-                  </View>
-                );
-              })()
-            ) : (
-              <MutedText>Loading inventory summary...</MutedText>
-            )}
+                  );
+                })()
+              ) : (
+                <MutedText>Loading inventory summary...</MutedText>
+              )}
+            </View>
           </Card>
 
           <Card>
@@ -484,36 +490,38 @@ export function DashboardScreen({ navigation }: any) {
               />
             </View>
 
-            {data?.orders.recent?.length ? (
-              (() => {
-                const recent = data.orders.recent.slice(0, 50);
-                const counts = recent.reduce(
-                  (acc, o) => {
-                    acc[o.status] = (acc[o.status] ?? 0) + 1;
-                    return acc;
-                  },
-                  {} as Record<string, number>
-                );
+            <View style={{ minHeight: 260, justifyContent: data?.orders.recent?.length ? "flex-start" : "center" }}>
+              {data?.orders.recent?.length ? (
+                (() => {
+                  const recent = data.orders.recent.slice(0, 50);
+                  const counts = recent.reduce(
+                    (acc, o) => {
+                      acc[o.status] = (acc[o.status] ?? 0) + 1;
+                      return acc;
+                    },
+                    {} as Record<string, number>
+                  );
 
-                const slices: PieSlice[] = [
-                  { label: "Created", value: counts.created ?? 0, color: theme.colors.primary },
-                  { label: "Picking", value: counts.picking ?? 0, color: theme.colors.warning },
-                  { label: "Fulfilled", value: counts.fulfilled ?? 0, color: theme.colors.success },
-                  { label: "Cancelled", value: counts.cancelled ?? 0, color: theme.colors.danger },
-                ];
+                  const slices: PieSlice[] = [
+                    { label: "Created", value: counts.created ?? 0, color: theme.colors.primary },
+                    { label: "Picking", value: counts.picking ?? 0, color: theme.colors.warning },
+                    { label: "Fulfilled", value: counts.fulfilled ?? 0, color: theme.colors.success },
+                    { label: "Cancelled", value: counts.cancelled ?? 0, color: theme.colors.danger },
+                  ];
 
-                return (
-                  <View style={{ flexDirection: "column", gap: 12, alignItems: "center" }}>
-                    <DonutChart slices={slices} size={170} />
-                    <View style={{ width: "100%" }}>
-                      <ChartLegend slices={slices} />
+                  return (
+                    <View style={{ flexDirection: "column", gap: 12, alignItems: "center" }}>
+                      <DonutChart slices={slices} size={170} />
+                      <View style={{ width: "100%" }}>
+                        <ChartLegend slices={slices} />
+                      </View>
                     </View>
-                  </View>
-                );
-              })()
-            ) : (
-              <MutedText>No recent orders</MutedText>
-            )}
+                  );
+                })()
+              ) : (
+                <MutedText>No recent orders</MutedText>
+              )}
+            </View>
           </Card>
 
           <Card>

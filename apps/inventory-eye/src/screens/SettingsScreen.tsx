@@ -119,7 +119,7 @@ export function SettingsScreen() {
         ) : null}
 
         <View style={{ marginTop: 12 }}>
-          <AppButton title={pinging ? "Pinging..." : "Ping API"} onPress={pingApi} disabled={pinging} loading={pinging} />
+          <AppButton title="Ping API" onPress={pingApi} disabled={pinging} loading={pinging} />
         </View>
       </Card>
 

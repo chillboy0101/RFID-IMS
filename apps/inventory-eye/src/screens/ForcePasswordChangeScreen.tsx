@@ -86,7 +86,7 @@ export function ForcePasswordChangeScreen() {
             ) : null}
 
             <View style={{ height: 12 }} />
-            <AppButton title={busy ? "Saving..." : "Save new password"} onPress={onSubmit} disabled={busy || !token} />
+            <AppButton title="Save new password" onPress={onSubmit} disabled={busy || !token} loading={busy} />
 
             <View style={{ height: 10 }} />
             <AppButton title="Sign out" onPress={() => signOut()} variant="secondary" disabled={busy} />

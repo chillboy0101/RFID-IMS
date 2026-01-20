@@ -159,7 +159,7 @@ export function ReportsScreen({ navigation }: Props) {
             </View>
 
             {canSeeFulfillment ? (
-              <View style={{ marginTop: 12 }}>
+              <View style={{ marginTop: 12, minHeight: 92, justifyContent: fulfillment ? "flex-start" : "center" }}>
                 <Text style={[theme.typography.label, { color: theme.colors.textMuted, marginBottom: 8 }]}>Order fulfillment</Text>
                 {fulfillment ? (
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
@@ -180,20 +180,22 @@ export function ReportsScreen({ navigation }: Props) {
 
           <Card>
             <Text style={[theme.typography.h2, { color: theme.colors.text, marginBottom: 10 }]}>Low stock items</Text>
-            {lowStockFiltered.length ? (
-              <View style={{ gap: 10 }}>
-                {lowStockFiltered.slice(0, 30).map((it) => (
-                  <ListRow
-                    key={it._id}
-                    title={it.name}
-                    subtitle={`SKU: ${it.sku}`}
-                    meta={`Qty: ${it.quantity} / Reorder: ${it.reorderLevel}`}
-                  />
-                ))}
-              </View>
-            ) : (
-              <MutedText>{q.trim() ? "No matching items" : "No low stock items"}</MutedText>
-            )}
+            <View style={{ minHeight: 160, justifyContent: lowStockFiltered.length ? "flex-start" : "center" }}>
+              {lowStockFiltered.length ? (
+                <View style={{ gap: 10 }}>
+                  {lowStockFiltered.slice(0, 30).map((it) => (
+                    <ListRow
+                      key={it._id}
+                      title={it.name}
+                      subtitle={`SKU: ${it.sku}`}
+                      meta={`Qty: ${it.quantity} / Reorder: ${it.reorderLevel}`}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <MutedText>{q.trim() ? "No matching items" : "No low stock items"}</MutedText>
+              )}
+            </View>
           </Card>
 
         </View>

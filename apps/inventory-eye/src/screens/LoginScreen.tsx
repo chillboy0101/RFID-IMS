@@ -74,7 +74,7 @@ export function LoginScreen({ navigation }: Props) {
             <View style={{ height: 12 }} />
 
             <AppButton
-              title={loading ? "Signing in..." : "Sign in"}
+              title="Sign in"
               onPress={onSubmit}
               disabled={!canSubmit || loading}
               loading={loading}

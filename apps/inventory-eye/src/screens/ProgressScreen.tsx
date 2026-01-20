@@ -219,7 +219,7 @@ export function ProgressScreen({ navigation }: Props) {
 
             <View style={{ height: 12 }} />
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-              <AppButton title={starting ? "Starting..." : "Start"} onPress={startSession} disabled={starting || !!openSession} loading={starting} />
+              <AppButton title="Start" onPress={startSession} disabled={starting || !!openSession} loading={starting} />
               <AppButton
                 title="Stop"
                 onPress={() => (openSession ? stopSession(openSession._id) : undefined)}
@@ -229,15 +229,17 @@ export function ProgressScreen({ navigation }: Props) {
             </View>
 
             <View style={{ height: 10 }} />
-            {openSession ? (
-              <ListRow
-                title={`Current: ${kindLabels[openSession.kind]}`}
-                subtitle={new Date(openSession.startedAt).toLocaleString()}
-                right={null}
-              />
-            ) : (
-              <MutedText>No open timer</MutedText>
-            )}
+            <View style={{ minHeight: 72, justifyContent: openSession ? "flex-start" : "center" }}>
+              {openSession ? (
+                <ListRow
+                  title={`Current: ${kindLabels[openSession.kind]}`}
+                  subtitle={new Date(openSession.startedAt).toLocaleString()}
+                  right={null}
+                />
+              ) : (
+                <MutedText>No open timer</MutedText>
+              )}
+            </View>
           </Card>
 
           <Card>
@@ -256,7 +258,7 @@ export function ProgressScreen({ navigation }: Props) {
             <TextField value={q} onChangeText={setQ} placeholder="Search: kind or date" autoCapitalize="none" />
             <View style={{ height: 12 }} />
             {isWeb ? (
-              <View style={{ gap: 10 }}>
+              <View style={{ gap: 10, minHeight: 140, justifyContent: loading ? "center" : "flex-start" }}>
                 {loading ? (
                   <MutedText>Loading...</MutedText>
                 ) : filteredSessions.length ? (
@@ -320,7 +322,7 @@ export function ProgressScreen({ navigation }: Props) {
 
             <View style={{ height: 12 }} />
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-              <AppButton title={starting ? "Starting..." : "Start"} onPress={startSession} disabled={starting || !!openSession} loading={starting} />
+              <AppButton title="Start" onPress={startSession} disabled={starting || !!openSession} loading={starting} />
               <AppButton
                 title="Stop"
                 onPress={() => (openSession ? stopSession(openSession._id) : undefined)}

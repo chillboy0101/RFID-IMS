@@ -128,7 +128,7 @@ export function RfidScannerScreen({ navigation }: Props) {
         <TextField label="Location (optional)" value={location} onChangeText={setLocation} placeholder="e.g. Aisle 3" autoCapitalize="none" />
 
         <View style={{ height: 12 }} />
-        <AppButton title={sending ? "Sending..." : "Send to system"} onPress={sendToSystem} disabled={sending} loading={sending} />
+        <AppButton title="Send to system" onPress={sendToSystem} disabled={sending} loading={sending} />
 
         {sendResult ? (
           <View style={{ marginTop: 12 }}>

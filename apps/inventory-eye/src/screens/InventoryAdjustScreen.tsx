@@ -111,7 +111,7 @@ export function InventoryAdjustScreen({ navigation, route }: Props) {
         <TextField label="Reason" value={reason} onChangeText={setReason} placeholder="Optional" />
         <MutedText style={{ marginTop: 8 }}>Delta must be non-zero.</MutedText>
         <View style={{ height: 16 }} />
-        <AppButton title={loading ? "Submitting..." : "Submit"} onPress={onSubmit} loading={loading} />
+        <AppButton title="Submit" onPress={onSubmit} loading={loading} />
       </Card>
     </Screen>
   );

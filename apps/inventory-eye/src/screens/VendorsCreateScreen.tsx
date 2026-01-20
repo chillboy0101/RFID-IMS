@@ -99,7 +99,7 @@ export function VendorsCreateScreen({ navigation }: Props) {
           <TextField label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional" multiline numberOfLines={3} />
 
           <View style={{ height: 16 }} />
-          <AppButton title={submitting ? "Creating..." : "Create"} onPress={createVendor} disabled={submitting} loading={submitting} />
+          <AppButton title="Create" onPress={createVendor} disabled={submitting} loading={submitting} />
         </Card>
       )}
     </Screen>

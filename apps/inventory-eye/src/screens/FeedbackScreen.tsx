@@ -159,7 +159,7 @@ export function FeedbackScreen({ navigation }: Props) {
 
             <View style={{ height: 16 }} />
 
-            <AppButton title={submitting ? "Submitting..." : "Submit"} onPress={submit} disabled={!canSubmit || submitting} loading={submitting} />
+            <AppButton title="Submit" onPress={submit} disabled={!canSubmit || submitting} loading={submitting} />
           </Card>
 
           <Card>
@@ -252,7 +252,7 @@ export function FeedbackScreen({ navigation }: Props) {
 
             <View style={{ height: 16 }} />
 
-            <AppButton title={submitting ? "Submitting..." : "Submit"} onPress={submit} disabled={!canSubmit || submitting} loading={submitting} />
+            <AppButton title="Submit" onPress={submit} disabled={!canSubmit || submitting} loading={submitting} />
           </Card>
 
           <Card>

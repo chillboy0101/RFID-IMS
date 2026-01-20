@@ -150,10 +150,10 @@ export function VendorsEditScreen({ navigation, route }: Props) {
           <TextField label="Notes" value={editNotes} onChangeText={setEditNotes} multiline numberOfLines={3} />
 
           <View style={{ height: 16 }} />
-          <AppButton title={saving ? "Saving..." : "Save"} onPress={save} disabled={saving} loading={saving} />
+          <AppButton title="Save" onPress={save} disabled={saving} loading={saving} />
 
           <View style={{ height: 10 }} />
-          <AppButton title={deleting ? "Deleting..." : "Delete"} onPress={deleteVendor} variant="danger" disabled={!canDelete || deleting} loading={deleting} />
+          <AppButton title="Delete" onPress={deleteVendor} variant="danger" disabled={!canDelete || deleting} loading={deleting} />
         </Card>
       )}
     </Screen>

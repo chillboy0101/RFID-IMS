@@ -97,7 +97,7 @@ export function ReorderCreateScreen({ navigation }: Props) {
             <TextField label="Note" value={note} onChangeText={setNote} placeholder="Optional" />
 
             <View style={{ height: 16 }} />
-            <AppButton title={submitting ? "Creating..." : "Create reorder"} onPress={create} disabled={submitting} loading={submitting} />
+            <AppButton title="Create reorder" onPress={create} disabled={submitting} loading={submitting} />
           </Card>
         </>
       )}

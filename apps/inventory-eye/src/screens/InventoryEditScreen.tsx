@@ -500,7 +500,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
 
               <Card>
                 <AppButton
-                  title={loading ? "Saving..." : "Save"}
+                  title="Save"
                   onPress={onSave}
                   disabled={!canSubmit || loading || !hasChanges}
                   loading={loading}
@@ -712,7 +712,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
           </Card>
 
           <Card>
-            <AppButton title={loading ? "Saving..." : "Save"} onPress={onSave} disabled={!canSubmit || loading || !hasChanges} loading={loading} />
+            <AppButton title="Save" onPress={onSave} disabled={!canSubmit || loading || !hasChanges} loading={loading} />
             {!canSubmit ? <MutedText style={{ marginTop: 8 }}>Fill required fields and use valid numbers.</MutedText> : null}
             {canSubmit && !loading && !hasChanges ? <MutedText style={{ marginTop: 8 }}>No changes to save.</MutedText> : null}
           </Card>

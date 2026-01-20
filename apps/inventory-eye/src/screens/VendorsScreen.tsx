@@ -160,7 +160,7 @@ export function VendorsScreen({ navigation }: Props) {
           <Card>
             <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>List</Text>
             {isWeb ? (
-              <View style={{ gap: 10 }}>
+              <View style={{ gap: 10, minHeight: 160, justifyContent: loading ? "center" : "flex-start" }}>
                 {loading ? (
                   <MutedText>Loading...</MutedText>
                 ) : filteredVendors.length ? (
@@ -206,7 +206,7 @@ export function VendorsScreen({ navigation }: Props) {
             />
             <View style={{ height: 12 }} />
             {isWeb ? (
-              <View style={{ gap: 10 }}>
+              <View style={{ gap: 10, minHeight: 160, justifyContent: loading ? "center" : "flex-start" }}>
                 {loading ? (
                   <MutedText>Loading...</MutedText>
                 ) : filteredVendors.length ? (

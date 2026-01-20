@@ -141,6 +141,7 @@ export function Screen({ title, children, scroll, right, refreshControl, busy, c
                   <ActivityIndicator
                     color={theme.colors.text}
                     size="large"
+                    accessible
                     accessibilityRole="progressbar"
                     accessibilityLabel="Loading"
                     style={{ transform: [{ scale: 1.25 }] }}
@@ -161,6 +162,7 @@ export function FullScreenLoader() {
       <ActivityIndicator
         size="large"
         color={theme.colors.text}
+        accessible
         accessibilityRole="progressbar"
         accessibilityLabel="Loading"
         style={{ transform: [{ scale: 1.5 }] }}
@@ -273,7 +275,14 @@ export function AppButton({ title, onPress, disabled, loading, variant = "primar
         ];
       }}
     >
-      {loading ? <ActivityIndicator color={textColor} accessibilityRole="progressbar" accessibilityLabel={`${title} loading`} /> : null}
+      {loading ? (
+        <ActivityIndicator
+          color={textColor}
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel={`${title} loading`}
+        />
+      ) : null}
       {!loading && iconName ? <Ionicons name={iconName} size={iconSize ?? 20} color={textColor} /> : null}
       {isIconOnly ? null : <Text style={{ color: textColor, fontWeight: "800" }}>{title}</Text>}
     </Pressable>
@@ -298,6 +307,14 @@ export const TextField = React.forwardRef<TextInput, TextFieldProps>(function Te
 
   const autoNativeId = useMemo(() => (Platform.OS === "web" ? nextTextFieldNativeId() : undefined), []);
   const resolvedNativeId = nativeID ?? autoNativeId;
+  const labelNativeId = useMemo(() => {
+    if (!label || !resolvedNativeId) return undefined;
+    return `${resolvedNativeId}-label`;
+  }, [label, resolvedNativeId]);
+
+  const resolvedA11yLabel = useMemo(() => {
+    return props.accessibilityLabel ?? label ?? props.placeholder;
+  }, [label, props.accessibilityLabel, props.placeholder]);
 
   const handleFocus: TextInputProps["onFocus"] = (e) => {
     setFocused(true);
@@ -313,10 +330,16 @@ export const TextField = React.forwardRef<TextInput, TextFieldProps>(function Te
 
   return (
     <View style={[{ gap: 8 }, containerStyle]}>
-      {label ? <Text style={[theme.typography.label, { color: textColor, letterSpacing: 0.2 }]}>{label}</Text> : null}
+      {label ? (
+        <Text nativeID={labelNativeId} style={[theme.typography.label, { color: textColor, letterSpacing: 0.2 }]}>
+          {label}
+        </Text>
+      ) : null}
       <TextInput
         ref={ref}
         nativeID={resolvedNativeId}
+        accessibilityLabel={resolvedA11yLabel}
+        accessibilityLabelledBy={Platform.OS === "web" && labelNativeId ? labelNativeId : undefined}
         value={value}
         onChangeText={onChangeText}
         onFocus={handleFocus}
@@ -387,7 +410,9 @@ export function Badge({ label, tone = "default", size = "default", responsive = 
         justifyContent: "center",
       }}
     >
-      <Text style={[theme.typography.label, { color: fg }]}>{label}</Text>
+      <Text style={[theme.typography.label, { color: fg }]} numberOfLines={1}>
+        {label}
+      </Text>
     </View>
   );
 }

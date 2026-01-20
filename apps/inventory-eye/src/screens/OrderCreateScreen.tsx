@@ -153,10 +153,11 @@ export function OrderCreateScreen({ navigation }: Props) {
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
                 <AppButton title="Scan RFID" onPress={() => searchRef.current?.focus()} variant="secondary" />
                 <AppButton
-                  title={loading ? "Searching..." : "Search"}
+                  title="Search"
                   onPress={() => loadItems().catch((e) => setError(e instanceof Error ? e.message : "Failed"))}
                   variant="secondary"
                   disabled={loading}
+                  loading={loading}
                 />
                 <View style={{ flexGrow: 1 }} />
                 <Badge label={`Selected: ${cart.length}`} tone={cart.length ? "primary" : "default"} size="header" />
@@ -306,12 +307,46 @@ export function OrderCreateScreen({ navigation }: Props) {
             <Card>
               <TextField label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional" multiline numberOfLines={3} />
               <View style={{ height: 16 }} />
-              <AppButton title={submitting ? "Creating..." : "Create order"} onPress={submit} disabled={submitting} loading={submitting} />
+              <AppButton title="Create order" onPress={submit} disabled={submitting} loading={submitting} />
+            </Card>
+
+            <Card>
+              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Inventory</Text>
+              {isWeb ? (
+                <View style={{ gap: 10 }}>
+                  {items.map((item) => (
+                    <ListRow
+                      key={item._id}
+                      title={item.name}
+                      subtitle={`SKU: ${item.sku}`}
+                      meta={`Available: ${item.quantity}`}
+                      right={<Badge label="Add" tone="primary" />}
+                      onPress={() => addToCart(item)}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <FlatList
+                  scrollEnabled={false}
+                  data={items}
+                  keyExtractor={(i) => i._id}
+                  ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+                  renderItem={({ item }) => (
+                    <ListRow
+                      title={item.name}
+                      subtitle={`SKU: ${item.sku}`}
+                      meta={`Available: ${item.quantity}`}
+                      right={<Badge label="Add" tone="primary" />}
+                      onPress={() => addToCart(item)}
+                    />
+                  )}
+                />
+              )}
             </Card>
           </View>
         </View>
       ) : (
-        <>
+        <View style={{ gap: theme.spacing.md }}>
           <Card>
             <TextField
               ref={searchRef}
@@ -330,10 +365,11 @@ export function OrderCreateScreen({ navigation }: Props) {
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
               <AppButton title="Scan RFID" onPress={() => searchRef.current?.focus()} variant="secondary" />
               <AppButton
-                title={loading ? "Searching..." : "Search"}
+                title="Search"
                 onPress={() => loadItems().catch((e) => setError(e instanceof Error ? e.message : "Failed"))}
                 variant="secondary"
                 disabled={loading}
+                loading={loading}
               />
               <Badge label={`Selected: ${cart.length}`} tone={cart.length ? "primary" : "default"} size="header" responsive={false} />
               <Badge label={`Total units: ${cartTotal}`} tone={cartTotal ? "primary" : "default"} size="header" responsive={false} />
@@ -367,7 +403,7 @@ export function OrderCreateScreen({ navigation }: Props) {
           <Card>
             <TextField label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional" multiline numberOfLines={3} />
             <View style={{ height: 16 }} />
-            <AppButton title={submitting ? "Creating..." : "Create order"} onPress={submit} disabled={submitting} loading={submitting} />
+            <AppButton title="Create order" onPress={submit} disabled={submitting} loading={submitting} />
           </Card>
 
           <Card>
@@ -403,7 +439,7 @@ export function OrderCreateScreen({ navigation }: Props) {
               />
             )}
           </Card>
-        </>
+        </View>
       )}
     </Screen>
   );
