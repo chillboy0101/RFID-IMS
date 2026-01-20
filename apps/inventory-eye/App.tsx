@@ -1,14 +1,15 @@
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
 import { Platform } from "react-native";
-import { Analytics } from "@vercel/analytics/react";
-import { SpeedInsights } from "@vercel/speed-insights/react";
 
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthProvider } from "./src/auth/AuthContext";
 import { AppNavigator } from "./src/navigation/AppNavigator";
 import { ThemeProvider } from "./src/ui";
+
+const WebAnalytics = Platform.OS === "web" ? (require("@vercel/analytics/react").Analytics as React.ComponentType) : null;
+const WebSpeedInsights = Platform.OS === "web" ? (require("@vercel/speed-insights/react").SpeedInsights as React.ComponentType) : null;
 
 export default function App() {
   useEffect(() => {
@@ -84,8 +85,8 @@ export default function App() {
       <SafeAreaProvider>
         <AuthProvider>
           <AppNavigator />
-          {Platform.OS === "web" ? <Analytics /> : null}
-          {Platform.OS === "web" ? <SpeedInsights /> : null}
+          {WebAnalytics ? <WebAnalytics /> : null}
+          {WebSpeedInsights ? <WebSpeedInsights /> : null}
           <StatusBar style="auto" />
         </AuthProvider>
       </SafeAreaProvider>

@@ -65,6 +65,13 @@ app.use((req: ReqWithId, res, next) => {
     const statusClass = `${Math.floor(res.statusCode / 100)}xx`;
     metrics.httpResponsesByStatusClass[statusClass] = (metrics.httpResponsesByStatusClass[statusClass] ?? 0) + 1;
 
+    const isOk = res.statusCode < 400;
+    const isHealth = req.originalUrl === "/health";
+    const isPreflight = req.method === "OPTIONS";
+    if (isOk && (isHealth || isPreflight)) {
+      return;
+    }
+
     console.log(
       JSON.stringify({
         ts: new Date().toISOString(),
