@@ -2,6 +2,7 @@ import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
 import { Platform } from "react-native";
 import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -84,6 +85,7 @@ export default function App() {
         <AuthProvider>
           <AppNavigator />
           {Platform.OS === "web" ? <Analytics /> : null}
+          {Platform.OS === "web" ? <SpeedInsights /> : null}
           <StatusBar style="auto" />
         </AuthProvider>
       </SafeAreaProvider>

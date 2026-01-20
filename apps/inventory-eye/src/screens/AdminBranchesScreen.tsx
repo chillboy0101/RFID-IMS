@@ -44,6 +44,139 @@ type TenantSessionRow = {
 
 const roles: UserRole[] = ["inventory_staff", "manager", "admin"];
 
+type BranchRowProps = {
+  id: string;
+  name: string;
+  slug: string;
+  isActive: boolean;
+  onSelect: (tenantId: string) => void;
+};
+
+const BranchRow = React.memo(function BranchRow({ id, name, slug, isActive, onSelect }: BranchRowProps) {
+  return (
+    <ListRow
+      title={name}
+      subtitle={slug}
+      right={isActive ? <Badge label="Active" tone="success" /> : undefined}
+      onPress={() => onSelect(id)}
+    />
+  );
+});
+
+type MemberCardProps = {
+  member: BranchMember;
+  busy: boolean;
+  isSuperAdmin: boolean;
+  onUpdateMemberRole: (userId: string, role: UserRole) => void;
+  onUpdateGlobalRole: (userId: string, nextRole: UserRole) => void;
+  onRemoveMember: (userId: string) => void;
+};
+
+const MemberCard = React.memo(function MemberCard({ member, busy, isSuperAdmin, onUpdateMemberRole, onUpdateGlobalRole, onRemoveMember }: MemberCardProps) {
+  const displayRole = member.user?.role === "admin" ? "super_admin" : member.role;
+  const displayTone = member.user?.role === "admin" ? "warning" : member.role === "admin" ? "primary" : "default";
+
+  return (
+    <Card>
+      <ListRow
+        title={member.user?.name || member.user?.email || member.userId}
+        subtitle={member.user?.email || ""}
+        right={<Badge label={displayRole} tone={displayTone} />}
+      />
+      <View style={{ height: 10 }} />
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+        {roles.map((r) => (
+          <AppButton
+            key={`${member.userId}-${r}`}
+            title={r}
+            onPress={() => onUpdateMemberRole(member.userId, r)}
+            variant={member.role === r ? "primary" : "secondary"}
+            disabled={busy}
+          />
+        ))}
+        {isSuperAdmin ? (
+          <AppButton
+            title={member.user?.role === "admin" ? "Remove super-admin" : "Make super-admin"}
+            onPress={() => onUpdateGlobalRole(member.userId, member.user?.role === "admin" ? "inventory_staff" : "admin")}
+            disabled={busy}
+            variant="secondary"
+          />
+        ) : null}
+      </View>
+      <View style={{ height: 10 }} />
+      <AppButton title="Remove" onPress={() => onRemoveMember(member.userId)} variant="secondary" disabled={busy} />
+    </Card>
+  );
+});
+
+type SessionCardProps = {
+  session: TenantSessionRow;
+  busy: boolean;
+  isSuperAdmin: boolean;
+  onRevoke: (jti: string, isCurrent?: boolean) => void;
+};
+
+const SessionCard = React.memo(function SessionCard({ session, busy, onRevoke }: SessionCardProps) {
+  return (
+    <Card>
+      <ListRow title={session.user?.name || session.user?.email || session.userId} subtitle={session.user?.email || ""} right={<Badge label="Active" tone="success" />} />
+      <View style={{ height: 10 }} />
+      <AppButton
+        title="Force sign-out"
+        onPress={() => onRevoke(session.jti, session.isCurrent)}
+        disabled={busy || Boolean(session.isCurrent)}
+        variant="secondary"
+      />
+    </Card>
+  );
+});
+
+type AllUserCardProps = {
+  user: AdminUserRow;
+  busy: boolean;
+  activeTenantId: string | null;
+  onAssignToActive: (userId: string) => void;
+  onDelete: (userId: string, email: string) => void;
+};
+
+const AllUserCard = React.memo(function AllUserCard({ user, busy, activeTenantId, onAssignToActive, onDelete }: AllUserCardProps) {
+  return (
+    <Card key={user.id} style={(user.tenantCount ?? 0) === 0 ? { borderColor: theme.colors.warning } : undefined}>
+      <ListRow
+        title={user.name || user.email}
+        subtitle={user.email}
+        right={
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "flex-end" }}>
+            <Badge label={user.role === "admin" ? "super_admin" : user.role} tone={user.role === "admin" ? "warning" : user.role === "manager" ? "primary" : "default"} />
+            <Badge
+              label={(user.tenantCount ?? 0) === 0 ? "Unassigned" : `Branches: ${user.tenantCount}`}
+              tone={(user.tenantCount ?? 0) === 0 ? "warning" : "default"}
+            />
+          </View>
+        }
+      />
+      <View style={{ height: 10 }} />
+      {(user.tenants?.length ?? 0) > 0 ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+          {user.tenants?.slice(0, 6).map((t) => <Badge key={`${user.id}-${t.id}`} label={t.name} tone="default" />)}
+          {(user.tenants?.length ?? 0) > 6 ? <Badge label={`+${(user.tenants?.length ?? 0) - 6} more`} tone="default" /> : null}
+        </View>
+      ) : (
+        <MutedText>No branches</MutedText>
+      )}
+      <View style={{ height: 10 }} />
+      <AppButton
+        title={activeTenantId ? "Assign to active branch" : "Select a branch to assign"}
+        onPress={() => onAssignToActive(user.id)}
+        disabled={busy || !activeTenantId}
+        variant="secondary"
+      />
+      <View style={{ height: 10 }} />
+      <AppButton title="Delete user" onPress={() => onDelete(user.id, user.email)} disabled={busy} variant="secondary" />
+    </Card>
+  );
+});
+
 export function AdminBranchesScreen({ navigation }: Props) {
   const { token, user, effectiveRole, tenants, activeTenantId, setActiveTenantId, refreshMe, refreshTenants } = useContext(AuthContext);
   const isSuperAdmin = user?.role === "admin";
@@ -126,7 +259,15 @@ export function AdminBranchesScreen({ navigation }: Props) {
     setAllUsers(Array.isArray(res.users) ? res.users : []);
   }, [isSuperAdmin, token]);
 
-  async function createUserInActiveBranch() {
+  const unassignedUsersCount = useMemo(() => {
+    let count = 0;
+    for (const u of allUsers) {
+      if ((u.tenantCount ?? 0) === 0) count++;
+    }
+    return count;
+  }, [allUsers]);
+
+  const createUserInActiveBranch = useCallback(async () => {
     if (!token || !isBranchAdmin) return;
     if (!activeTenantId) {
       setError("Select a branch first");
@@ -166,9 +307,21 @@ export function AdminBranchesScreen({ navigation }: Props) {
     } finally {
       setBusy(false);
     }
-  }
+  }, [activeTenantId, createUserEmail, createUserMakeSuperAdmin, createUserName, createUserPassword, createUserRole, isBranchAdmin, isSuperAdmin, loadMembers, token]);
 
-  async function revokeSession(jti: string, isCurrent?: boolean) {
+  const confirmAction = useCallback(async (title: string, message: string): Promise<boolean> => {
+    if (Platform.OS === "web") {
+      return !!(globalThis as any).confirm?.(`${title}\n\n${message}`);
+    }
+    return await new Promise<boolean>((resolve) => {
+      Alert.alert(title, message, [
+        { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+        { text: "Confirm", style: "destructive", onPress: () => resolve(true) },
+      ]);
+    });
+  }, []);
+
+  const revokeSession = useCallback(async (jti: string, isCurrent?: boolean) => {
     if (!token || !activeTenantId || busy) return;
 
     if (isCurrent) {
@@ -193,47 +346,38 @@ export function AdminBranchesScreen({ navigation }: Props) {
     } finally {
       setBusy(false);
     }
-  }
+  }, [activeTenantId, busy, confirmAction, isSuperAdmin, loadSessions, token]);
 
-  async function confirmAction(title: string, message: string): Promise<boolean> {
-    if (Platform.OS === "web") {
-      return !!(globalThis as any).confirm?.(`${title}\n\n${message}`);
-    }
-    return await new Promise<boolean>((resolve) => {
-      Alert.alert(title, message, [
-        { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
-        { text: "Confirm", style: "destructive", onPress: () => resolve(true) },
-      ]);
-    });
-  }
+  const updateGlobalRole = useCallback(
+    async (userId: string, role: UserRole) => {
+      if (!token || !isSuperAdmin || busy) return;
 
-  async function updateGlobalRole(userId: string, role: UserRole) {
-    if (!token || !isSuperAdmin || busy) return;
+      const ok = await confirmAction(
+        "Change global role",
+        role === "admin"
+          ? "Promote this user to super-admin? This grants full access to all branches and global admin actions."
+          : "Remove super-admin from this user? They will only have access via branch membership roles."
+      );
+      if (!ok) return;
 
-    const ok = await confirmAction(
-      "Change global role",
-      role === "admin"
-        ? "Promote this user to super-admin? This grants full access to all branches and global admin actions."
-        : "Remove super-admin from this user? They will only have access via branch membership roles."
-    );
-    if (!ok) return;
-
-    setBusy(true);
-    setError(null);
-    try {
-      await apiRequest<{ ok: true }>(`/admin/users/${userId}/role`, {
-        method: "PATCH",
-        token,
-        body: JSON.stringify({ role }),
-      });
-      await loadAllUsers();
-      await refreshTenants();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update global role");
-    } finally {
-      setBusy(false);
-    }
-  }
+      setBusy(true);
+      setError(null);
+      try {
+        await apiRequest<{ ok: true }>(`/admin/users/${userId}/role`, {
+          method: "PATCH",
+          token,
+          body: JSON.stringify({ role }),
+        });
+        await loadAllUsers();
+        await refreshTenants();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to update global role");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, confirmAction, isSuperAdmin, loadAllUsers, refreshTenants, token]
+  );
 
   async function createInvite() {
     if (!token || !isBranchAdmin) return;
@@ -269,7 +413,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
     }
   }
 
-  async function deleteUser(userId: string, email: string) {
+  const deleteUser = useCallback(async (userId: string, email: string) => {
     if (!token || !isSuperAdmin) return;
 
     const message = `Delete ${email}? This cannot be undone.`;
@@ -293,9 +437,9 @@ export function AdminBranchesScreen({ navigation }: Props) {
     } finally {
       setBusy(false);
     }
-  }
+  }, [activeTenantId, isSuperAdmin, loadAllUsers, loadMembers, token]);
 
-  async function assignUserToActiveBranch(userId: string) {
+  const assignUserToActiveBranch = useCallback(async (userId: string) => {
     if (!token || !isSuperAdmin) return;
     if (!activeTenantId) {
       setError("Select a branch first");
@@ -316,9 +460,9 @@ export function AdminBranchesScreen({ navigation }: Props) {
     } finally {
       setBusy(false);
     }
-  }
+  }, [activeTenantId, isSuperAdmin, loadAllUsers, loadMembers, memberRole, token]);
 
-  async function updateMemberRole(userId: string, role: UserRole) {
+  const updateMemberRole = useCallback(async (userId: string, role: UserRole) => {
     if (!token || !isBranchAdmin) return;
     if (!activeTenantId) return;
     if (busy) return;
@@ -343,7 +487,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
     } finally {
       setBusy(false);
     }
-  }
+  }, [activeTenantId, busy, confirmAction, isBranchAdmin, loadMembers, token]);
 
   useFocusEffect(
     useCallback(() => {
@@ -437,7 +581,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
         await loadAllUsers().catch(() => undefined);
       }
     },
-    [activeTenantId, isSuperAdmin, loadAllUsers, loadMembers, loadSessions, refreshMe]
+    [activeTenantId, isSuperAdmin, loadAllUsers, loadMembers, refreshMe]
   );
 
   async function addMember() {
@@ -475,7 +619,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
     }
   }
 
-  async function removeMember(userId: string) {
+  const removeMember = useCallback(async (userId: string) => {
     if (!token || !isBranchAdmin) return;
     if (!activeTenantId) return;
 
@@ -492,7 +636,42 @@ export function AdminBranchesScreen({ navigation }: Props) {
     } finally {
       setBusy(false);
     }
-  }
+  }, [activeTenantId, isBranchAdmin, loadMembers, token]);
+
+  const branchRows = useMemo(() => {
+    return list.map((t) => <BranchRow key={t.id} id={t.id} name={t.name} slug={t.slug} isActive={t.id === activeTenantId} onSelect={selectBranch} />);
+  }, [activeTenantId, list, selectBranch]);
+
+  const memberCards = useMemo(() => {
+    return members.map((m) => (
+      <MemberCard
+        key={`${m.userId}-${m.tenantId}`}
+        member={m}
+        busy={busy}
+        isSuperAdmin={isSuperAdmin}
+        onUpdateMemberRole={updateMemberRole}
+        onUpdateGlobalRole={updateGlobalRole}
+        onRemoveMember={removeMember}
+      />
+    ));
+  }, [busy, isSuperAdmin, members, removeMember, updateGlobalRole, updateMemberRole]);
+
+  const sessionCards = useMemo(() => {
+    return sessions.map((s) => <SessionCard key={s.jti} session={s} busy={busy} isSuperAdmin={isSuperAdmin} onRevoke={revokeSession} />);
+  }, [busy, isSuperAdmin, revokeSession, sessions]);
+
+  const allUserCards = useMemo(() => {
+    return allUsers.map((u) => (
+      <AllUserCard
+        key={u.id}
+        user={u}
+        busy={busy}
+        activeTenantId={activeTenantId}
+        onAssignToActive={assignUserToActiveBranch}
+        onDelete={deleteUser}
+      />
+    ));
+  }, [activeTenantId, allUsers, assignUserToActiveBranch, busy, deleteUser]);
 
   return (
     <Screen
@@ -535,19 +714,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
             </>
           ) : (
             <View style={{ gap: 10 }}>
-              {list.length ? (
-                list.map((t) => (
-                  <ListRow
-                    key={t.id}
-                    title={t.name}
-                    subtitle={t.slug}
-                    right={t.id === activeTenantId ? <Badge label="Active" tone="success" /> : undefined}
-                    onPress={() => selectBranch(t.id)}
-                  />
-                ))
-              ) : (
-                <MutedText>No branches found.</MutedText>
-              )}
+              {list.length ? branchRows : <MutedText>No branches found.</MutedText>}
             </View>
           )}
         </Card>
@@ -674,46 +841,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
                       <View style={{ height: theme.spacing.md }} />
                       <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Members</Text>
                       <View style={{ gap: 10 }}>
-                        {members.length ? (
-                          members.map((m) => (
-                            <Card key={`${m.userId}-${m.tenantId}`}>
-                              <ListRow
-                                title={m.user?.name || m.user?.email || m.userId}
-                                subtitle={m.user?.email || ""}
-                                right={
-                                  <Badge
-                                    label={m.user?.role === "admin" ? "super_admin" : m.role}
-                                    tone={m.user?.role === "admin" ? "warning" : m.role === "admin" ? "primary" : "default"}
-                                  />
-                                }
-                              />
-                              <View style={{ height: 10 }} />
-                              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                                {roles.map((r) => (
-                                  <AppButton
-                                    key={`${m.userId}-${r}`}
-                                    title={r}
-                                    onPress={() => updateMemberRole(m.userId, r)}
-                                    variant={m.role === r ? "primary" : "secondary"}
-                                    disabled={busy}
-                                  />
-                                ))}
-                                {isSuperAdmin ? (
-                                  <AppButton
-                                    title={m.user?.role === "admin" ? "Remove super-admin" : "Make super-admin"}
-                                    onPress={() => updateGlobalRole(m.userId, m.user?.role === "admin" ? "inventory_staff" : "admin")}
-                                    disabled={busy}
-                                    variant="secondary"
-                                  />
-                                ) : null}
-                              </View>
-                              <View style={{ height: 10 }} />
-                              <AppButton title="Remove" onPress={() => removeMember(m.userId)} variant="secondary" disabled={busy} />
-                            </Card>
-                          ))
-                        ) : (
-                          <MutedText>No members found.</MutedText>
-                        )}
+                        {members.length ? memberCards : <MutedText>No members found.</MutedText>}
                       </View>
                     </>
                   ) : null}
@@ -725,26 +853,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
                       <MutedText>{isSuperAdmin ? "Super-admin can sign out anyone." : "Branch admin can sign out users from this branch."}</MutedText>
                       <View style={{ height: 12 }} />
                       <View style={{ gap: 10 }}>
-                        {sessions.length ? (
-                          sessions.map((s) => (
-                            <Card key={s.jti}>
-                              <ListRow
-                                title={s.user?.name || s.user?.email || s.userId}
-                                subtitle={s.user?.email || ""}
-                                right={<Badge label="Active" tone="success" />}
-                              />
-                              <View style={{ height: 10 }} />
-                              <AppButton
-                                title="Force sign-out"
-                                onPress={() => revokeSession(s.jti, s.isCurrent)}
-                                disabled={busy || Boolean(s.isCurrent)}
-                                variant="secondary"
-                              />
-                            </Card>
-                          ))
-                        ) : (
-                          <MutedText>No active sessions found.</MutedText>
-                        )}
+                        {sessions.length ? sessionCards : <MutedText>No active sessions found.</MutedText>}
                       </View>
                     </>
                   ) : null}
@@ -755,59 +864,13 @@ export function AdminBranchesScreen({ navigation }: Props) {
                       <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>All users</Text>
                       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
                         <Badge label={`Total: ${allUsers.length}`} tone="default" />
-                        <Badge label={`Unassigned: ${allUsers.filter((u) => (u.tenantCount ?? 0) === 0).length}`} tone="warning" />
+                        <Badge label={`Unassigned: ${unassignedUsersCount}`} tone="warning" />
                       </View>
                       <View style={{ height: 12 }} />
                       <MutedText>Select a role in Add user, then assign users to the active branch.</MutedText>
                       <View style={{ height: 12 }} />
                       <View style={{ gap: 10 }}>
-                        {allUsers.length ? (
-                          allUsers.map((u) => (
-                            <Card key={u.id} style={(u.tenantCount ?? 0) === 0 ? { borderColor: theme.colors.warning } : undefined}>
-                              <ListRow
-                                title={u.name || u.email}
-                                subtitle={u.email}
-                                right={
-                                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "flex-end" }}>
-                                    <Badge
-                                      label={u.role === "admin" ? "super_admin" : u.role}
-                                      tone={u.role === "admin" ? "warning" : u.role === "manager" ? "primary" : "default"}
-                                    />
-                                    <Badge
-                                      label={(u.tenantCount ?? 0) === 0 ? "Unassigned" : `Branches: ${u.tenantCount}`}
-                                      tone={(u.tenantCount ?? 0) === 0 ? "warning" : "default"}
-                                    />
-                                  </View>
-                                }
-                              />
-                              <View style={{ height: 10 }} />
-                              {(u.tenants?.length ?? 0) > 0 ? (
-                                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                                  {u.tenants?.slice(0, 6).map((t) => <Badge key={`${u.id}-${t.id}`} label={t.name} tone="default" />)}
-                                  {(u.tenants?.length ?? 0) > 6 ? <Badge label={`+${(u.tenants?.length ?? 0) - 6} more`} tone="default" /> : null}
-                                </View>
-                              ) : (
-                                <MutedText>No branches</MutedText>
-                              )}
-                              <View style={{ height: 10 }} />
-                              <AppButton
-                                title={activeTenantId ? "Assign to active branch" : "Select a branch to assign"}
-                                onPress={() => assignUserToActiveBranch(u.id)}
-                                disabled={busy || !activeTenantId}
-                                variant="secondary"
-                              />
-                              <View style={{ height: 10 }} />
-                              <AppButton
-                                title="Delete user"
-                                onPress={() => deleteUser(u.id, u.email)}
-                                disabled={busy}
-                                variant="secondary"
-                              />
-                            </Card>
-                          ))
-                        ) : (
-                          <MutedText>No users found.</MutedText>
-                        )}
+                        {allUsers.length ? allUserCards : <MutedText>No users found.</MutedText>}
                       </View>
                     </>
                   ) : null}

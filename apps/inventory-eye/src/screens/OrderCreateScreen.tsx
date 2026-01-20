@@ -309,40 +309,6 @@ export function OrderCreateScreen({ navigation }: Props) {
               <View style={{ height: 16 }} />
               <AppButton title="Create order" onPress={submit} disabled={submitting} loading={submitting} />
             </Card>
-
-            <Card>
-              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Inventory</Text>
-              {isWeb ? (
-                <View style={{ gap: 10 }}>
-                  {items.map((item) => (
-                    <ListRow
-                      key={item._id}
-                      title={item.name}
-                      subtitle={`SKU: ${item.sku}`}
-                      meta={`Available: ${item.quantity}`}
-                      right={<Badge label="Add" tone="primary" />}
-                      onPress={() => addToCart(item)}
-                    />
-                  ))}
-                </View>
-              ) : (
-                <FlatList
-                  scrollEnabled={false}
-                  data={items}
-                  keyExtractor={(i) => i._id}
-                  ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-                  renderItem={({ item }) => (
-                    <ListRow
-                      title={item.name}
-                      subtitle={`SKU: ${item.sku}`}
-                      meta={`Available: ${item.quantity}`}
-                      right={<Badge label="Add" tone="primary" />}
-                      onPress={() => addToCart(item)}
-                    />
-                  )}
-                />
-              )}
-            </Card>
           </View>
         </View>
       ) : (
