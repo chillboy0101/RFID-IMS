@@ -1,9 +1,12 @@
 import express from "express";
+import mongoose from "mongoose";
 
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
 import { requireTenant, type TenantRequest } from "../middleware/tenant.js";
 import { InventoryItemModel } from "../models/InventoryItem.js";
 import { InventoryLogModel } from "../models/InventoryLog.js";
+import { SecurityAlertModel, securityAlertStatuses } from "../models/SecurityAlert.js";
+import { asEnum } from "../utils/validate.js";
 
 const router = express.Router();
 
@@ -15,8 +18,51 @@ router.get("/", async (_req, res) => {
     ok: true,
     endpoints: {
       list: "GET /alerts?expiryDays=30&movementHours=24&movementDelta=50",
+      securityList: "GET /alerts/security?status=open",
+      securityUpdateStatus: "PATCH /alerts/security/:id/status (manager/admin)",
     },
   });
+});
+
+router.get("/security", requireRole("manager", "admin"), async (req, res) => {
+  const tenantId = (req as TenantRequest).tenantId as string;
+  const status = (req.query.status as string | undefined)?.trim();
+  const limitRaw = (req.query.limit as string | undefined)?.trim();
+  const limit = Math.min(500, Math.max(1, Number(limitRaw) || 200));
+
+  const filter: Record<string, unknown> = { tenantId };
+  if (status) filter.status = status;
+
+  const docs = await SecurityAlertModel.find(filter).sort({ createdAt: -1 }).limit(limit).exec();
+  res.json({ ok: true, alerts: docs });
+});
+
+router.patch("/security/:id/status", requireRole("manager", "admin"), async (req, res) => {
+  const tenantId = (req as TenantRequest).tenantId as string;
+  const { id } = req.params;
+  if (!mongoose.isValidObjectId(id)) {
+    res.status(400).json({ ok: false, error: "Invalid id" });
+    return;
+  }
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const statusR = asEnum(body.status, securityAlertStatuses, { field: "status", required: true });
+  if (!statusR.ok) {
+    res.status(400).json({ ok: false, error: statusR.error });
+    return;
+  }
+
+  const doc = await SecurityAlertModel.findOneAndUpdate(
+    { _id: id, tenantId },
+    { $set: { status: statusR.value } },
+    { new: true }
+  ).exec();
+  if (!doc) {
+    res.status(404).json({ ok: false, error: "Not found" });
+    return;
+  }
+
+  res.json({ ok: true, alert: doc });
 });
 
 router.get("/list", async (req, res) => {
