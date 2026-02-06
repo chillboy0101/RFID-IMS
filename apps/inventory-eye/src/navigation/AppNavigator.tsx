@@ -37,8 +37,6 @@ import { ReordersScreen } from "../screens/ReordersScreen";
 import { ReorderCreateScreen } from "../screens/ReorderCreateScreen";
 import { IntegrationsScreen } from "../screens/IntegrationsScreen";
 import { RfidScannerScreen } from "../screens/RfidScannerScreen";
-import { BarcodeScannerScreen as MoreBarcodeScannerScreen } from "../screens/BarcodeScannerScreen";
-import { InventoryBarcodeScannerScreen } from "../screens/InventoryBarcodeScannerScreen";
 
 import { AppButton, Badge, FullScreenLoader, shadow, theme, useTheme } from "../ui";
 
@@ -479,7 +477,6 @@ function InventoryNavigator() {
       <InventoryStack.Screen name="InventoryDetail" component={InventoryDetailScreen} />
       <InventoryStack.Screen name="InventoryCreate" component={InventoryEditScreen} />
       <InventoryStack.Screen name="InventoryEdit" component={InventoryEditScreen} />
-      <InventoryStack.Screen name="BarcodeScanner" component={InventoryBarcodeScannerScreen} />
       <InventoryStack.Screen name="InventoryAdjust" component={InventoryAdjustScreen} />
       <InventoryStack.Screen name="InventoryLogs" component={InventoryLogsScreen} />
     </InventoryStack.Navigator>
@@ -512,7 +509,6 @@ function MoreNavigator() {
       <MoreStack.Screen name="Reorders" component={ReordersScreen} />
       <MoreStack.Screen name="ReordersCreate" component={ReorderCreateScreen} />
       <MoreStack.Screen name="RfidScanner" component={RfidScannerScreen} />
-      <MoreStack.Screen name="BarcodeScanner" component={MoreBarcodeScannerScreen} />
       <MoreStack.Screen name="Integrations" component={IntegrationsScreen} />
     </MoreStack.Navigator>
   );

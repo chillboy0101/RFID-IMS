@@ -6,7 +6,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import type { OrdersStackParamList } from "../navigation/types";
-import { AppButton, Badge, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
+import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
 
 type InventoryItem = {
   _id: string;
@@ -44,6 +44,7 @@ export function OrderCreateScreen({ navigation }: Props) {
   }, [isDesktopWeb, navigation]);
 
   const searchRef = useRef<TextInput>(null);
+  const [scanOpen, setScanOpen] = useState(false);
 
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [query, setQuery] = useState("");
@@ -130,6 +131,16 @@ export function OrderCreateScreen({ navigation }: Props) {
 
   return (
     <Screen title="New order" scroll right={<AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />}>
+      <BarcodeScanModal
+        visible={scanOpen}
+        title="Scan barcode"
+        onClose={() => setScanOpen(false)}
+        onScanned={(value) => {
+          setQuery(value);
+          setScanOpen(false);
+          setTimeout(() => searchRef.current?.focus(), 50);
+        }}
+      />
       {error ? <ErrorText>{error}</ErrorText> : null}
 
       {isDesktopWeb ? (
@@ -151,7 +162,7 @@ export function OrderCreateScreen({ navigation }: Props) {
               />
               <View style={{ height: 12 }} />
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-                <AppButton title="Scan" onPress={() => searchRef.current?.focus()} variant="secondary" />
+                <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
                 <AppButton
                   title="Search"
                   onPress={() => loadItems().catch((e) => setError(e instanceof Error ? e.message : "Failed"))}

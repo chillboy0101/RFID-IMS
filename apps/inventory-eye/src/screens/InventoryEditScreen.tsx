@@ -6,7 +6,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import type { InventoryStackParamList } from "../navigation/types";
-import { AppButton, Badge, Card, ErrorText, MutedText, Screen, TextField, theme } from "../ui";
+import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, MutedText, Screen, TextField, theme } from "../ui";
 
 declare const require: undefined | ((id: string) => any);
 
@@ -36,9 +36,8 @@ type Props = NativeStackScreenProps<InventoryStackParamList, "InventoryEdit" | "
 
 export function InventoryEditScreen({ navigation, route }: Props) {
   const { token } = useContext(AuthContext);
-  const params = (route.params ?? {}) as Partial<{ id?: string; scannedBarcode?: string }>;
+  const params = (route.params ?? {}) as Partial<{ id?: string }>;
   const routeId = params.id;
-  const scannedBarcode = params.scannedBarcode;
   const id = routeId && routeId !== "undefined" ? routeId : undefined;
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
@@ -112,6 +111,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [barcodeScanOpen, setBarcodeScanOpen] = useState(false);
   const initialRef = useRef<InventoryItem | null>(null);
 
   const title = id ? "Edit item" : "New item";
@@ -183,11 +183,6 @@ export function InventoryEditScreen({ navigation, route }: Props) {
       setLoading(false);
     }
   }, [id, token]);
-
-  React.useEffect(() => {
-    if (!scannedBarcode) return;
-    setBarcode(scannedBarcode);
-  }, [scannedBarcode]);
 
   const hasChanges = useMemo(() => {
     if (!id) return true;
@@ -313,6 +308,16 @@ export function InventoryEditScreen({ navigation, route }: Props) {
       scroll
       right={<AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />}
     >
+      <BarcodeScanModal
+        visible={barcodeScanOpen}
+        title="Scan item barcode"
+        onClose={() => setBarcodeScanOpen(false)}
+        onScanned={(value) => {
+          setBarcode(value);
+          setBarcodeScanOpen(false);
+          setTimeout(() => barcodeRef.current?.focus(), 50);
+        }}
+      />
       {error ? <ErrorText>{error}</ErrorText> : null}
 
       {isDesktopWeb ? (
@@ -341,11 +346,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                   <AppButton
                     title="Scan Barcode"
                     onPress={() => {
-                      if (Platform.OS !== "web") {
-                        navigation.navigate("BarcodeScanner", { returnTo: id ? "InventoryEdit" : "InventoryCreate", id });
-                        return;
-                      }
-                      barcodeRef.current?.focus();
+                      setBarcodeScanOpen(true);
                     }}
                     variant="secondary"
                   />
@@ -582,11 +583,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
               <AppButton
                 title="Scan"
                 onPress={() => {
-                  if (Platform.OS !== "web") {
-                    navigation.navigate("BarcodeScanner", { returnTo: id ? "InventoryEdit" : "InventoryCreate", id });
-                    return;
-                  }
-                  barcodeRef.current?.focus();
+                  setBarcodeScanOpen(true);
                 }}
                 variant="secondary"
               />

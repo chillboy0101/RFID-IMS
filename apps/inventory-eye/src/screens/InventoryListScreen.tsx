@@ -6,7 +6,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import type { InventoryStackParamList } from "../navigation/types";
-import { AppButton, Badge, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
+import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
 
 type InventoryItem = {
   _id: string;
@@ -32,6 +32,7 @@ export function InventoryListScreen({ navigation }: Props) {
   const isWeb = Platform.OS === "web";
   const [q, setQ] = useState("");
   const searchRef = useRef<TextInput>(null);
+  const [scanOpen, setScanOpen] = useState(false);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,6 +85,16 @@ export function InventoryListScreen({ navigation }: Props) {
       title="Inventory"
       right={<AppButton title="New" onPress={() => navigation.navigate("InventoryCreate")} variant="secondary" iconName="add" iconOnly />}
     >
+      <BarcodeScanModal
+        visible={scanOpen}
+        title="Scan barcode"
+        onClose={() => setScanOpen(false)}
+        onScanned={(value) => {
+          setQ(value);
+          setScanOpen(false);
+          setTimeout(() => searchRef.current?.focus(), 50);
+        }}
+      />
       {isDesktopWeb ? (
         <View style={{ flex: 1, gap: theme.spacing.md }}>
           <Card>
@@ -100,7 +111,7 @@ export function InventoryListScreen({ navigation }: Props) {
                 />
               </View>
 
-              <AppButton title="Scan" onPress={() => searchRef.current?.focus()} variant="secondary" />
+              <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
 
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 10, flexShrink: 0 }}>
                 <Badge label={`Total: ${items.length}`} tone="default" size="header" />
