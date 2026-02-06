@@ -360,7 +360,7 @@ export function OrdersListScreen({ navigation }: Props) {
         )
       )}
 
-      {!isDesktopWeb && showFloatingSearch ? (
+      {!isDesktopWeb && showFloatingSearch && !searchOverlayOpen ? (
         <Animated.View
           style={{
             position: "absolute",

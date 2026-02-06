@@ -478,7 +478,7 @@ export function InventoryListScreen({ navigation }: Props) {
         )
       )}
 
-      {!isDesktopWeb && showFloatingSearch ? (
+      {!isDesktopWeb && showFloatingSearch && !searchOverlayOpen ? (
         <Animated.View
           style={{
             position: "absolute",
