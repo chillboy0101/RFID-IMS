@@ -36,7 +36,9 @@ type Props = NativeStackScreenProps<InventoryStackParamList, "InventoryEdit" | "
 
 export function InventoryEditScreen({ navigation, route }: Props) {
   const { token } = useContext(AuthContext);
-  const routeId = route.params?.id;
+  const params = (route.params ?? {}) as Partial<{ id?: string; scannedBarcode?: string }>;
+  const routeId = params.id;
+  const scannedBarcode = params.scannedBarcode;
   const id = routeId && routeId !== "undefined" ? routeId : undefined;
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
@@ -181,6 +183,11 @@ export function InventoryEditScreen({ navigation, route }: Props) {
       setLoading(false);
     }
   }, [id, token]);
+
+  React.useEffect(() => {
+    if (!scannedBarcode) return;
+    setBarcode(scannedBarcode);
+  }, [scannedBarcode]);
 
   const hasChanges = useMemo(() => {
     if (!id) return true;
@@ -331,7 +338,17 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                       onSubmitEditing={() => setBarcode((prev) => prev.trim())}
                     />
                   </View>
-                  <AppButton title="Scan Barcode" onPress={() => barcodeRef.current?.focus()} variant="secondary" />
+                  <AppButton
+                    title="Scan Barcode"
+                    onPress={() => {
+                      if (Platform.OS !== "web") {
+                        navigation.navigate("BarcodeScanner", { returnTo: id ? "InventoryEdit" : "InventoryCreate", id });
+                        return;
+                      }
+                      barcodeRef.current?.focus();
+                    }}
+                    variant="secondary"
+                  />
                 </View>
                 <View style={{ height: 12 }} />
                 <TextField
@@ -562,7 +579,17 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                   onSubmitEditing={() => setBarcode((prev) => prev.trim())}
                 />
               </View>
-              <AppButton title="Scan" onPress={() => barcodeRef.current?.focus()} variant="secondary" />
+              <AppButton
+                title="Scan"
+                onPress={() => {
+                  if (Platform.OS !== "web") {
+                    navigation.navigate("BarcodeScanner", { returnTo: id ? "InventoryEdit" : "InventoryCreate", id });
+                    return;
+                  }
+                  barcodeRef.current?.focus();
+                }}
+                variant="secondary"
+              />
             </View>
             <View style={{ height: 12 }} />
             <TextField

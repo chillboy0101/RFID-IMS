@@ -6,7 +6,8 @@ export type ExitAuthorizationStatus = (typeof exitAuthorizationStatuses)[number]
 const exitAuthorizationSchema = new mongoose.Schema(
   {
     tenantId: { type: mongoose.Schema.Types.ObjectId, ref: "Tenant", required: true, index: true },
-    tagId: { type: String, required: true, trim: true, index: true },
+    tagId: { type: String, trim: true, index: true },
+    barcode: { type: String, trim: true, index: true },
     location: { type: String, trim: true, default: "EXIT_MAIN" },
     status: { type: String, required: true, enum: exitAuthorizationStatuses, default: "active" },
     orderId: { type: mongoose.Schema.Types.ObjectId, ref: "Order" },
@@ -19,6 +20,7 @@ const exitAuthorizationSchema = new mongoose.Schema(
 );
 
 exitAuthorizationSchema.index({ tenantId: 1, tagId: 1, location: 1, expiresAt: 1 });
+exitAuthorizationSchema.index({ tenantId: 1, barcode: 1, location: 1, expiresAt: 1 });
 exitAuthorizationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export type ExitAuthorization = InferSchemaType<typeof exitAuthorizationSchema>;

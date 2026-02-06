@@ -14,10 +14,11 @@ export type AppTabsParamList = {
 export type InventoryStackParamList = {
   InventoryList: undefined;
   InventoryDetail: { id: string };
-  InventoryCreate: undefined;
-  InventoryEdit: { id?: string };
+  InventoryCreate: { scannedBarcode?: string } | undefined;
+  InventoryEdit: { id?: string; scannedBarcode?: string };
   InventoryAdjust: { id: string };
   InventoryLogs: { id: string };
+  BarcodeScanner: { returnTo: "InventoryEdit" | "InventoryCreate"; id?: string };
 };
 
 export type OrdersStackParamList = {

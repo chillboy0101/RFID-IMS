@@ -15,16 +15,19 @@ const router = express.Router();
 router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: GateRequest, res) => {
   const tenantId = req.tenantId as string;
 
-  const { tagId, location, observedAt, source, itemId } = req.body as {
+  const { tagId, barcode, location, observedAt, source, itemId } = req.body as {
     tagId?: string;
+    barcode?: string;
     location?: string;
     observedAt?: string;
     source?: string;
     itemId?: string;
   };
 
-  if (!tagId || !tagId.trim()) {
-    res.status(400).json({ ok: false, error: "tagId is required" });
+  const cleanTagId = typeof tagId === "string" ? tagId.trim() : "";
+  const cleanBarcode = typeof barcode === "string" ? barcode.trim() : "";
+  if (!cleanTagId && !cleanBarcode) {
+    res.status(400).json({ ok: false, error: "tagId or barcode is required" });
     return;
   }
 
@@ -38,12 +41,16 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
     }
     resolvedItem = (await InventoryItemModel.findOne({ _id: itemId, tenantId }).exec()) as InventoryItemDocument | null;
   } else {
-    resolvedItem = (await InventoryItemModel.findOne({ tenantId, rfidTagId: tagId.trim() }).exec()) as InventoryItemDocument | null;
+    if (cleanTagId) {
+      resolvedItem = (await InventoryItemModel.findOne({ tenantId, rfidTagId: cleanTagId }).exec()) as InventoryItemDocument | null;
+    } else {
+      resolvedItem = (await InventoryItemModel.findOne({ tenantId, barcode: cleanBarcode }).exec()) as InventoryItemDocument | null;
+    }
   }
 
   const eventDoc = await RfidEventModel.create({
     tenantId,
-    tagId: tagId.trim(),
+    tagId: cleanTagId || cleanBarcode,
     eventType: "scan",
     itemId: resolvedItem?._id,
     location: loc,
@@ -55,7 +62,7 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
   const now = new Date();
   const authDoc = await ExitAuthorizationModel.findOne({
     tenantId,
-    tagId: tagId.trim(),
+    ...(cleanTagId ? { tagId: cleanTagId } : { barcode: cleanBarcode }),
     location: loc,
     status: "active",
     expiresAt: { $gt: now },
@@ -73,7 +80,8 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
 
   const alertDoc = await SecurityAlertModel.create({
     tenantId,
-    tagId: tagId.trim(),
+    tagId: cleanTagId || undefined,
+    barcode: cleanBarcode || undefined,
     itemId: resolvedItem?._id,
     location: loc,
     source: source?.trim() || "gate",
@@ -215,9 +223,11 @@ router.post("/exit-authorizations", requireRole("manager", "admin"), async (req:
     return;
   }
 
-  const { tagId, tagIds, location, minutes, orderId } = req.body as {
+  const { tagId, tagIds, barcode, barcodes, location, minutes, orderId } = req.body as {
     tagId?: string;
     tagIds?: string[];
+    barcode?: string;
+    barcodes?: string[];
     location?: string;
     minutes?: number;
     orderId?: string;
@@ -225,8 +235,11 @@ router.post("/exit-authorizations", requireRole("manager", "admin"), async (req:
 
   const tagsRaw = Array.isArray(tagIds) ? tagIds : tagId ? [tagId] : [];
   const tags = tagsRaw.map((t) => String(t ?? "").trim()).filter(Boolean);
-  if (tags.length === 0) {
-    res.status(400).json({ ok: false, error: "tagId or tagIds is required" });
+  const barcodesRaw = Array.isArray(barcodes) ? barcodes : barcode ? [barcode] : [];
+  const barcodeList = barcodesRaw.map((b) => String(b ?? "").trim()).filter(Boolean);
+
+  if (tags.length === 0 && barcodeList.length === 0) {
+    res.status(400).json({ ok: false, error: "tagId/tagIds or barcode/barcodes is required" });
     return;
   }
 
@@ -243,13 +256,21 @@ router.post("/exit-authorizations", requireRole("manager", "admin"), async (req:
     orderObjectId = String(orderId).trim();
   }
 
-  await ExitAuthorizationModel.updateMany(
-    { tenantId, tagId: { $in: tags }, location: loc, status: "active" },
-    { $set: { status: "revoked" } }
-  ).exec();
+  if (tags.length) {
+    await ExitAuthorizationModel.updateMany(
+      { tenantId, tagId: { $in: tags }, location: loc, status: "active" },
+      { $set: { status: "revoked" } }
+    ).exec();
+  }
+  if (barcodeList.length) {
+    await ExitAuthorizationModel.updateMany(
+      { tenantId, barcode: { $in: barcodeList }, location: loc, status: "active" },
+      { $set: { status: "revoked" } }
+    ).exec();
+  }
 
-  const created = await ExitAuthorizationModel.insertMany(
-    tags.map((t) => ({
+  const created = await ExitAuthorizationModel.insertMany([
+    ...tags.map((t) => ({
       tenantId,
       tagId: t,
       location: loc,
@@ -257,8 +278,17 @@ router.post("/exit-authorizations", requireRole("manager", "admin"), async (req:
       orderId: orderObjectId,
       createdByUserId: auth.id,
       expiresAt,
-    }))
-  );
+    })),
+    ...barcodeList.map((b) => ({
+      tenantId,
+      barcode: b,
+      location: loc,
+      status: "active",
+      orderId: orderObjectId,
+      createdByUserId: auth.id,
+      expiresAt,
+    })),
+  ]);
 
   res.status(201).json({ ok: true, authorizations: created, expiresAt, location: loc });
 });
@@ -268,11 +298,13 @@ router.get("/exit-authorizations", requireRole("manager", "admin"), async (req: 
   const status = (req.query.status as string | undefined)?.trim();
   const location = (req.query.location as string | undefined)?.trim();
   const tagId = (req.query.tagId as string | undefined)?.trim();
+  const barcode = (req.query.barcode as string | undefined)?.trim();
 
   const filter: Record<string, unknown> = { tenantId };
   if (status) filter.status = status;
   if (location) filter.location = location;
   if (tagId) filter.tagId = tagId;
+  if (barcode) filter.barcode = barcode;
 
   const docs = await ExitAuthorizationModel.find(filter).sort({ createdAt: -1 }).limit(500).exec();
   res.json({ ok: true, authorizations: docs });
