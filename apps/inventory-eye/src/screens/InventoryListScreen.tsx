@@ -34,9 +34,11 @@ export function InventoryListScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const [q, setQ] = useState("");
   const searchRef = useRef<TextInput>(null);
+  const listRef = useRef<FlatList<InventoryItem>>(null);
   const [scanOpen, setScanOpen] = useState(false);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [showFloatingSearch, setShowFloatingSearch] = useState(false);
 
   const queryUrl = useMemo(() => {
     const t = q.trim();
@@ -356,10 +358,17 @@ export function InventoryListScreen({ navigation }: Props) {
           </ScrollView>
         ) : (
           <FlatList
+            ref={listRef}
             style={{ flex: 1 }}
             contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 112 }}
             data={items}
             keyExtractor={(it) => it._id}
+            onScroll={(e) => {
+              const y = e.nativeEvent.contentOffset.y;
+              const next = y > 80;
+              setShowFloatingSearch((prev) => (prev === next ? prev : next));
+            }}
+            scrollEventThrottle={32}
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
             ListHeaderComponent={
               <Card>
@@ -414,6 +423,28 @@ export function InventoryListScreen({ navigation }: Props) {
           />
         )
       )}
+
+      {Platform.OS !== "web" && !isDesktopWeb && showFloatingSearch ? (
+        <View
+          style={{
+            position: "absolute",
+            right: theme.spacing.md,
+            bottom: theme.spacing.md + insets.bottom + 112,
+          }}
+          pointerEvents="box-none"
+        >
+          <AppButton
+            title="Search"
+            iconName="search"
+            iconOnly
+            variant="secondary"
+            onPress={() => {
+              listRef.current?.scrollToOffset({ offset: 0, animated: true });
+              setTimeout(() => searchRef.current?.focus(), 150);
+            }}
+          />
+        </View>
+      ) : null}
     </Screen>
   );
 }

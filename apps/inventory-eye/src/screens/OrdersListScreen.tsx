@@ -1,5 +1,5 @@
-import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { FlatList, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { FlatList, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,8 +29,11 @@ export function OrdersListScreen({ navigation }: Props) {
   const isWeb = Platform.OS === "web";
   const insets = useSafeAreaInsets();
   const [q, setQ] = useState("");
+  const searchRef = useRef<TextInput>(null);
+  const listRef = useRef<FlatList<Order>>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [showFloatingSearch, setShowFloatingSearch] = useState(false);
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -257,14 +260,22 @@ export function OrdersListScreen({ navigation }: Props) {
           </ScrollView>
         ) : (
           <FlatList
+            ref={listRef}
             style={{ flex: 1 }}
             contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 112 }}
             data={filtered}
             keyExtractor={(o) => o._id}
+            onScroll={(e) => {
+              const y = e.nativeEvent.contentOffset.y;
+              const next = y > 80;
+              setShowFloatingSearch((prev) => (prev === next ? prev : next));
+            }}
+            scrollEventThrottle={32}
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
             ListHeaderComponent={
               <Card>
                 <TextField
+                  ref={searchRef}
                   value={q}
                   onChangeText={setQ}
                   placeholder="Search: order ID or status"
@@ -290,6 +301,28 @@ export function OrdersListScreen({ navigation }: Props) {
           />
         )
       )}
+
+      {Platform.OS !== "web" && !isDesktopWeb && showFloatingSearch ? (
+        <View
+          style={{
+            position: "absolute",
+            right: theme.spacing.md,
+            bottom: theme.spacing.md + insets.bottom + 112,
+          }}
+          pointerEvents="box-none"
+        >
+          <AppButton
+            title="Search"
+            iconName="search"
+            iconOnly
+            variant="secondary"
+            onPress={() => {
+              listRef.current?.scrollToOffset({ offset: 0, animated: true });
+              setTimeout(() => searchRef.current?.focus(), 150);
+            }}
+          />
+        </View>
+      ) : null}
     </Screen>
   );
 }

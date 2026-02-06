@@ -86,12 +86,20 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     if (!visible) return;
     if (!permission) return;
     if (permission.granted) return;
-    if (permission.status === "denied") return;
+    if (permission.status === "denied") {
+      setError("Camera permission is denied. Enable it in your device settings to scan barcodes.");
+      return;
+    }
 
-    requestPermission().catch(() => setError("Permission request failed"));
+    requestPermission().catch(() => setError("Failed to request camera permission"));
   }, [permission, requestPermission, visible]);
 
   useEffect(() => {
+    if (!visible) {
+      setBusy(false);
+      setLast("");
+      setError(null);
+    }
     if (Platform.OS !== "web") return;
     if (!visible) return;
     if (busy) return;
@@ -154,23 +162,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     [busy, onScanned]
   );
 
-  const cameraCard = !permission ? (
-    <Card>
-      <MutedText>Loading camera permissions...</MutedText>
-    </Card>
-  ) : !permission.granted ? (
-    permission.status === "denied" ? (
-      <Card>
-        <MutedText>Camera permission is denied. Enable it in your device settings to scan barcodes.</MutedText>
-        <View style={{ height: 12 }} />
-        <AppButton title="Try again" onPress={() => requestPermission().catch(() => setError("Permission request failed"))} />
-      </Card>
-    ) : (
-      <Card>
-        <MutedText>Requesting camera permission…</MutedText>
-      </Card>
-    )
-  ) : (
+  const cameraCard = permission?.granted ? (
     <Card style={{ padding: 0, overflow: "hidden" as any }}>
       <View style={{ width: "100%", aspectRatio: 1, backgroundColor: "#000" }}>
         {Platform.OS === "web" ? (
@@ -214,7 +206,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         )}
       </View>
     </Card>
-  );
+  ) : null;
 
   const header = (
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
@@ -251,10 +243,10 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         }}
       >
         {header}
-        <View style={{ height: 12 }} />
+        {helper ? <View style={{ height: 12 }} /> : null}
         {helper}
         {errorBox}
-        <View style={{ height: 12 }} />
+        {cameraCard ? <View style={{ height: 12 }} /> : null}
         {cameraCard}
       </View>
     </View>
