@@ -1,7 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
 
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
+
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 
 import { AppButton, Badge, Card, ErrorText, MutedText } from "./components";
 import { theme } from "./theme";
@@ -18,6 +21,9 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const [busy, setBusy] = useState(false);
   const [last, setLast] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+
+  const webVideoRef = useRef<HTMLVideoElement | null>(null);
+  const webReaderRef = useRef<any>(null);
 
   const { width, height } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
@@ -52,6 +58,26 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     []
   );
 
+  const webHints = useMemo(() => {
+    const hints = new Map();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.QR_CODE,
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.CODE_93,
+      BarcodeFormat.ITF,
+      BarcodeFormat.CODABAR,
+      BarcodeFormat.PDF_417,
+      BarcodeFormat.DATA_MATRIX,
+      BarcodeFormat.AZTEC,
+    ]);
+    return hints;
+  }, []);
+
   const canUseCamera = useMemo(() => {
     return !!permission?.granted;
   }, [permission?.granted]);
@@ -64,6 +90,53 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
 
     requestPermission().catch(() => setError("Permission request failed"));
   }, [permission, requestPermission, visible]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    if (!visible) return;
+    if (busy) return;
+    if (permission && !permission.granted) return;
+
+    setError(null);
+
+    if (!webReaderRef.current) {
+      webReaderRef.current = new BrowserMultiFormatReader(webHints, { delayBetweenScanAttempts: 200 } as any);
+    }
+
+    const reader = webReaderRef.current;
+    const videoEl = webVideoRef.current;
+    if (!reader || !videoEl) return;
+
+    let cancelled = false;
+
+    try {
+      void reader.decodeFromVideoDevice(undefined, videoEl, (result: any) => {
+        if (cancelled) return;
+        if (!result) return;
+        const value = String(result.getText?.() ?? "").trim();
+        if (!value) return;
+        if (busy) return;
+
+        setBusy(true);
+        setLast(value);
+        onScanned(value);
+        setTimeout(() => setBusy(false), 800);
+      });
+    } catch (e) {
+      if (!cancelled) setError(e instanceof Error ? e.message : "Failed to start camera");
+    }
+
+    return () => {
+      cancelled = true;
+      try {
+        (reader as any)?.reset?.();
+        (reader as any)?.stopContinuousDecode?.();
+        (reader as any)?.stopAsyncDecode?.();
+      } catch {
+        // ignore
+      }
+    };
+  }, [busy, onScanned, permission, visible, webHints]);
 
   const handleScan = useCallback(
     (result: BarcodeScanningResult) => {
@@ -100,7 +173,28 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   ) : (
     <Card style={{ padding: 0, overflow: "hidden" as any }}>
       <View style={{ width: "100%", aspectRatio: 1, backgroundColor: "#000" }}>
-        {canUseCamera ? (
+        {Platform.OS === "web" ? (
+          <View style={{ flex: 1 }}>
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "#000",
+              }}
+            />
+            <video
+              ref={(el) => {
+                webVideoRef.current = el;
+              }}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              muted
+              playsInline
+            />
+          </View>
+        ) : canUseCamera ? (
           <CameraView
             style={{ flex: 1 }}
             facing="back"
