@@ -29,6 +29,7 @@ type Props = NativeStackScreenProps<InventoryStackParamList, "InventoryList">;
 export function InventoryListScreen({ navigation }: Props) {
   const { token } = useContext(AuthContext);
   const { width } = useWindowDimensions();
+  const { height } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
   const isWeb = Platform.OS === "web";
   const insets = useSafeAreaInsets();
@@ -44,21 +45,51 @@ export function InventoryListScreen({ navigation }: Props) {
   const overlaySearchRef = useRef<TextInput>(null);
 
   const floatingPos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const floatingDraggedRef = useRef(false);
+
+  const buttonSize = 52;
+  const floatingMargin = theme.spacing.md;
+  const floatingTop = theme.spacing.md + insets.top + 64;
+  const floatingBottomLimit = theme.spacing.md + insets.bottom + 112;
+  const maxX = Math.max(0, width - buttonSize - floatingMargin * 2);
+  const maxY = Math.max(0, height - buttonSize - floatingTop - floatingBottomLimit);
+
   const floatingPan = useMemo(
-    () =>
-      PanResponder.create({
+    () => {
+      const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+      return PanResponder.create({
         onStartShouldSetPanResponder: () => false,
         onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
         onPanResponderGrant: () => {
           floatingPos.extractOffset();
         },
-        onPanResponderMove: Animated.event([null, { dx: floatingPos.x, dy: floatingPos.y }], { useNativeDriver: false }),
+        onPanResponderMove: (e, g) => {
+          if (Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2) floatingDraggedRef.current = true;
+          floatingPos.setValue({
+            x: g.dx,
+            y: g.dy,
+          });
+        },
         onPanResponderRelease: () => {
           floatingPos.flattenOffset();
+          const x = clamp((floatingPos.x as any).__getValue?.() ?? 0, 0, maxX);
+          const y = clamp((floatingPos.y as any).__getValue?.() ?? 0, 0, maxY);
+          const snapX = x < maxX / 2 ? 0 : maxX;
+          Animated.spring(floatingPos, { toValue: { x: snapX, y }, useNativeDriver: false, friction: 7, tension: 90 }).start();
         },
-      }),
-    [floatingPos]
+      });
+    },
+    [floatingPos, maxX, maxY]
   );
+
+  useEffect(() => {
+    if (!showFloatingSearch) {
+      floatingDraggedRef.current = false;
+      return;
+    }
+    if (floatingDraggedRef.current) return;
+    floatingPos.setValue({ x: maxX, y: 0 });
+  }, [floatingPos, maxX, showFloatingSearch]);
 
   const openSearchOverlay = useCallback(() => {
     setSearchOverlayOpen(true);
@@ -471,8 +502,8 @@ export function InventoryListScreen({ navigation }: Props) {
         <Animated.View
           style={{
             position: "absolute",
-            right: theme.spacing.md,
-            bottom: theme.spacing.md + insets.bottom + 112,
+            left: floatingMargin,
+            top: floatingTop,
             zIndex: 50,
             elevation: 50,
             transform: floatingPos.getTranslateTransform(),
@@ -480,7 +511,7 @@ export function InventoryListScreen({ navigation }: Props) {
           pointerEvents="box-none"
           {...floatingPan.panHandlers}
         >
-          <AppButton title="Search" iconName="search" iconOnly variant="secondary" onPress={openSearchOverlay} />
+          <AppButton title="Search" iconName="search" iconOnly iconSize={28} variant="secondary" onPress={openSearchOverlay} />
         </Animated.View>
       ) : null}
 
