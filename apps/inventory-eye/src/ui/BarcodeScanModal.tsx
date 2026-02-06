@@ -19,8 +19,38 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const [last, setLast] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
+
+  const modalMaxWidth = useMemo(() => {
+    if (!width) return 420;
+    return Math.min(420, Math.max(280, width - theme.spacing.md * 2));
+  }, [width]);
+
+  const modalMaxHeight = useMemo(() => {
+    if (!height) return 620;
+    return Math.min(680, Math.max(460, height - theme.spacing.md * 2));
+  }, [height]);
+
+  const barcodeTypes = useMemo(
+    () =>
+      [
+        "qr",
+        "ean13",
+        "ean8",
+        "upc_a",
+        "upc_e",
+        "code128",
+        "code39",
+        "code93",
+        "pdf417",
+        "aztec",
+        "datamatrix",
+        "itf14",
+        "codabar",
+      ] as any,
+    []
+  );
 
   const canUseCamera = useMemo(() => {
     return !!permission?.granted;
@@ -59,7 +89,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
           <CameraView
             style={{ flex: 1 }}
             facing="back"
-            barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "code128", "code39", "upc_a", "upc_e", "qr"] }}
+            barcodeScannerSettings={{ barcodeTypes }}
             onBarcodeScanned={handleScan}
           />
         ) : null}
@@ -96,14 +126,14 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     </View>
   ) : null;
 
-  const body = isDesktopWeb ? (
+  const body = (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing.md }}>
       <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} onPress={onClose} />
       <View
         style={{
           width: "100%",
-          maxWidth: 420,
-          maxHeight: 620,
+          maxWidth: modalMaxWidth,
+          maxHeight: modalMaxHeight,
           backgroundColor: theme.colors.bg,
           borderRadius: 18,
           borderWidth: 1,
@@ -119,32 +149,10 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         {cameraCard}
       </View>
     </View>
-  ) : (
-    <View style={{ flex: 1, justifyContent: "flex-end" }}>
-      <Pressable style={{ flex: 1 }} onPress={onClose} />
-
-      <View
-        style={{
-          padding: theme.spacing.md,
-          backgroundColor: theme.colors.bg,
-          borderTopLeftRadius: 18,
-          borderTopRightRadius: 18,
-          borderWidth: 1,
-          borderColor: theme.colors.border,
-        }}
-      >
-        {header}
-        <View style={{ height: 12 }} />
-        {helper}
-        {errorBox}
-        <View style={{ height: 12 }} />
-        {cameraCard}
-      </View>
-    </View>
   );
 
   return (
-    <Modal visible={visible} transparent animationType={isDesktopWeb ? "fade" : "slide"} onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType={isDesktopWeb ? "fade" : "fade"} onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)" }}>{body}</View>
     </Modal>
   );
