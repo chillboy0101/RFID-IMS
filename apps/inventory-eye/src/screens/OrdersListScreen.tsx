@@ -304,13 +304,6 @@ export function OrdersListScreen({ navigation }: Props) {
             scrollEventThrottle={32}
           >
             <Card>
-              <TextField
-                value={q}
-                onChangeText={setQ}
-                placeholder="Search: order ID or status"
-                autoCapitalize="none"
-              />
-              <View style={{ height: 12 }} />
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                 <Badge label={`Total: ${filtered.length}`} />
                 <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} />
@@ -347,14 +340,6 @@ export function OrdersListScreen({ navigation }: Props) {
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
             ListHeaderComponent={
               <Card>
-                <TextField
-                  ref={searchRef}
-                  value={q}
-                  onChangeText={setQ}
-                  placeholder="Search: order ID or status"
-                  autoCapitalize="none"
-                />
-                <View style={{ height: 12 }} />
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                   <Badge label={`Total: ${filtered.length}`} />
                   <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} />
@@ -393,8 +378,7 @@ export function OrdersListScreen({ navigation }: Props) {
       ) : null}
 
       {searchOverlayOpen ? (
-        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 60, elevation: 60 }}>
-          <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} onPress={closeSearchOverlay} />
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 60, elevation: 60 }} pointerEvents="box-none">
           <Animated.View
             style={{
               padding: theme.spacing.md,

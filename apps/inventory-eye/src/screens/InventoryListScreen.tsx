@@ -378,18 +378,8 @@ export function InventoryListScreen({ navigation }: Props) {
             scrollEventThrottle={32}
           >
             <Card>
-              <TextField
-                ref={searchRef}
-                value={q}
-                onChangeText={setQ}
-                placeholder="Search: name, SKU, barcode, location, RFID tag"
-                autoCapitalize="none"
-                returnKeyType="search"
-                onSubmitEditing={() => setQ((prev) => prev.trim())}
-              />
-              <View style={{ height: 12 }} />
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, flex: 1 }}>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, flex: 1, alignItems: "center" }}>
                   <Badge label={`Total: ${items.length}`} tone="default" />
                   <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} />
                 </View>
@@ -446,18 +436,8 @@ export function InventoryListScreen({ navigation }: Props) {
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
             ListHeaderComponent={
               <Card>
-                <TextField
-                  ref={searchRef}
-                  value={q}
-                  onChangeText={setQ}
-                  placeholder="Search: name, SKU, barcode, location, RFID tag"
-                  autoCapitalize="none"
-                  returnKeyType="search"
-                  onSubmitEditing={() => setQ((prev) => prev.trim())}
-                />
-                <View style={{ height: 12 }} />
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, flex: 1 }}>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, flex: 1, alignItems: "center" }}>
                     <Badge label={`Total: ${items.length}`} tone="default" />
                     <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} />
                   </View>
@@ -516,8 +496,7 @@ export function InventoryListScreen({ navigation }: Props) {
       ) : null}
 
       {searchOverlayOpen ? (
-        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 60, elevation: 60 }}>
-          <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} onPress={closeSearchOverlay} />
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 60, elevation: 60 }} pointerEvents="box-none">
           <Animated.View
             style={{
               padding: theme.spacing.md,
