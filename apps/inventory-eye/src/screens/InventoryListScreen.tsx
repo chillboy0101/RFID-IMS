@@ -311,11 +311,12 @@ export function InventoryListScreen({ navigation }: Props) {
               onSubmitEditing={() => setQ((prev) => prev.trim())}
             />
             <View style={{ height: 12 }} />
-            <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
-            <View style={{ height: 12 }} />
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-              <Badge label={`Total: ${items.length}`} tone="default" />
-              <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, flex: 1 }}>
+                <Badge label={`Total: ${items.length}`} tone="default" />
+                <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} />
+              </View>
+              <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
             </View>
             {error ? (
               <View style={{ marginTop: 10 }}>
