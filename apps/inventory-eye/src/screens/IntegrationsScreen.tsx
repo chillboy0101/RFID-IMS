@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import { API_BASE_URL } from "../config";
+import { getApiTenantId } from "../api/tenant";
 import type { MoreStackParamList } from "../navigation/types";
 import { AppButton, Badge, Card, ErrorText, MutedText, Screen, TextField, theme } from "../ui";
 
@@ -189,10 +190,13 @@ export function IntegrationsScreen({ navigation }: Props) {
     setError(null);
 
     try {
+      const tenantId = getApiTenantId();
+      if (!tenantId) throw new Error("Active branch is required");
       const res = await fetch(`${API_BASE_URL}/integrations/export?type=${encodeURIComponent(exportType)}&format=csv`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
+          "X-Tenant-ID": tenantId,
         },
       });
       const text = await res.text();
@@ -213,10 +217,13 @@ export function IntegrationsScreen({ navigation }: Props) {
     setLoading(true);
     setError(null);
     try {
+      const tenantId = getApiTenantId();
+      if (!tenantId) throw new Error("Active branch is required");
       const res = await fetch(`${API_BASE_URL}/integrations/template?type=inventory&format=csv`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
+          "X-Tenant-ID": tenantId,
         },
       });
       const text = await res.text();
@@ -242,10 +249,13 @@ export function IntegrationsScreen({ navigation }: Props) {
     setError(null);
 
     try {
+      const tenantId = getApiTenantId();
+      if (!tenantId) throw new Error("Active branch is required");
       const res = await fetch(`${API_BASE_URL}/integrations/import/inventory/csv`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
+          "X-Tenant-ID": tenantId,
           "Content-Type": "text/csv",
         },
         body: importCsv,
@@ -333,7 +343,7 @@ export function IntegrationsScreen({ navigation }: Props) {
 
   return (
     <Screen
-      title="Integrations"
+      title="Import & Export"
       scroll
       right={!isDesktopWeb ? <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly /> : null}
     >
@@ -346,7 +356,7 @@ export function IntegrationsScreen({ navigation }: Props) {
 
           {!canUse ? (
             <View style={{ marginTop: 10 }}>
-              <MutedText>Integrations are admin-only.</MutedText>
+              <MutedText>Import & Export is admin-only.</MutedText>
             </View>
           ) : null}
 

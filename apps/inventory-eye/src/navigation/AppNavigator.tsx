@@ -97,7 +97,7 @@ function EnterpriseTabBar({ state, descriptors, navigation }: BottomTabBarProps)
     ...(isAdmin
       ? ([
           {
-            title: "Integrations",
+            title: "Import & Export",
             icon: "swap-horizontal-outline",
             match: "More/Integrations",
             onPress: () => (navigation as any).navigate("More", { screen: "Integrations" }),
