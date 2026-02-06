@@ -225,55 +225,70 @@ export function OrdersListScreen({ navigation }: Props) {
           </Card>
         </View>
       ) : (
-        <>
-          <Card>
-            <TextField
-              value={q}
-              onChangeText={setQ}
-              placeholder="Search: order ID or status"
-              autoCapitalize="none"
-            />
-            <View style={{ height: 12 }} />
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-              <Badge label={`Total: ${filtered.length}`} />
-              <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} />
-            </View>
-          </Card>
+        Platform.OS === "web" ? (
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled">
+            <Card>
+              <TextField
+                value={q}
+                onChangeText={setQ}
+                placeholder="Search: order ID or status"
+                autoCapitalize="none"
+              />
+              <View style={{ height: 12 }} />
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                <Badge label={`Total: ${filtered.length}`} />
+                <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} />
+              </View>
+            </Card>
 
-          {Platform.OS === "web" ? (
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled">
-              {filtered.length ? (
-                filtered.map((item) => (
-                  <ListRow
-                    key={item._id}
-                    title={`Order #${item._id.slice(-6)}`}
-                    subtitle={`Created: ${new Date(item.createdAt).toLocaleString()}`}
-                    right={<Badge label={item.status} tone={item.status === "fulfilled" ? "success" : item.status === "cancelled" ? "danger" : "primary"} />}
-                    onPress={() => navigation.navigate("OrderDetail", { id: item._id })}
-                  />
-                ))
-              ) : (
-                <MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>
-              )}
-            </ScrollView>
-          ) : (
-            <FlatList
-              style={{ flex: 1 }}
-              data={filtered}
-              keyExtractor={(o) => o._id}
-              ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-              ListEmptyComponent={<MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>}
-              renderItem={({ item }) => (
+            {filtered.length ? (
+              filtered.map((item) => (
                 <ListRow
+                  key={item._id}
                   title={`Order #${item._id.slice(-6)}`}
                   subtitle={`Created: ${new Date(item.createdAt).toLocaleString()}`}
                   right={<Badge label={item.status} tone={item.status === "fulfilled" ? "success" : item.status === "cancelled" ? "danger" : "primary"} />}
                   onPress={() => navigation.navigate("OrderDetail", { id: item._id })}
                 />
-              )}
-            />
-          )}
-        </>
+              ))
+            ) : (
+              <MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>
+            )}
+          </ScrollView>
+        ) : (
+          <FlatList
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 112 }}
+            data={filtered}
+            keyExtractor={(o) => o._id}
+            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+            ListHeaderComponent={
+              <Card>
+                <TextField
+                  value={q}
+                  onChangeText={setQ}
+                  placeholder="Search: order ID or status"
+                  autoCapitalize="none"
+                />
+                <View style={{ height: 12 }} />
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                  <Badge label={`Total: ${filtered.length}`} />
+                  <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} />
+                </View>
+              </Card>
+            }
+            ListHeaderComponentStyle={{ marginBottom: 12 }}
+            ListEmptyComponent={<MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>}
+            renderItem={({ item }) => (
+              <ListRow
+                title={`Order #${item._id.slice(-6)}`}
+                subtitle={`Created: ${new Date(item.createdAt).toLocaleString()}`}
+                right={<Badge label={item.status} tone={item.status === "fulfilled" ? "success" : item.status === "cancelled" ? "danger" : "primary"} />}
+                onPress={() => navigation.navigate("OrderDetail", { id: item._id })}
+              />
+            )}
+          />
+        )
       )}
     </Screen>
   );

@@ -299,72 +299,37 @@ export function InventoryListScreen({ navigation }: Props) {
           </View>
         </View>
       ) : (
-        <>
-          <Card>
-            <TextField
-              ref={searchRef}
-              value={q}
-              onChangeText={setQ}
-              placeholder="Search: name, SKU, barcode, location, RFID tag"
-              autoCapitalize="none"
-              returnKeyType="search"
-              onSubmitEditing={() => setQ((prev) => prev.trim())}
-            />
-            <View style={{ height: 12 }} />
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, flex: 1 }}>
-                <Badge label={`Total: ${items.length}`} tone="default" />
-                <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} />
+        Platform.OS === "web" ? (
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled">
+            <Card>
+              <TextField
+                ref={searchRef}
+                value={q}
+                onChangeText={setQ}
+                placeholder="Search: name, SKU, barcode, location, RFID tag"
+                autoCapitalize="none"
+                returnKeyType="search"
+                onSubmitEditing={() => setQ((prev) => prev.trim())}
+              />
+              <View style={{ height: 12 }} />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, flex: 1 }}>
+                  <Badge label={`Total: ${items.length}`} tone="default" />
+                  <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} />
+                </View>
+                <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
               </View>
-              <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
-            </View>
-            {error ? (
-              <View style={{ marginTop: 10 }}>
-                <ErrorText>{error}</ErrorText>
-              </View>
-            ) : null}
-          </Card>
+              {error ? (
+                <View style={{ marginTop: 10 }}>
+                  <ErrorText>{error}</ErrorText>
+                </View>
+              ) : null}
+            </Card>
 
-          {Platform.OS === "web" ? (
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled">
-              {items.length ? (
-                items.map((item) => (
-                  <ListRow
-                    key={item._id}
-                    title={item.name}
-                    subtitle={`SKU: ${item.sku}\nLocation: ${item.location ?? "-"}`}
-                    meta={`Qty: ${item.quantity} (reorder ${item.reorderLevel})`}
-                    topRight={
-                      item.quantity <= item.reorderLevel ? (
-                        <View
-                          style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: 999,
-                            backgroundColor: theme.colors.warning,
-                            borderWidth: 2,
-                            borderColor: theme.colors.surface,
-                          }}
-                        />
-                      ) : null
-                    }
-                    onPress={() => navigation.navigate("InventoryDetail", { id: item._id })}
-                  />
-                ))
-              ) : (
-                <MutedText>{q.trim() ? "No matching items" : "No inventory items"}</MutedText>
-              )}
-            </ScrollView>
-          ) : (
-            <FlatList
-              style={{ flex: 1 }}
-              contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 112 }}
-              data={items}
-              keyExtractor={(it) => it._id}
-              ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-              ListEmptyComponent={<MutedText>{q.trim() ? "No matching items" : "No inventory items"}</MutedText>}
-              renderItem={({ item }) => (
+            {items.length ? (
+              items.map((item) => (
                 <ListRow
+                  key={item._id}
                   title={item.name}
                   subtitle={`SKU: ${item.sku}\nLocation: ${item.location ?? "-"}`}
                   meta={`Qty: ${item.quantity} (reorder ${item.reorderLevel})`}
@@ -384,10 +349,70 @@ export function InventoryListScreen({ navigation }: Props) {
                   }
                   onPress={() => navigation.navigate("InventoryDetail", { id: item._id })}
                 />
-              )}
-            />
-          )}
-        </>
+              ))
+            ) : (
+              <MutedText>{q.trim() ? "No matching items" : "No inventory items"}</MutedText>
+            )}
+          </ScrollView>
+        ) : (
+          <FlatList
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 112 }}
+            data={items}
+            keyExtractor={(it) => it._id}
+            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+            ListHeaderComponent={
+              <Card>
+                <TextField
+                  ref={searchRef}
+                  value={q}
+                  onChangeText={setQ}
+                  placeholder="Search: name, SKU, barcode, location, RFID tag"
+                  autoCapitalize="none"
+                  returnKeyType="search"
+                  onSubmitEditing={() => setQ((prev) => prev.trim())}
+                />
+                <View style={{ height: 12 }} />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, flex: 1 }}>
+                    <Badge label={`Total: ${items.length}`} tone="default" />
+                    <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} />
+                  </View>
+                  <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
+                </View>
+                {error ? (
+                  <View style={{ marginTop: 10 }}>
+                    <ErrorText>{error}</ErrorText>
+                  </View>
+                ) : null}
+              </Card>
+            }
+            ListHeaderComponentStyle={{ marginBottom: 12 }}
+            ListEmptyComponent={<MutedText>{q.trim() ? "No matching items" : "No inventory items"}</MutedText>}
+            renderItem={({ item }) => (
+              <ListRow
+                title={item.name}
+                subtitle={`SKU: ${item.sku}\nLocation: ${item.location ?? "-"}`}
+                meta={`Qty: ${item.quantity} (reorder ${item.reorderLevel})`}
+                topRight={
+                  item.quantity <= item.reorderLevel ? (
+                    <View
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: 999,
+                        backgroundColor: theme.colors.warning,
+                        borderWidth: 2,
+                        borderColor: theme.colors.surface,
+                      }}
+                    />
+                  ) : null
+                }
+                onPress={() => navigation.navigate("InventoryDetail", { id: item._id })}
+              />
+            )}
+          />
+        )
       )}
     </Screen>
   );
