@@ -37,6 +37,7 @@ import { ReordersScreen } from "../screens/ReordersScreen";
 import { ReorderCreateScreen } from "../screens/ReorderCreateScreen";
 import { IntegrationsScreen } from "../screens/IntegrationsScreen";
 import { RfidScannerScreen } from "../screens/RfidScannerScreen";
+import { BarcodeScannerScreen } from "../screens/BarcodeScannerScreen";
 
 import { AppButton, Badge, FullScreenLoader, shadow, theme, useTheme } from "../ui";
 
@@ -509,6 +510,7 @@ function MoreNavigator() {
       <MoreStack.Screen name="Reorders" component={ReordersScreen} />
       <MoreStack.Screen name="ReordersCreate" component={ReorderCreateScreen} />
       <MoreStack.Screen name="RfidScanner" component={RfidScannerScreen} />
+      <MoreStack.Screen name="BarcodeScanner" component={BarcodeScannerScreen} />
       <MoreStack.Screen name="Integrations" component={IntegrationsScreen} />
     </MoreStack.Navigator>
   );

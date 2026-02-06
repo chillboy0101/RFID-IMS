@@ -14,6 +14,7 @@ type InventoryItem = {
   _id: string;
   name: string;
   sku: string;
+  barcode?: string;
   description?: string;
   location?: string;
   quantity: number;
@@ -61,6 +62,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
   }, [id, isDesktopWeb, navigation]);
 
   const rfidRef = useRef<TextInput>(null);
+  const barcodeRef = useRef<TextInput>(null);
 
   const DateTimePicker = useMemo(() => {
     if (Platform.OS === "web") return null as any;
@@ -90,6 +92,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
 
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
+  const [barcode, setBarcode] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
   const [quantity, setQuantity] = useState("0");
@@ -156,19 +159,27 @@ export function InventoryEditScreen({ navigation, route }: Props) {
   const load = useCallback(async () => {
     if (!token || !id) return;
     setError(null);
-    const res = await apiRequest<GetResponse>(`/inventory/items/${id}`, { method: "GET", token });
-    const it = res.item;
-    initialRef.current = it;
-    setName(it.name ?? "");
-    setSku(it.sku ?? "");
-    setDescription(it.description ?? "");
-    setLocation(it.location ?? "");
-    setQuantity(String(it.quantity ?? 0));
-    setReorderLevel(String(it.reorderLevel ?? 0));
-    setExpiryDate(it.expiryDate ? new Date(it.expiryDate).toISOString().slice(0, 10) : "");
-    setRfidTagId(it.rfidTagId ?? "");
-    setVendorId(it.vendorId ?? "");
-    setStatus(it.status ?? "active");
+    setLoading(true);
+    try {
+      const res = await apiRequest<GetResponse>(`/inventory/items/${encodeURIComponent(id)}`, { method: "GET", token });
+      const it = res.item;
+      initialRef.current = it;
+      setName(it.name ?? "");
+      setSku(it.sku ?? "");
+      setBarcode(it.barcode ?? "");
+      setDescription(it.description ?? "");
+      setLocation(it.location ?? "");
+      setQuantity(String(it.quantity ?? 0));
+      setReorderLevel(String(it.reorderLevel ?? 0));
+      setExpiryDate(it.expiryDate ? new Date(it.expiryDate).toISOString().slice(0, 10) : "");
+      setRfidTagId(it.rfidTagId ?? "");
+      setVendorId(it.vendorId ?? "");
+      setStatus(it.status ?? "active");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
   }, [id, token]);
 
   const hasChanges = useMemo(() => {
@@ -191,6 +202,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
     return (
       name.trim() !== (it.name ?? "").trim() ||
       sku.trim() !== (it.sku ?? "").trim() ||
+      barcode.trim() !== (it.barcode ?? "").trim() ||
       description.trim() !== (it.description ?? "").trim() ||
       location.trim() !== (it.location ?? "").trim() ||
       nowQty !== itQty ||
@@ -200,7 +212,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
       vendorId.trim() !== (it.vendorId ?? "").trim() ||
       nowStatus !== itStatus
     );
-  }, [description, expiryDate, id, location, name, quantity, reorderLevel, rfidTagId, sku, status, vendorId]);
+  }, [description, expiryDate, id, location, name, quantity, reorderLevel, rfidTagId, sku, status, vendorId, barcode]);
 
   useFocusEffect(
     useCallback(() => {
@@ -239,9 +251,10 @@ export function InventoryEditScreen({ navigation, route }: Props) {
     return vendors.find((v) => v._id === vendorId.trim()) ?? null;
   }, [vendorId, vendors]);
 
-  async function onSave() {
+  async function save() {
     if (!token || loading) return;
-    if (id && !hasChanges) return;
+    setShowValidation(true);
+    if (!name.trim() || !sku.trim()) return;
     if (!canSubmit) {
       setShowValidation(true);
       return;
@@ -251,34 +264,35 @@ export function InventoryEditScreen({ navigation, route }: Props) {
     setError(null);
 
     try {
-      const body = {
+      const body: any = {
         name: name.trim(),
         sku: sku.trim(),
+        barcode: barcode.trim() ? barcode.trim() : undefined,
         description: description.trim() ? description.trim() : undefined,
         location: location.trim() ? location.trim() : undefined,
-        quantity: Number(quantity),
-        reorderLevel: reorderLevel.trim() ? Number(reorderLevel) : undefined,
-        expiryDate: expiryDate.trim() ? new Date(expiryDate.trim()).toISOString() : undefined,
+        quantity: Number(quantity) || 0,
+        reorderLevel: Number(reorderLevel) || 0,
+        expiryDate: expiryDate.trim() ? expiryDate.trim() : undefined,
         rfidTagId: rfidTagId.trim() ? rfidTagId.trim() : undefined,
         vendorId: vendorId.trim() ? vendorId.trim() : undefined,
         status: status.trim() ? status.trim() : undefined,
       };
 
       if (id) {
-        const res = await apiRequest<{ ok: true; item: InventoryItem }>(`/inventory/items/${id}`, {
+        const res = await apiRequest<{ ok: true; item: InventoryItem }>(`/inventory/items/${encodeURIComponent(id)}`, {
           method: "PATCH",
           token,
           body: JSON.stringify(body),
         });
-        navigation.navigate("InventoryDetail", { id: res.item._id });
-      } else {
-        const res = await apiRequest<{ ok: true; item: InventoryItem }>("/inventory/items", {
-          method: "POST",
-          token,
-          body: JSON.stringify(body),
-        });
         navigation.replace("InventoryDetail", { id: res.item._id });
+        return;
       }
+      const res = await apiRequest<{ ok: true; item: InventoryItem }>("/inventory/items", {
+        method: "POST",
+        token,
+        body: JSON.stringify(body),
+      });
+      navigation.replace("InventoryDetail", { id: res.item._id });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -303,6 +317,22 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                 <TextField label="Name *" value={name} onChangeText={setName} placeholder="Item name" errorText={nameError} />
                 <View style={{ height: 12 }} />
                 <TextField label="SKU *" value={sku} onChangeText={setSku} placeholder="Unique SKU" autoCapitalize="characters" errorText={skuError} />
+                <View style={{ height: 12 }} />
+                <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-end" }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <TextField
+                      ref={barcodeRef}
+                      label="Barcode"
+                      value={barcode}
+                      onChangeText={setBarcode}
+                      placeholder="Scan or type"
+                      autoCapitalize="none"
+                      returnKeyType="done"
+                      onSubmitEditing={() => setBarcode((prev) => prev.trim())}
+                    />
+                  </View>
+                  <AppButton title="Scan Barcode" onPress={() => barcodeRef.current?.focus()} variant="secondary" />
+                </View>
                 <View style={{ height: 12 }} />
                 <TextField
                   label="Description"
@@ -501,7 +531,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
               <Card>
                 <AppButton
                   title="Save"
-                  onPress={onSave}
+                  onPress={save}
                   disabled={!canSubmit || loading || !hasChanges}
                   loading={loading}
                 />
@@ -518,6 +548,22 @@ export function InventoryEditScreen({ navigation, route }: Props) {
             <TextField label="Name *" value={name} onChangeText={setName} placeholder="Item name" errorText={nameError} />
             <View style={{ height: 12 }} />
             <TextField label="SKU *" value={sku} onChangeText={setSku} placeholder="Unique SKU" autoCapitalize="characters" errorText={skuError} />
+            <View style={{ height: 12 }} />
+            <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-end" }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <TextField
+                  ref={barcodeRef}
+                  label="Barcode"
+                  value={barcode}
+                  onChangeText={setBarcode}
+                  placeholder="Scan or type"
+                  autoCapitalize="none"
+                  returnKeyType="done"
+                  onSubmitEditing={() => setBarcode((prev) => prev.trim())}
+                />
+              </View>
+              <AppButton title="Scan" onPress={() => barcodeRef.current?.focus()} variant="secondary" />
+            </View>
             <View style={{ height: 12 }} />
             <TextField
               label="Description"
@@ -712,7 +758,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
           </Card>
 
           <Card>
-            <AppButton title="Save" onPress={onSave} disabled={!canSubmit || loading || !hasChanges} loading={loading} />
+            <AppButton title="Save" onPress={save} disabled={!canSubmit || loading || !hasChanges} loading={loading} />
             {!canSubmit ? <MutedText style={{ marginTop: 8 }}>Fill required fields and use valid numbers.</MutedText> : null}
             {canSubmit && !loading && !hasChanges ? <MutedText style={{ marginTop: 8 }}>No changes to save.</MutedText> : null}
           </Card>

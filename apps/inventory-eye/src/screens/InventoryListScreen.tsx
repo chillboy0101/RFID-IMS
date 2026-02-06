@@ -93,14 +93,14 @@ export function InventoryListScreen({ navigation }: Props) {
                   ref={searchRef}
                   value={q}
                   onChangeText={setQ}
-                  placeholder="Search: name, SKU, location, RFID tag"
+                  placeholder="Search: name, SKU, barcode, location, RFID tag"
                   autoCapitalize="none"
                   returnKeyType="search"
                   onSubmitEditing={() => setQ((prev) => prev.trim())}
                 />
               </View>
 
-              <AppButton title="Scan RFID" onPress={() => searchRef.current?.focus()} variant="secondary" />
+              <AppButton title="Scan" onPress={() => searchRef.current?.focus()} variant="secondary" />
 
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 10, flexShrink: 0 }}>
                 <Badge label={`Total: ${items.length}`} tone="default" size="header" />

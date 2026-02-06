@@ -5,6 +5,7 @@ const inventoryItemSchema = new mongoose.Schema(
     tenantId: { type: mongoose.Schema.Types.ObjectId, ref: "Tenant", required: true, index: true },
     name: { type: String, required: true, trim: true },
     sku: { type: String, required: true, trim: true },
+    barcode: { type: String, trim: true },
     description: { type: String, trim: true },
     location: { type: String, trim: true },
     quantity: { type: Number, required: true, min: 0 },
@@ -18,6 +19,13 @@ const inventoryItemSchema = new mongoose.Schema(
 );
 
 inventoryItemSchema.index({ tenantId: 1, sku: 1 }, { unique: true });
+inventoryItemSchema.index(
+  { tenantId: 1, barcode: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { barcode: { $type: "string", $ne: "" } },
+  }
+);
 inventoryItemSchema.index({ tenantId: 1, updatedAt: -1 });
 
 export type InventoryItem = InferSchemaType<typeof inventoryItemSchema>;

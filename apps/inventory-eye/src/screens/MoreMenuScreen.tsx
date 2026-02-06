@@ -32,6 +32,7 @@ export function MoreMenuScreen({ navigation }: Props) {
       <ListRow title="Vendors" subtitle="Create, update, manage suppliers" onPress={() => navigation.navigate("Vendors")} />
       <ListRow title="Reorders" subtitle="Create and manage reorder requests" onPress={() => navigation.navigate("Reorders")} />
       <ListRow title="RFID Scanner" subtitle="Scanner hardware integration and test" onPress={() => navigation.navigate("RfidScanner")} />
+      <ListRow title="Barcode Scanner" subtitle="Scan barcode/QR using camera" onPress={() => navigation.navigate("BarcodeScanner")} />
       {isAdmin ? <ListRow title="Integrations" subtitle="Export/import data" onPress={() => navigation.navigate("Integrations")} /> : null}
       <ListRow
         title="Settings"

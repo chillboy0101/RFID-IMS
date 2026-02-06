@@ -43,6 +43,7 @@ router.get("/items", async (req, res) => {
     filter.$or = [
       { name: { $regex: q, $options: "i" } },
       { sku: { $regex: q, $options: "i" } },
+      { barcode: { $regex: q, $options: "i" } },
       { location: { $regex: q, $options: "i" } },
       { rfidTagId: { $regex: q, $options: "i" } },
     ];
@@ -58,6 +59,27 @@ router.get("/items", async (req, res) => {
   const items = (hasMore ? docs.slice(0, limit) : docs);
 
   res.json({ ok: true, items, page, limit, hasMore });
+});
+
+router.get("/lookup", async (req, res) => {
+  const tenantId = (req as TenantRequest).tenantId as string;
+  const barcode = (req.query.barcode as string | undefined)?.trim();
+  if (!barcode) {
+    res.status(400).json({ ok: false, error: "barcode is required" });
+    return;
+  }
+  if (barcode.length > 120) {
+    res.status(400).json({ ok: false, error: "barcode is too long" });
+    return;
+  }
+
+  const item = await InventoryItemModel.findOne({ tenantId, barcode }).exec();
+  if (!item) {
+    res.status(404).json({ ok: false, error: "Not found" });
+    return;
+  }
+
+  res.json({ ok: true, item });
 });
 
 router.post("/items", async (req: TenantRequest, res) => {
@@ -99,6 +121,11 @@ router.post("/items", async (req: TenantRequest, res) => {
     res.status(400).json({ ok: false, error: expiryDateR.error });
     return;
   }
+  const barcodeR = asString(body.barcode, { field: "barcode", trim: true, maxLen: 120 });
+  if (!barcodeR.ok) {
+    res.status(400).json({ ok: false, error: barcodeR.error });
+    return;
+  }
   const rfidTagIdR = asString(body.rfidTagId, { field: "rfidTagId", trim: true, maxLen: 120 });
   if (!rfidTagIdR.ok) {
     res.status(400).json({ ok: false, error: rfidTagIdR.error });
@@ -128,6 +155,7 @@ router.post("/items", async (req: TenantRequest, res) => {
     tenantId,
     name: nameR.value,
     sku: skuR.value,
+    barcode: barcodeR.value,
     description: descriptionR.value,
     location: locationR.value,
     quantity: quantityR.value,
@@ -207,6 +235,15 @@ router.patch("/items/:id", async (req: TenantRequest, res) => {
       return;
     }
     updates.description = r.value;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "barcode")) {
+    const r = asString(body.barcode, { field: "barcode", trim: true, maxLen: 120 });
+    if (!r.ok) {
+      res.status(400).json({ ok: false, error: r.error });
+      return;
+    }
+    updates.barcode = typeof r.value === "string" && r.value.length === 0 ? undefined : r.value;
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "location")) {

@@ -140,7 +140,7 @@ export function OrderCreateScreen({ navigation }: Props) {
                 ref={searchRef}
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Search: name, SKU, location, RFID tag"
+                placeholder="Search: name, SKU, barcode, location, RFID tag"
                 autoCapitalize="none"
                 returnKeyType="search"
                 onSubmitEditing={() => {
@@ -151,7 +151,7 @@ export function OrderCreateScreen({ navigation }: Props) {
               />
               <View style={{ height: 12 }} />
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-                <AppButton title="Scan RFID" onPress={() => searchRef.current?.focus()} variant="secondary" />
+                <AppButton title="Scan" onPress={() => searchRef.current?.focus()} variant="secondary" />
                 <AppButton
                   title="Search"
                   onPress={() => loadItems().catch((e) => setError(e instanceof Error ? e.message : "Failed"))}

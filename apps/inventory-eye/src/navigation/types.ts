@@ -40,5 +40,6 @@ export type MoreStackParamList = {
   Reorders: undefined;
   ReordersCreate: undefined;
   RfidScanner: undefined;
+  BarcodeScanner: undefined;
   Integrations: undefined;
 };
