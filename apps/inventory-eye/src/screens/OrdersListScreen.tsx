@@ -2,6 +2,7 @@ import React, { useCallback, useContext, useEffect, useMemo, useState } from "re
 import { FlatList, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
@@ -26,6 +27,7 @@ export function OrdersListScreen({ navigation }: Props) {
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
   const isWeb = Platform.OS === "web";
+  const insets = useSafeAreaInsets();
   const [q, setQ] = useState("");
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -175,7 +177,7 @@ export function OrdersListScreen({ navigation }: Props) {
             ) : (
               <FlatList
                 style={{ flex: 1 }}
-                contentContainerStyle={{ padding: theme.spacing.md, gap: 8 }}
+                contentContainerStyle={{ padding: theme.spacing.md, gap: 8, paddingBottom: theme.spacing.lg + insets.bottom + 112 }}
                 data={filtered}
                 keyExtractor={(o) => o._id}
                 ListEmptyComponent={<MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>}

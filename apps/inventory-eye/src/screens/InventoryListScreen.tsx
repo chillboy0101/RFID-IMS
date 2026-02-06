@@ -2,6 +2,7 @@ import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } 
 import { FlatList, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
@@ -30,6 +31,7 @@ export function InventoryListScreen({ navigation }: Props) {
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
   const isWeb = Platform.OS === "web";
+  const insets = useSafeAreaInsets();
   const [q, setQ] = useState("");
   const searchRef = useRef<TextInput>(null);
   const [scanOpen, setScanOpen] = useState(false);
@@ -302,13 +304,13 @@ export function InventoryListScreen({ navigation }: Props) {
               ref={searchRef}
               value={q}
               onChangeText={setQ}
-              placeholder="Search: name, SKU, location, RFID tag"
+              placeholder="Search: name, SKU, barcode, location, RFID tag"
               autoCapitalize="none"
               returnKeyType="search"
               onSubmitEditing={() => setQ((prev) => prev.trim())}
             />
             <View style={{ height: 12 }} />
-            <AppButton title="Scan RFID" onPress={() => searchRef.current?.focus()} variant="secondary" />
+            <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
             <View style={{ height: 12 }} />
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
               <Badge label={`Total: ${items.length}`} tone="default" />
@@ -354,6 +356,7 @@ export function InventoryListScreen({ navigation }: Props) {
           ) : (
             <FlatList
               style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 112 }}
               data={items}
               keyExtractor={(it) => it._id}
               ItemSeparatorComponent={() => <View style={{ height: 12 }} />}

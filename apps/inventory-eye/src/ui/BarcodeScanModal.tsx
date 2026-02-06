@@ -102,7 +102,8 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
       <View
         style={{
           width: "100%",
-          maxWidth: 560,
+          maxWidth: 420,
+          maxHeight: 620,
           backgroundColor: theme.colors.bg,
           borderRadius: 18,
           borderWidth: 1,
