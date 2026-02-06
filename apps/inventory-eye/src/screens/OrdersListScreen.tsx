@@ -229,7 +229,17 @@ export function OrdersListScreen({ navigation }: Props) {
         </View>
       ) : (
         Platform.OS === "web" ? (
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ gap: 12 }}
+            keyboardShouldPersistTaps="handled"
+            onScroll={(e) => {
+              const y = (e as any)?.nativeEvent?.contentOffset?.y ?? 0;
+              const next = y > 80;
+              setShowFloatingSearch((prev) => (prev === next ? prev : next));
+            }}
+            scrollEventThrottle={32}
+          >
             <Card>
               <TextField
                 value={q}
@@ -302,12 +312,14 @@ export function OrdersListScreen({ navigation }: Props) {
         )
       )}
 
-      {Platform.OS !== "web" && !isDesktopWeb && showFloatingSearch ? (
+      {!isDesktopWeb && showFloatingSearch ? (
         <View
           style={{
             position: "absolute",
             right: theme.spacing.md,
             bottom: theme.spacing.md + insets.bottom + 112,
+            zIndex: 50,
+            elevation: 50,
           }}
           pointerEvents="box-none"
         >
