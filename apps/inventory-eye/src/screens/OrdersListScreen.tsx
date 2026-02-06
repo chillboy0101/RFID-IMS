@@ -85,6 +85,7 @@ export function OrdersListScreen({ navigation }: Props) {
   return (
     <Screen
       title="Orders"
+      tabBarPadding={isDesktopWeb}
       right={<AppButton title="New" onPress={() => navigation.navigate("OrderCreate")} variant="secondary" iconName="add" iconOnly />}
     >
       {error ? <ErrorText>{error}</ErrorText> : null}

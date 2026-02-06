@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
 
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
@@ -56,6 +56,15 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     return !!permission?.granted;
   }, [permission?.granted]);
 
+  useEffect(() => {
+    if (!visible) return;
+    if (!permission) return;
+    if (permission.granted) return;
+    if (permission.status === "denied") return;
+
+    requestPermission().catch(() => setError("Permission request failed"));
+  }, [permission, requestPermission, visible]);
+
   const handleScan = useCallback(
     (result: BarcodeScanningResult) => {
       if (busy) return;
@@ -77,11 +86,17 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
       <MutedText>Loading camera permissions...</MutedText>
     </Card>
   ) : !permission.granted ? (
-    <Card>
-      <MutedText>Allow camera access to scan barcodes.</MutedText>
-      <View style={{ height: 12 }} />
-      <AppButton title="Allow camera" onPress={() => requestPermission().catch(() => setError("Permission request failed"))} />
-    </Card>
+    permission.status === "denied" ? (
+      <Card>
+        <MutedText>Camera permission is denied. Enable it in your device settings to scan barcodes.</MutedText>
+        <View style={{ height: 12 }} />
+        <AppButton title="Try again" onPress={() => requestPermission().catch(() => setError("Permission request failed"))} />
+      </Card>
+    ) : (
+      <Card>
+        <MutedText>Requesting camera permission…</MutedText>
+      </Card>
+    )
   ) : (
     <Card style={{ padding: 0, overflow: "hidden" as any }}>
       <View style={{ width: "100%", aspectRatio: 1, backgroundColor: "#000" }}>

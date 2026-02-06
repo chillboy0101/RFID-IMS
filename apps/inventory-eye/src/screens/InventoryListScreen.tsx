@@ -85,6 +85,7 @@ export function InventoryListScreen({ navigation }: Props) {
   return (
     <Screen
       title="Inventory"
+      tabBarPadding={isDesktopWeb}
       right={<AppButton title="New" onPress={() => navigation.navigate("InventoryCreate")} variant="secondary" iconName="add" iconOnly />}
     >
       <BarcodeScanModal
