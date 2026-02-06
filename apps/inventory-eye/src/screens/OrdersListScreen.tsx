@@ -1,5 +1,5 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Animated, FlatList, PanResponder, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -34,6 +34,39 @@ export function OrdersListScreen({ navigation }: Props) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showFloatingSearch, setShowFloatingSearch] = useState(false);
+  const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
+  const overlayAnim = useRef(new Animated.Value(0)).current;
+  const overlaySearchRef = useRef<TextInput>(null);
+
+  const floatingPos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const floatingPan = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
+        onPanResponderGrant: () => {
+          floatingPos.extractOffset();
+        },
+        onPanResponderMove: Animated.event([null, { dx: floatingPos.x, dy: floatingPos.y }], { useNativeDriver: false }),
+        onPanResponderRelease: () => {
+          floatingPos.flattenOffset();
+        },
+      }),
+    [floatingPos]
+  );
+
+  const openSearchOverlay = useCallback(() => {
+    setSearchOverlayOpen(true);
+    overlayAnim.setValue(0);
+    Animated.timing(overlayAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    setTimeout(() => overlaySearchRef.current?.focus(), 50);
+  }, [overlayAnim]);
+
+  const closeSearchOverlay = useCallback(() => {
+    Animated.timing(overlayAnim, { toValue: 0, duration: 160, useNativeDriver: true }).start(({ finished }) => {
+      if (finished) setSearchOverlayOpen(false);
+    });
+  }, [overlayAnim]);
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -313,26 +346,55 @@ export function OrdersListScreen({ navigation }: Props) {
       )}
 
       {!isDesktopWeb && showFloatingSearch ? (
-        <View
+        <Animated.View
           style={{
             position: "absolute",
             right: theme.spacing.md,
             bottom: theme.spacing.md + insets.bottom + 112,
             zIndex: 50,
             elevation: 50,
+            transform: floatingPos.getTranslateTransform(),
           }}
           pointerEvents="box-none"
+          {...floatingPan.panHandlers}
         >
-          <AppButton
-            title="Search"
-            iconName="search"
-            iconOnly
-            variant="secondary"
-            onPress={() => {
-              listRef.current?.scrollToOffset({ offset: 0, animated: true });
-              setTimeout(() => searchRef.current?.focus(), 150);
+          <AppButton title="Search" iconName="search" iconOnly variant="secondary" onPress={openSearchOverlay} />
+        </Animated.View>
+      ) : null}
+
+      {searchOverlayOpen ? (
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 60, elevation: 60 }}>
+          <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} onPress={closeSearchOverlay} />
+          <Animated.View
+            style={{
+              padding: theme.spacing.md,
+              paddingTop: theme.spacing.md + insets.top,
+              transform: [
+                {
+                  translateY: overlayAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-160, 0],
+                  }),
+                },
+              ],
+              opacity: overlayAnim,
             }}
-          />
+          >
+            <Card>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <TextField
+                    ref={overlaySearchRef}
+                    value={q}
+                    onChangeText={setQ}
+                    placeholder="Search orders"
+                    autoCapitalize="none"
+                  />
+                </View>
+                <AppButton title="Close" iconName="close" iconOnly variant="secondary" onPress={closeSearchOverlay} />
+              </View>
+            </Card>
+          </Animated.View>
         </View>
       ) : null}
     </Screen>

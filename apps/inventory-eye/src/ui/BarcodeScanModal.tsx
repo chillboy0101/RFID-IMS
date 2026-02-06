@@ -21,6 +21,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const [busy, setBusy] = useState(false);
   const [last, setLast] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [webVideoReady, setWebVideoReady] = useState(0);
 
   const webVideoRef = useRef<HTMLVideoElement | null>(null);
   const webReaderRef = useRef<any>(null);
@@ -84,6 +85,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
 
   useEffect(() => {
     if (!visible) return;
+    if (Platform.OS === "web") return;
     if (!permission) return;
     if (permission.granted) return;
     if (permission.status === "denied") {
@@ -103,8 +105,6 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     if (Platform.OS !== "web") return;
     if (!visible) return;
     if (busy) return;
-    if (permission && !permission.granted) return;
-
     setError(null);
 
     if (!webReaderRef.current) {
@@ -144,7 +144,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         // ignore
       }
     };
-  }, [busy, onScanned, permission, visible, webHints]);
+  }, [busy, onScanned, visible, webHints, webVideoReady]);
 
   const handleScan = useCallback(
     (result: BarcodeScanningResult) => {
@@ -162,7 +162,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     [busy, onScanned]
   );
 
-  const cameraCard = permission?.granted ? (
+  const cameraCard = (
     <Card style={{ padding: 0, overflow: "hidden" as any }}>
       <View style={{ width: "100%", aspectRatio: 1, backgroundColor: "#000" }}>
         {Platform.OS === "web" ? (
@@ -180,6 +180,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
             <video
               ref={(el) => {
                 webVideoRef.current = el;
+                if (el) setWebVideoReady((v) => v + 1);
               }}
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
               muted
@@ -193,7 +194,11 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
             barcodeScannerSettings={{ barcodeTypes }}
             onBarcodeScanned={handleScan}
           />
-        ) : null}
+        ) : (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+            <MutedText style={{ color: "#fff" as any }}>Waiting for camera permission…</MutedText>
+          </View>
+        )}
       </View>
       <View style={{ padding: theme.spacing.md, gap: 10 }}>
         {last ? (
@@ -206,7 +211,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         )}
       </View>
     </Card>
-  ) : null;
+  );
 
   const header = (
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
