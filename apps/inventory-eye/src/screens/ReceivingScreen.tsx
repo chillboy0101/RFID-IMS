@@ -3,7 +3,10 @@ import { Platform, Text, TextInput, View, Vibration, useWindowDimensions } from 
 
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
+import type { MoreStackParamList } from "../navigation/types";
 import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, MutedText, Screen, TextField, theme } from "../ui";
+
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 type InventoryItem = {
   _id: string;
@@ -18,10 +21,22 @@ type InventoryItem = {
 type LookupResponse = { ok: true; item: InventoryItem };
 type ReceiveResponse = { ok: true; item: InventoryItem; units: Array<{ _id: string; tagId?: string; location?: string; status?: string }> };
 
-export function ReceivingScreen() {
+type Props = NativeStackScreenProps<MoreStackParamList, "Receiving">;
+
+export function ReceivingScreen({ navigation }: Props) {
   const { token } = useContext(AuthContext);
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
+
+  const onBack = useCallback(() => {
+    const state = navigation.getState();
+    const first = state.routes?.[0]?.name;
+    if (first === "MoreMenu") {
+      navigation.popToTop();
+      return;
+    }
+    navigation.navigate("MoreMenu");
+  }, [navigation]);
 
   const [barcode, setBarcode] = useState("");
   const [item, setItem] = useState<InventoryItem | null>(null);
@@ -194,7 +209,14 @@ export function ReceivingScreen() {
     <Screen
       title="Receiving"
       scroll
-      right={!isDesktopWeb ? <AppButton title="Scan" onPress={() => setBarcodeScanOpen(true)} variant="secondary" /> : null}
+      right={
+        !isDesktopWeb ? (
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />
+            <AppButton title="Scan" onPress={() => setBarcodeScanOpen(true)} variant="secondary" />
+          </View>
+        ) : null
+      }
     >
       {lookupError ? <ErrorText>{lookupError}</ErrorText> : null}
       {submitError ? <ErrorText>{submitError}</ErrorText> : null}
