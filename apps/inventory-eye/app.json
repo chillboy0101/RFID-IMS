@@ -26,7 +26,7 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.webp",
+      "favicon": "./assets/favicon.png",
       "name": "VDL Fulfilment Ops",
       "shortName": "VDL Ops",
       "display": "standalone",
