@@ -23,9 +23,11 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const [error, setError] = useState<string | null>(null);
   const [webVideoReady, setWebVideoReady] = useState(0);
   const [webVideoElReady, setWebVideoElReady] = useState(0);
+  const [webNeedsTap, setWebNeedsTap] = useState(false);
 
   const webVideoRef = useRef<HTMLVideoElement | null>(null);
   const webReaderRef = useRef<any>(null);
+  const webStreamRef = useRef<MediaStream | null>(null);
 
   const { width, height } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
@@ -84,6 +86,72 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     return !!permission?.granted;
   }, [permission?.granted]);
 
+  const stopWebCamera = useCallback(() => {
+    try {
+      webStreamRef.current?.getTracks?.().forEach((t) => t.stop());
+    } catch {
+      // ignore
+    }
+    webStreamRef.current = null;
+    try {
+      const videoEl = webVideoRef.current;
+      if (videoEl) (videoEl as any).srcObject = null;
+    } catch {
+      // ignore
+    }
+    try {
+      (webReaderRef.current as any)?.reset?.();
+      (webReaderRef.current as any)?.stopContinuousDecode?.();
+      (webReaderRef.current as any)?.stopAsyncDecode?.();
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const startWebCamera = useCallback(async () => {
+    setError(null);
+    setWebNeedsTap(false);
+
+    if (Platform.OS !== "web") return;
+    if (typeof window === "undefined" || typeof navigator === "undefined") return;
+    const videoEl = webVideoRef.current;
+    if (!videoEl) return;
+
+    const isSecure = (window as any).isSecureContext;
+    const host = window.location?.hostname;
+    const isLocalhost = host === "localhost" || host === "127.0.0.1";
+    if (!isSecure && !isLocalhost) {
+      setError("Camera requires HTTPS (or localhost). Open the app over HTTPS then try again.");
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError("Camera is not supported in this browser.");
+      return;
+    }
+
+    stopWebCamera();
+    setWebVideoReady(0);
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false } as any);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to access camera. Please allow camera permission.");
+      return;
+    }
+
+    webStreamRef.current = stream;
+    (videoEl as any).srcObject = stream;
+
+    try {
+      await (videoEl as any).play?.();
+      setWebVideoReady((v) => v + 1);
+    } catch {
+      setWebNeedsTap(true);
+    }
+  }, [stopWebCamera]);
+
   useEffect(() => {
     if (!visible) return;
     if (Platform.OS === "web") return;
@@ -104,91 +172,94 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     }
     if (Platform.OS !== "web") return;
     if (!visible) return;
+    void startWebCamera();
+    return () => stopWebCamera();
+  }, [startWebCamera, stopWebCamera, visible]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    if (!visible) return;
+    if (!webVideoReady) return;
     if (busy) return;
-    setError(null);
-    setWebVideoReady(0);
 
-    if (!webReaderRef.current) {
-      webReaderRef.current = new BrowserMultiFormatReader(webHints, { delayBetweenScanAttempts: 200 } as any);
-    }
-
-    const reader = webReaderRef.current;
     const videoEl = webVideoRef.current;
-    if (!reader || !videoEl) return;
+    if (!videoEl) return;
 
     let cancelled = false;
 
-    const onLoaded = () => {
-      if (!cancelled) setWebVideoReady(1);
-    };
-    const onErr = () => {
-      if (!cancelled) setError("Camera failed to start. Please ensure camera permission is allowed and try again.");
-    };
-
-    try {
+    const run = async () => {
       try {
-        (reader as any)?.reset?.();
-      } catch {
-        // ignore
-      }
-      videoEl.addEventListener("loadedmetadata", onLoaded);
-      videoEl.addEventListener("error", onErr);
+        const AnyWindow = window as any;
+        const Detector = AnyWindow?.BarcodeDetector as any;
 
-      void (async () => {
-        let deviceId: string | undefined = undefined;
-        try {
-          const devices = await (BrowserMultiFormatReader as any)?.listVideoInputDevices?.();
-          if (Array.isArray(devices) && devices.length) {
-            const preferred = devices.find((d: any) => /back|rear|environment/i.test(String(d?.label ?? "")));
-            deviceId = (preferred ?? devices[devices.length - 1])?.deviceId;
+        if (Detector) {
+          const formats = [
+            "qr_code",
+            "ean_13",
+            "ean_8",
+            "upc_a",
+            "upc_e",
+            "code_128",
+            "code_39",
+            "code_93",
+            "itf",
+            "codabar",
+            "pdf417",
+            "data_matrix",
+            "aztec",
+          ];
+          const detector = new Detector({ formats });
+
+          while (!cancelled) {
+            const barcodes = await detector.detect(videoEl);
+            if (cancelled) return;
+            const raw = barcodes?.[0]?.rawValue;
+            const value = String(raw ?? "").trim();
+            if (value) {
+              setBusy(true);
+              setLast(value);
+              onScanned(value);
+              setTimeout(() => setBusy(false), 800);
+              return;
+            }
+            await new Promise((r) => setTimeout(r, 180));
           }
-        } catch {
-          // ignore
+          return;
         }
 
-        if (cancelled) return;
+        if (!webReaderRef.current) {
+          webReaderRef.current = new BrowserMultiFormatReader(webHints, { delayBetweenScanAttempts: 200 } as any);
+        }
+        const reader = webReaderRef.current;
 
-        void reader.decodeFromVideoDevice(deviceId, videoEl, (result: any) => {
-          onLoaded();
+        while (!cancelled) {
+          const result = await reader.decodeFromVideoElement(videoEl);
           if (cancelled) return;
-          if (!result) return;
-          const value = String(result.getText?.() ?? "").trim();
-          if (!value) return;
-          if (busy) return;
+          const value = String(result?.getText?.() ?? "").trim();
+          if (!value) continue;
 
           setBusy(true);
           setLast(value);
           onScanned(value);
           setTimeout(() => setBusy(false), 800);
-        });
-      })();
-    } catch (e) {
-      if (!cancelled) {
-        setError(
-          e instanceof Error
-            ? e.message
-            : "Failed to start camera. On web you may need HTTPS (or localhost) and to allow camera permission."
-        );
+          return;
+        }
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to scan barcode");
       }
-    }
+    };
+
+    void run();
 
     return () => {
       cancelled = true;
       try {
-        (reader as any)?.reset?.();
-        (reader as any)?.stopContinuousDecode?.();
-        (reader as any)?.stopAsyncDecode?.();
-      } catch {
-        // ignore
-      }
-      try {
-        videoEl.removeEventListener("loadedmetadata", onLoaded);
-        videoEl.removeEventListener("error", onErr);
+        (webReaderRef.current as any)?.reset?.();
       } catch {
         // ignore
       }
     };
-  }, [busy, onScanned, visible, webHints, webVideoElReady]);
+  }, [busy, onScanned, visible, webHints, webVideoReady]);
 
   const handleScan = useCallback(
     (result: BarcodeScanningResult) => {
@@ -233,7 +304,11 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
             />
             {webVideoReady ? null : (
               <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
-                <MutedText style={{ color: "#fff" as any }}>Starting camera…</MutedText>
+                {webNeedsTap ? (
+                  <AppButton title="Tap to start camera" onPress={startWebCamera as any} variant="secondary" />
+                ) : (
+                  <MutedText style={{ color: "#fff" as any }}>Starting camera…</MutedText>
+                )}
               </View>
             )}
           </View>
