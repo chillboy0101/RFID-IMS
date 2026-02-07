@@ -1,5 +1,5 @@
-import React, { useCallback, useContext, useMemo, useRef, useState } from "react";
-import { Platform, Text, TextInput, View, useWindowDimensions } from "react-native";
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Platform, Text, TextInput, View, Vibration, useWindowDimensions } from "react-native";
 
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
@@ -39,7 +39,42 @@ export function ReceivingScreen() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<string>("");
 
+  const [receiveNext, setReceiveNext] = useState(true);
+
   const [barcodeScanOpen, setBarcodeScanOpen] = useState(false);
+
+  const autoLookupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastLookupBarcodeRef = useRef<string>("");
+
+  const successFeedback = useCallback(() => {
+    try {
+      if (Platform.OS !== "web") {
+        Vibration.vibrate(40);
+      } else if (typeof window !== "undefined") {
+        const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
+        if (!Ctx) return;
+        const ctx = new Ctx();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "sine";
+        o.frequency.value = 880;
+        g.gain.value = 0.08;
+        o.connect(g);
+        g.connect(ctx.destination);
+        o.start();
+        setTimeout(() => {
+          try {
+            o.stop();
+            ctx.close?.();
+          } catch {
+            // ignore
+          }
+        }, 90);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const effectiveQuantity = useMemo(() => {
     if (tagId.trim()) return 1;
@@ -78,6 +113,28 @@ export function ReceivingScreen() {
     [token]
   );
 
+  useEffect(() => {
+    if (autoLookupTimeoutRef.current) clearTimeout(autoLookupTimeoutRef.current);
+    const b = barcode.trim();
+    if (!b) {
+      lastLookupBarcodeRef.current = "";
+      setItem(null);
+      setLookupError(null);
+      return;
+    }
+
+    if (b === lastLookupBarcodeRef.current) return;
+
+    autoLookupTimeoutRef.current = setTimeout(() => {
+      lastLookupBarcodeRef.current = b;
+      void lookupByBarcode(b);
+    }, 250);
+
+    return () => {
+      if (autoLookupTimeoutRef.current) clearTimeout(autoLookupTimeoutRef.current);
+    };
+  }, [barcode, lookupByBarcode]);
+
   const submitReceiving = useCallback(async () => {
     setSubmitError(null);
     setLastResult("");
@@ -111,16 +168,27 @@ export function ReceivingScreen() {
 
       setItem(res.item);
       setLastResult(`Received ${effectiveQuantity} unit${effectiveQuantity === 1 ? "" : "s"}`);
+
+      successFeedback();
+
       setScanValue("");
       setTagId("");
-      setQuantity("1");
+
+      if (!receiveNext) {
+        setBarcode("");
+        setItem(null);
+        setQuantity("1");
+      } else {
+        if (!tagId.trim()) setQuantity("1");
+      }
+
       setTimeout(() => scannerRef.current?.focus(), 50);
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : "Receiving failed");
     } finally {
       setSubmitLoading(false);
     }
-  }, [effectiveQuantity, item?._id, location, submitLoading, tagId, token]);
+  }, [effectiveQuantity, item?._id, location, receiveNext, submitLoading, successFeedback, tagId, token]);
 
   return (
     <Screen
@@ -140,6 +208,8 @@ export function ReceivingScreen() {
 
       <Card>
         <Text style={[theme.typography.h2, { color: theme.colors.text, marginBottom: 10 }]}>1) Scan item barcode</Text>
+        <MutedText>Auto-lookup is enabled.</MutedText>
+        <View style={{ height: 10 }} />
         <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-end" }}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <TextField
@@ -218,7 +288,18 @@ export function ReceivingScreen() {
         />
         <View style={{ height: 12 }} />
 
-        <AppButton title="Receive" onPress={() => void submitReceiving()} disabled={!canSubmit || submitLoading} loading={submitLoading} />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+          <AppButton
+            title={receiveNext ? "Receive & Next: ON" : "Receive & Next: OFF"}
+            onPress={() => setReceiveNext((v) => !v)}
+            variant="secondary"
+          />
+          <MutedText>{receiveNext ? "Keeps item + location, clears tag and focuses scanner." : "Clears item after receiving."}</MutedText>
+        </View>
+
+        <View style={{ height: 12 }} />
+
+        <AppButton title={receiveNext ? "Receive & Next" : "Receive"} onPress={() => void submitReceiving()} disabled={!canSubmit || submitLoading} loading={submitLoading} />
       </Card>
 
       <BarcodeScanModal
@@ -227,7 +308,7 @@ export function ReceivingScreen() {
         onClose={() => setBarcodeScanOpen(false)}
         onScanned={(value) => {
           setBarcodeScanOpen(false);
-          void lookupByBarcode(value);
+          setBarcode(value);
         }}
       />
     </Screen>
