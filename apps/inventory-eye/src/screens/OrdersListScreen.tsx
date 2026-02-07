@@ -39,6 +39,9 @@ export function OrdersListScreen({ navigation }: Props) {
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const overlaySearchRef = useRef<TextInput>(null);
 
+  const scrollOffsetRef = useRef(0);
+  const restoreRef = useRef<{ q: string; offset: number } | null>(null);
+
   const floatingPos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const floatingDraggedRef = useRef(false);
 
@@ -86,15 +89,24 @@ export function OrdersListScreen({ navigation }: Props) {
   }, [floatingPos, maxX, showFloatingSearch]);
 
   const openSearchOverlay = useCallback(() => {
+    restoreRef.current = { q, offset: scrollOffsetRef.current };
     setSearchOverlayOpen(true);
     overlayAnim.setValue(0);
     Animated.timing(overlayAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
     setTimeout(() => overlaySearchRef.current?.focus(), 50);
-  }, [overlayAnim]);
+  }, [overlayAnim, q]);
 
   const closeSearchOverlay = useCallback(() => {
     Animated.timing(overlayAnim, { toValue: 0, duration: 160, useNativeDriver: true }).start(({ finished }) => {
-      if (finished) setSearchOverlayOpen(false);
+      if (!finished) return;
+      setSearchOverlayOpen(false);
+      const restore = restoreRef.current;
+      restoreRef.current = null;
+      if (!restore) return;
+      setQ(restore.q);
+      setTimeout(() => {
+        listRef.current?.scrollToOffset({ offset: restore.offset, animated: false });
+      }, 50);
     });
   }, [overlayAnim]);
 
@@ -298,6 +310,7 @@ export function OrdersListScreen({ navigation }: Props) {
             keyboardShouldPersistTaps="handled"
             onScroll={(e) => {
               const y = (e as any)?.nativeEvent?.contentOffset?.y ?? 0;
+              scrollOffsetRef.current = y;
               const next = y > 80;
               setShowFloatingSearch((prev) => (prev === next ? prev : next));
             }}
@@ -333,6 +346,7 @@ export function OrdersListScreen({ navigation }: Props) {
             keyExtractor={(o) => o._id}
             onScroll={(e) => {
               const y = e.nativeEvent.contentOffset.y;
+              scrollOffsetRef.current = y;
               const next = y > 80;
               setShowFloatingSearch((prev) => (prev === next ? prev : next));
             }}
