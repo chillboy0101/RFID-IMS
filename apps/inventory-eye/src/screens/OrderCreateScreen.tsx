@@ -65,6 +65,7 @@ export function OrderCreateScreen({ navigation }: Props) {
   const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const overlaySearchRef = useRef<TextInput>(null);
+  const overlaySpace = theme.spacing.md + insets.top + 160;
 
   const floatingPos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const floatingDraggedRef = useRef(false);
@@ -424,13 +425,20 @@ export function OrderCreateScreen({ navigation }: Props) {
       ) : (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ gap: theme.spacing.md, paddingBottom: theme.spacing.lg + insets.bottom + 156 }}
+          contentContainerStyle={{ gap: theme.spacing.md, paddingBottom: theme.spacing.lg + insets.bottom + 156, paddingTop: searchOverlayOpen ? overlaySpace : 0 }}
           keyboardShouldPersistTaps="handled"
         >
           <Card>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-              <Badge label={`Selected: ${cart.length}`} tone={cart.length ? "primary" : "default"} size="header" responsive={false} />
-              <Badge label={`Total units: ${cartTotal}`} tone={cartTotal ? "primary" : "default"} size="header" responsive={false} />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Badge label={`Selected: ${cart.length}`} tone={cart.length ? "primary" : "default"} size="header" responsive={false} fullWidth />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Badge label={`Total units: ${cartTotal}`} tone={cartTotal ? "primary" : "default"} size="header" responsive={false} fullWidth />
+              </View>
+              <View style={{ flex: 0 }}>
+                <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
+              </View>
             </View>
             <MutedText style={{ marginTop: 8 }}>Use the search button to add inventory items.</MutedText>
           </Card>
@@ -550,11 +558,7 @@ export function OrderCreateScreen({ navigation }: Props) {
                 </View>
                 <AppButton title="Close" iconName="close" iconOnly variant="secondary" onPress={closeSearchOverlay} />
               </View>
-              <View style={{ height: 12 }} />
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-                <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
-                {loading ? <MutedText>Searching…</MutedText> : null}
-              </View>
+              {loading ? <MutedText style={{ marginTop: 10 }}>Searching…</MutedText> : null}
             </Card>
           </Animated.View>
         </View>

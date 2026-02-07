@@ -396,8 +396,8 @@ export function InventoryListScreen({ navigation }: Props) {
           >
             <Card>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                <Badge label={`Total: ${items.length}`} tone="default" />
-                <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} />
+                <Badge label={`Total: ${items.length}`} tone="default" size="header" responsive={false} />
+                <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} size="header" responsive={false} />
                 <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
               </View>
               {error ? (
@@ -451,8 +451,8 @@ export function InventoryListScreen({ navigation }: Props) {
             ListHeaderComponent={
               <Card>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                  <Badge label={`Total: ${items.length}`} tone="default" />
-                  <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} />
+                  <Badge label={`Total: ${items.length}`} tone="default" size="header" responsive={false} />
+                  <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} size="header" responsive={false} />
                   <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
                 </View>
                 {error ? (
