@@ -24,6 +24,8 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const [webVideoReady, setWebVideoReady] = useState(0);
   const [webNeedsTap, setWebNeedsTap] = useState(false);
 
+  const lastScanRef = useRef<{ value: string; at: number }>({ value: "", at: 0 });
+
   const webVideoRef = useRef<HTMLVideoElement | null>(null);
   const webReaderRef = useRef<any>(null);
   const webStreamRef = useRef<MediaStream | null>(null);
@@ -78,6 +80,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
       BarcodeFormat.DATA_MATRIX,
       BarcodeFormat.AZTEC,
     ]);
+    hints.set(DecodeHintType.TRY_HARDER, true);
     return hints;
   }, []);
 
@@ -134,10 +137,23 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
 
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false } as any);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to access camera. Please allow camera permission.");
-      return;
+      stream = await navigator.mediaDevices.getUserMedia(
+        {
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        } as any
+      );
+    } catch {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false } as any);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to access camera. Please allow camera permission.");
+        return;
+      }
     }
 
     webStreamRef.current = stream;
@@ -215,6 +231,12 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
             const raw = barcodes?.[0]?.rawValue;
             const value = String(raw ?? "").trim();
             if (value) {
+              const now = Date.now();
+              if (lastScanRef.current.value === value && now - lastScanRef.current.at < 1200) {
+                await new Promise((r) => setTimeout(r, 180));
+                continue;
+              }
+              lastScanRef.current = { value, at: now };
               setBusy(true);
               setLast(value);
               onScanned(value);
@@ -237,6 +259,10 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
           const value = String(result?.getText?.() ?? "").trim();
           if (!value) return;
           if (busy) return;
+
+          const now = Date.now();
+          if (lastScanRef.current.value === value && now - lastScanRef.current.at < 1200) return;
+          lastScanRef.current = { value, at: now };
 
           setBusy(true);
           setLast(value);
@@ -265,6 +291,10 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
       if (busy) return;
       const value = String((result as any)?.data ?? "").trim();
       if (!value) return;
+
+      const now = Date.now();
+      if (lastScanRef.current.value === value && now - lastScanRef.current.at < 1200) return;
+      lastScanRef.current = { value, at: now };
 
       setBusy(true);
       setLast(value);
