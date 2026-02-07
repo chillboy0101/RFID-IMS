@@ -509,8 +509,8 @@ export function OrderCreateScreen({ navigation }: Props) {
             position: "absolute",
             left: floatingMargin,
             top: floatingTop,
-            zIndex: 50,
-            elevation: 50,
+            zIndex: 999,
+            elevation: 999,
             transform: floatingPos.getTranslateTransform(),
           }}
           pointerEvents="box-none"

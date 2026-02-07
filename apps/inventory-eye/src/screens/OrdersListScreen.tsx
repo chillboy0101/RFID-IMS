@@ -323,10 +323,10 @@ export function OrdersListScreen({ navigation }: Props) {
             <Card>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                 <View style={{ flex: 1 }}>
-                  <Badge label={`Total: ${filtered.length}`} fullWidth />
+                  <Badge label={`Total: ${filtered.length}`} size="header" responsive={false} fullWidth />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} fullWidth />
+                  <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} size="header" responsive={false} fullWidth />
                 </View>
               </View>
             </Card>
@@ -362,10 +362,10 @@ export function OrdersListScreen({ navigation }: Props) {
               <Card>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <View style={{ flex: 1 }}>
-                    <Badge label={`Total: ${filtered.length}`} fullWidth />
+                    <Badge label={`Total: ${filtered.length}`} size="header" responsive={false} fullWidth />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} fullWidth />
+                    <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} size="header" responsive={false} fullWidth />
                   </View>
                 </View>
               </Card>
