@@ -22,6 +22,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const [last, setLast] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [webVideoReady, setWebVideoReady] = useState(0);
+  const [webVideoElReady, setWebVideoElReady] = useState(0);
 
   const webVideoRef = useRef<HTMLVideoElement | null>(null);
   const webReaderRef = useRef<any>(null);
@@ -117,22 +118,50 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
 
     let cancelled = false;
 
-    const constraints = { video: { facingMode: { ideal: "environment" } }, audio: false } as any;
+    const onLoaded = () => {
+      if (!cancelled) setWebVideoReady(1);
+    };
+    const onErr = () => {
+      if (!cancelled) setError("Camera failed to start. Please ensure camera permission is allowed and try again.");
+    };
 
     try {
-      if (!cancelled) setWebVideoReady(1);
-      void reader.decodeFromConstraints(constraints, videoEl, (result: any) => {
-        if (cancelled) return;
-        if (!result) return;
-        const value = String(result.getText?.() ?? "").trim();
-        if (!value) return;
-        if (busy) return;
+      try {
+        (reader as any)?.reset?.();
+      } catch {
+        // ignore
+      }
+      videoEl.addEventListener("loadedmetadata", onLoaded);
+      videoEl.addEventListener("error", onErr);
 
-        setBusy(true);
-        setLast(value);
-        onScanned(value);
-        setTimeout(() => setBusy(false), 800);
-      });
+      void (async () => {
+        let deviceId: string | undefined = undefined;
+        try {
+          const devices = await (BrowserMultiFormatReader as any)?.listVideoInputDevices?.();
+          if (Array.isArray(devices) && devices.length) {
+            const preferred = devices.find((d: any) => /back|rear|environment/i.test(String(d?.label ?? "")));
+            deviceId = (preferred ?? devices[devices.length - 1])?.deviceId;
+          }
+        } catch {
+          // ignore
+        }
+
+        if (cancelled) return;
+
+        void reader.decodeFromVideoDevice(deviceId, videoEl, (result: any) => {
+          onLoaded();
+          if (cancelled) return;
+          if (!result) return;
+          const value = String(result.getText?.() ?? "").trim();
+          if (!value) return;
+          if (busy) return;
+
+          setBusy(true);
+          setLast(value);
+          onScanned(value);
+          setTimeout(() => setBusy(false), 800);
+        });
+      })();
     } catch (e) {
       if (!cancelled) {
         setError(
@@ -152,8 +181,14 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
       } catch {
         // ignore
       }
+      try {
+        videoEl.removeEventListener("loadedmetadata", onLoaded);
+        videoEl.removeEventListener("error", onErr);
+      } catch {
+        // ignore
+      }
     };
-  }, [busy, onScanned, visible, webHints]);
+  }, [busy, onScanned, visible, webHints, webVideoElReady]);
 
   const handleScan = useCallback(
     (result: BarcodeScanningResult) => {
@@ -189,6 +224,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
             <video
               ref={(el) => {
                 webVideoRef.current = el;
+                if (el) setWebVideoElReady((v) => v + 1);
               }}
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
               muted
