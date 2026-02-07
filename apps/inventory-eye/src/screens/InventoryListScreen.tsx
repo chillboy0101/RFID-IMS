@@ -53,8 +53,8 @@ export function InventoryListScreen({ navigation }: Props) {
 
   const buttonSize = 52;
   const floatingMargin = theme.spacing.md;
-  const floatingTop = theme.spacing.md + insets.top + 96;
-  const floatingBottomLimit = theme.spacing.md + insets.bottom + 112;
+  const floatingTop = theme.spacing.md + insets.top + 64;
+  const floatingBottomLimit = theme.spacing.md + insets.bottom + 168;
   const maxX = Math.max(0, width - buttonSize - floatingMargin * 2);
   const maxY = Math.max(0, height - buttonSize - floatingTop - floatingBottomLimit);
 
@@ -395,16 +395,10 @@ export function InventoryListScreen({ navigation }: Props) {
             scrollEventThrottle={32}
           >
             <Card>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Badge label={`Total: ${items.length}`} tone="default" fullWidth />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} fullWidth />
-                </View>
-                <View style={{ flex: 0 }}>
-                  <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
-                </View>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <Badge label={`Total: ${items.length}`} tone="default" />
+                <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} />
+                <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
               </View>
               {error ? (
                 <View style={{ marginTop: 10 }}>
@@ -456,16 +450,10 @@ export function InventoryListScreen({ navigation }: Props) {
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
             ListHeaderComponent={
               <Card>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    <Badge label={`Total: ${items.length}`} tone="default" fullWidth />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} fullWidth />
-                  </View>
-                  <View style={{ flex: 0 }}>
-                    <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
-                  </View>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                  <Badge label={`Total: ${items.length}`} tone="default" />
+                  <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} />
+                  <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
                 </View>
                 {error ? (
                   <View style={{ marginTop: 10 }}>
