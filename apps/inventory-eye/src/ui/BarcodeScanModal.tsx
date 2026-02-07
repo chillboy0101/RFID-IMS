@@ -86,15 +86,58 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   useEffect(() => {
     if (!visible) return;
     if (Platform.OS === "web") return;
-    if (!permission) return;
-    if (permission.granted) return;
-    if (permission.status === "denied") {
+    if (permission?.granted) return;
+    if (permission?.status === "denied") {
       setError("Camera permission is denied. Enable it in your device settings to scan barcodes.");
       return;
     }
 
     requestPermission().catch(() => setError("Failed to request camera permission"));
   }, [permission, requestPermission, visible]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    if (!visible) return;
+    setError(null);
+    if (typeof navigator === "undefined") return;
+    const videoEl = webVideoRef.current;
+    if (!videoEl) return;
+
+    let cancelled = false;
+    let stream: MediaStream | null = null;
+
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false } as any);
+        if (cancelled) return;
+        (videoEl as any).srcObject = stream;
+        await (videoEl as any).play?.();
+        if (!cancelled) setWebVideoReady((v) => v + 1);
+      } catch (e) {
+        if (!cancelled) {
+          setError(
+            e instanceof Error
+              ? e.message
+              : "Failed to start camera. On web you may need HTTPS (or localhost) and to allow camera permission."
+          );
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      try {
+        stream?.getTracks?.().forEach((t) => t.stop());
+      } catch {
+        // ignore
+      }
+      try {
+        if (videoEl) (videoEl as any).srcObject = null;
+      } catch {
+        // ignore
+      }
+    };
+  }, [visible]);
 
   useEffect(() => {
     if (!visible) {
@@ -180,12 +223,17 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
             <video
               ref={(el) => {
                 webVideoRef.current = el;
-                if (el) setWebVideoReady((v) => v + 1);
               }}
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
               muted
               playsInline
+              autoPlay
             />
+            {webVideoReady ? null : (
+              <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
+                <MutedText style={{ color: "#fff" as any }}>Starting camera…</MutedText>
+              </View>
+            )}
           </View>
         ) : canUseCamera ? (
           <CameraView

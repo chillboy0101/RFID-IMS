@@ -98,7 +98,7 @@ export function InventoryListScreen({ navigation }: Props) {
       return;
     }
     if (floatingDraggedRef.current) return;
-    floatingPos.setValue({ x: maxX, y: 0 });
+    floatingPos.setValue({ x: maxX, y: maxY / 2 });
   }, [floatingPos, maxX, showFloatingSearch]);
 
   const openSearchOverlay = useCallback(() => {
@@ -522,39 +522,7 @@ export function InventoryListScreen({ navigation }: Props) {
           pointerEvents="box-none"
           {...floatingPan.panHandlers}
         >
-          <View style={{ position: "relative" }}>
-            <AppButton title="Search" iconName="search" iconOnly iconSize={28} variant="secondary" onPress={openSearchOverlay} />
-            <View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                left: 0,
-                top: 0,
-                right: 0,
-                bottom: 0,
-              }}
-            >
-              <View style={{ position: "absolute", left: 10, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
-              <View style={{ position: "absolute", left: 21, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
-              <View style={{ position: "absolute", left: 32, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
-              <View style={{ position: "absolute", left: 43, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
-
-              <View style={{ position: "absolute", left: 10, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
-              <View style={{ position: "absolute", left: 21, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
-              <View style={{ position: "absolute", left: 32, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
-              <View style={{ position: "absolute", left: 43, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
-
-              <View style={{ position: "absolute", left: 6, top: 10, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
-              <View style={{ position: "absolute", left: 6, top: 21, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
-              <View style={{ position: "absolute", left: 6, top: 32, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
-              <View style={{ position: "absolute", left: 6, top: 43, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
-
-              <View style={{ position: "absolute", right: 6, top: 10, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
-              <View style={{ position: "absolute", right: 6, top: 21, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
-              <View style={{ position: "absolute", right: 6, top: 32, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
-              <View style={{ position: "absolute", right: 6, top: 43, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
-            </View>
-          </View>
+          <AppButton title="Search" iconName="search" iconOnly iconSize={28} variant="secondary" onPress={openSearchOverlay} />
         </Animated.View>
       ) : null}
 
