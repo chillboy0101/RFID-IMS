@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "inventory-eye",
+    "name": "VDL Fulfilment Ops",
     "slug": "inventory-eye",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -27,8 +27,8 @@
     },
     "web": {
       "favicon": "./assets/favicon.png",
-      "name": "inventory-eye",
-      "shortName": "InventoryEye",
+      "name": "VDL Fulfilment Ops",
+      "shortName": "VDL Ops",
       "display": "standalone",
       "themeColor": "#0B0F17"
     },

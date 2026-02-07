@@ -85,7 +85,7 @@ function EnterpriseTabBar({ state, descriptors, navigation }: BottomTabBarProps)
   const sidebarLinks = [
     { title: "Dashboard", icon: "speedometer-outline", match: "Dashboard", onPress: () => (navigation as any).navigate("Dashboard") },
     { title: "Inventory", icon: "cube-outline", match: "Inventory", onPress: () => (navigation as any).navigate("Inventory") },
-    { title: "Orders", icon: "receipt-outline", match: "Orders", onPress: () => (navigation as any).navigate("Orders") },
+    { title: "Fulfilment Orders", icon: "receipt-outline", match: "Orders", onPress: () => (navigation as any).navigate("Orders") },
     { title: "Branches and Users", icon: "business-outline", match: "More/Branches", onPress: () => (navigation as any).navigate("More", { screen: "Branches" }) },
     { title: "Alerts", icon: "alert-circle-outline", match: "More/Alerts", onPress: () => (navigation as any).navigate("More", { screen: "Alerts" }) },
     { title: "Reports", icon: "bar-chart-outline", match: "More/Reports", onPress: () => (navigation as any).navigate("More", { screen: "Reports" }) },
@@ -217,7 +217,7 @@ function EnterpriseTabBar({ state, descriptors, navigation }: BottomTabBarProps)
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{ color: theme.colors.text, fontWeight: "800", fontSize: 13 }}>Navigation</Text>
                 <Text style={{ color: theme.colors.textMuted, fontSize: 12 }} numberOfLines={1}>
-                  {activeTenantName ? `Active branch: ${activeTenantName}` : "Inventory Eye"}
+                  {activeTenantName ? `Active branch: ${activeTenantName}` : "VDL Fulfilment Ops"}
                 </Text>
               </View>
             </View>

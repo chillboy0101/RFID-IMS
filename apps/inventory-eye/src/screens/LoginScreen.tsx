@@ -52,7 +52,7 @@ export function LoginScreen({ navigation }: Props) {
   return (
     <Screen scroll center tabBarPadding={false} sidebarInset={false}>
       <View style={{ width: "100%", maxWidth: 520, alignItems: "center" }}>
-        <Text style={[theme.typography.title, { color: theme.colors.text, textAlign: "center" }]}>Inventory Eye</Text>
+        <Text style={[theme.typography.title, { color: theme.colors.text, textAlign: "center" }]}>VDL Fulfilment Ops</Text>
         <View style={{ height: 18 }} />
 
         <Form
