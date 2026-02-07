@@ -264,6 +264,110 @@ router.post("/receiving/units", async (req: TenantRequest, res) => {
   res.status(201).json({ ok: true, item, units: createdUnits });
 });
 
+router.get("/putaway/pending", async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const itemId = (req.query.itemId as string | undefined)?.trim();
+  if (!itemId) {
+    res.status(400).json({ ok: false, error: "itemId is required" });
+    return;
+  }
+  if (!mongoose.isValidObjectId(itemId)) {
+    res.status(400).json({ ok: false, error: "Invalid itemId" });
+    return;
+  }
+
+  const pending = await InventoryUnitModel.countDocuments({
+    tenantId,
+    itemId,
+    $or: [{ tagId: { $exists: false } }, { tagId: null }, { tagId: "" }],
+  }).exec();
+
+  res.json({ ok: true, pending });
+});
+
+router.post("/putaway/assign-tag", async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const itemIdR = asObjectId(body.itemId, { field: "itemId", required: true });
+  if (!itemIdR.ok || !itemIdR.value) {
+    res.status(400).json({ ok: false, error: itemIdR.ok ? "itemId is required" : itemIdR.error });
+    return;
+  }
+  const tagIdR = asString(body.tagId, { field: "tagId", required: true, trim: true, maxLen: 120 });
+  if (!tagIdR.ok || !tagIdR.value) {
+    res.status(400).json({ ok: false, error: tagIdR.ok ? "tagId is required" : tagIdR.error });
+    return;
+  }
+  const locationR = asString(body.location, { field: "location", trim: true, maxLen: 120 });
+  if (!locationR.ok) {
+    res.status(400).json({ ok: false, error: locationR.error });
+    return;
+  }
+
+  const item = await InventoryItemModel.findOne({ _id: itemIdR.value, tenantId }).exec();
+  if (!item) {
+    res.status(404).json({ ok: false, error: "Item not found" });
+    return;
+  }
+
+  const tagId = tagIdR.value.trim();
+  const location = locationR.value?.trim() || "RECEIVING_STAGING";
+
+  const existingTag = await InventoryUnitModel.findOne({ tenantId, tagId }).select({ _id: 1 }).exec();
+  if (existingTag) {
+    res.status(409).json({ ok: false, error: "RFID tag already exists" });
+    return;
+  }
+
+  const unit = await InventoryUnitModel.findOne({
+    tenantId,
+    itemId: item._id,
+    $or: [{ tagId: { $exists: false } }, { tagId: null }, { tagId: "" }],
+  })
+    .sort({ createdAt: 1 })
+    .exec();
+
+  if (!unit) {
+    res.status(409).json({ ok: false, error: "No pending untagged units for this item" });
+    return;
+  }
+
+  const prevLocation = unit.location;
+  unit.tagId = tagId;
+  unit.location = location;
+  unit.status = "in_stock";
+  await unit.save();
+
+  if (!item.location) {
+    item.location = location;
+    await item.save();
+  }
+
+  await InventoryLogModel.create({
+    tenantId,
+    itemId: item._id,
+    action: "update",
+    actorUserId: auth.id,
+    newQuantity: item.quantity,
+    reason: "Putaway tag assignment",
+    meta: { unitId: unit._id.toString(), tagId, prevLocation, newLocation: location },
+  });
+
+  const pending = await InventoryUnitModel.countDocuments({
+    tenantId,
+    itemId: item._id,
+    $or: [{ tagId: { $exists: false } }, { tagId: null }, { tagId: "" }],
+  }).exec();
+
+  res.status(201).json({ ok: true, item, unit, pending });
+});
+
 router.get("/items/:id", async (req, res) => {
   const tenantId = (req as TenantRequest).tenantId as string;
   const { id } = req.params;
