@@ -343,7 +343,7 @@ export function OrdersListScreen({ navigation }: Props) {
           <FlatList
             ref={listRef}
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 112 }}
+            contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 156 }}
             data={filtered}
             keyExtractor={(o) => o._id}
             onScroll={(e) => {
@@ -354,12 +354,12 @@ export function OrdersListScreen({ navigation }: Props) {
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
             ListHeaderComponent={
               <Card>
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <View style={{ flex: 1, alignItems: "flex-start" }}>
-                    <Badge label={`Total: ${filtered.length}`} />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Badge label={`Total: ${filtered.length}`} fullWidth />
                   </View>
-                  <View style={{ flex: 1, alignItems: "flex-end" }}>
-                    <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} />
+                  <View style={{ flex: 1 }}>
+                    <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} fullWidth />
                   </View>
                 </View>
               </Card>

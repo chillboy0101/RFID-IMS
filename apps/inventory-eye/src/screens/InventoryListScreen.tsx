@@ -439,7 +439,7 @@ export function InventoryListScreen({ navigation }: Props) {
           <FlatList
             ref={listRef}
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 112 }}
+            contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 156 }}
             data={items}
             keyExtractor={(it) => it._id}
             onScroll={(e) => {
@@ -450,14 +450,14 @@ export function InventoryListScreen({ navigation }: Props) {
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
             ListHeaderComponent={
               <Card>
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <View style={{ flex: 1, alignItems: "flex-start" }}>
-                    <Badge label={`Total: ${items.length}`} tone="default" />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Badge label={`Total: ${items.length}`} tone="default" fullWidth />
                   </View>
-                  <View style={{ flex: 1, alignItems: "center" }}>
-                    <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} />
+                  <View style={{ flex: 1 }}>
+                    <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} fullWidth />
                   </View>
-                  <View style={{ flex: 1, alignItems: "flex-end" }}>
+                  <View style={{ flex: 0 }}>
                     <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
                   </View>
                 </View>

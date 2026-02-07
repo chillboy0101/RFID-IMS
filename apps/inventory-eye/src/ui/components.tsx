@@ -368,9 +368,10 @@ type BadgeProps = {
   tone?: "default" | "primary" | "success" | "warning" | "danger";
   size?: "default" | "header";
   responsive?: boolean;
+  fullWidth?: boolean;
 };
 
-export function Badge({ label, tone = "default", size = "default", responsive = true }: BadgeProps) {
+export function Badge({ label, tone = "default", size = "default", responsive = true, fullWidth = false }: BadgeProps) {
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
   const effectiveSize = isDesktopWeb || !responsive ? size : "default";
@@ -399,7 +400,8 @@ export function Badge({ label, tone = "default", size = "default", responsive = 
   return (
     <View
       style={{
-        alignSelf: "flex-start",
+        alignSelf: fullWidth ? "stretch" : "flex-start",
+        width: fullWidth ? "100%" : undefined,
         backgroundColor: bg,
         borderWidth: 1,
         borderColor: theme.colors.border,
@@ -408,6 +410,7 @@ export function Badge({ label, tone = "default", size = "default", responsive = 
         minHeight: effectiveSize === "header" ? 46 : undefined,
         borderRadius: 999,
         justifyContent: "center",
+        alignItems: fullWidth ? "center" : undefined,
       }}
     >
       <Text style={[theme.typography.label, { color: fg }]} numberOfLines={1}>
