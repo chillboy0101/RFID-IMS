@@ -293,6 +293,8 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     if (Platform.OS !== "web") return;
     if (!visible) return;
 
+    if (webVideoReady) return;
+
     const id = setInterval(() => {
       try {
         const videoEl = webVideoRef.current as any;
@@ -314,7 +316,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         // ignore
       }
     };
-  }, [visible]);
+  }, [visible, webVideoReady]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -350,27 +352,41 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
           ];
           const detector = new Detector({ formats });
 
-          while (!cancelled) {
-            const barcodes = await detector.detect(videoEl);
+          let inFlight = false;
+          const id = setInterval(() => {
             if (cancelled) return;
-            const raw = barcodes?.[0]?.rawValue;
-            const value = String(raw ?? "").trim();
-            if (value) {
-              const now = Date.now();
-              if (lastScanRef.current.value === value && now - lastScanRef.current.at < 1200) {
-                await new Promise((r) => setTimeout(r, 180));
-                continue;
-              }
-              lastScanRef.current = { value, at: now };
-              setBusy(true);
-              setLast(value);
-              onScanned(value);
-              setTimeout(() => setBusy(false), 800);
-              return;
+            if (inFlight) return;
+            if (busy) return;
+            inFlight = true;
+            Promise.resolve()
+              .then(() => detector.detect(videoEl))
+              .then((barcodes: any) => {
+                if (cancelled) return;
+                const raw = barcodes?.[0]?.rawValue;
+                const value = String(raw ?? "").trim();
+                if (!value) return;
+
+                const now = Date.now();
+                if (lastScanRef.current.value === value && now - lastScanRef.current.at < 1200) return;
+                lastScanRef.current = { value, at: now };
+
+                setBusy(true);
+                setLast(value);
+                onScanned(value);
+                setTimeout(() => setBusy(false), 800);
+              })
+              .finally(() => {
+                inFlight = false;
+              });
+          }, 250);
+
+          return () => {
+            try {
+              clearInterval(id);
+            } catch {
+              // ignore
             }
-            await new Promise((r) => setTimeout(r, 180));
-          }
-          return;
+          };
         }
 
         if (!webReaderRef.current) {
