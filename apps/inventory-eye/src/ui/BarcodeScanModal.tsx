@@ -135,6 +135,15 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     stopWebCamera();
     setWebVideoReady(0);
 
+    try {
+      (videoEl as any).setAttribute?.("playsinline", "true");
+      (videoEl as any).setAttribute?.("webkit-playsinline", "true");
+      (videoEl as any).muted = true;
+      (videoEl as any).autoplay = true;
+    } catch {
+      // ignore
+    }
+
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia(
@@ -160,11 +169,23 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     (videoEl as any).srcObject = stream;
 
     try {
-      await (videoEl as any).play?.();
+      if ((videoEl as any).paused) {
+        await (videoEl as any).play?.();
+      }
       setWebVideoReady((v) => v + 1);
     } catch {
       setWebNeedsTap(true);
     }
+
+    setTimeout(() => {
+      try {
+        if (webStreamRef.current && (videoEl as any) && ((videoEl as any).videoWidth ?? 0) === 0) {
+          setWebNeedsTap(true);
+        }
+      } catch {
+        // ignore
+      }
+    }, 1200);
   }, [stopWebCamera]);
 
   useEffect(() => {
@@ -187,7 +208,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     }
     if (Platform.OS !== "web") return;
     if (!visible) return;
-    void startWebCamera();
+    setWebNeedsTap(true);
     return () => stopWebCamera();
   }, [startWebCamera, stopWebCamera, visible]);
 
