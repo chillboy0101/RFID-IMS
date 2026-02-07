@@ -1,7 +1,8 @@
 import React, { useCallback, useContext, useMemo, useRef, useState } from "react";
-import { FlatList, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Animated, FlatList, PanResponder, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
@@ -28,8 +29,10 @@ type Props = NativeStackScreenProps<OrdersStackParamList, "OrderCreate">;
 export function OrderCreateScreen({ navigation }: Props) {
   const { token } = useContext(AuthContext);
   const { width } = useWindowDimensions();
+  const { height } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
   const isWeb = Platform.OS === "web";
+  const insets = useSafeAreaInsets();
 
   const onBack = useCallback(() => {
     if (isDesktopWeb) {
@@ -53,6 +56,72 @@ export function OrderCreateScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const [showFloatingSearch] = useState(true);
+  const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
+  const overlayAnim = useRef(new Animated.Value(0)).current;
+  const overlaySearchRef = useRef<TextInput>(null);
+
+  const floatingPos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const floatingDraggedRef = useRef(false);
+
+  const buttonSize = 52;
+  const floatingMargin = theme.spacing.md;
+  const floatingTop = theme.spacing.md + insets.top + 64;
+  const floatingBottomLimit = theme.spacing.md + insets.bottom + 112;
+  const maxX = Math.max(0, width - buttonSize - floatingMargin * 2);
+  const maxY = Math.max(0, height - buttonSize - floatingTop - floatingBottomLimit);
+
+  const floatingPan = useMemo(
+    () => {
+      const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+      return PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
+        onPanResponderGrant: () => {
+          floatingPos.extractOffset();
+        },
+        onPanResponderMove: (_, g) => {
+          if (Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2) floatingDraggedRef.current = true;
+          floatingPos.setValue({
+            x: g.dx,
+            y: g.dy,
+          });
+        },
+        onPanResponderRelease: () => {
+          floatingPos.flattenOffset();
+          const x = clamp((floatingPos.x as any).__getValue?.() ?? 0, 0, maxX);
+          const y = clamp((floatingPos.y as any).__getValue?.() ?? 0, 0, maxY);
+          const snapX = x < maxX / 2 ? 0 : maxX;
+          Animated.spring(floatingPos, { toValue: { x: snapX, y }, useNativeDriver: false, friction: 7, tension: 90 }).start();
+        },
+      });
+    },
+    [floatingPos, maxX, maxY]
+  );
+
+  React.useEffect(() => {
+    if (!showFloatingSearch) {
+      floatingDraggedRef.current = false;
+      return;
+    }
+    if (floatingDraggedRef.current) return;
+    floatingPos.setValue({ x: maxX, y: 0 });
+  }, [floatingPos, maxX, showFloatingSearch]);
+
+  const openSearchOverlay = useCallback(() => {
+    setSearchOverlayOpen(true);
+    overlayAnim.setValue(0);
+    Animated.timing(overlayAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    setTimeout(() => overlaySearchRef.current?.focus(), 50);
+  }, [overlayAnim]);
+
+  const closeSearchOverlay = useCallback(() => {
+    Animated.timing(overlayAnim, { toValue: 0, duration: 160, useNativeDriver: true }).start(({ finished }) => {
+      if (!finished) return;
+      setSearchOverlayOpen(false);
+    });
+  }, [overlayAnim]);
 
   const loadItems = useCallback(
     async (qOverride?: string) => {
@@ -138,7 +207,10 @@ export function OrderCreateScreen({ navigation }: Props) {
         onScanned={(value) => {
           setQuery(value);
           setScanOpen(false);
-          setTimeout(() => searchRef.current?.focus(), 50);
+          setTimeout(() => {
+            if (searchOverlayOpen) overlaySearchRef.current?.focus();
+            else searchRef.current?.focus();
+          }, 50);
         }}
       />
       {error ? <ErrorText>{error}</ErrorText> : null}
@@ -325,32 +397,11 @@ export function OrderCreateScreen({ navigation }: Props) {
       ) : (
         <View style={{ gap: theme.spacing.md }}>
           <Card>
-            <TextField
-              ref={searchRef}
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Name, SKU, location, RFID tag"
-              autoCapitalize="none"
-              returnKeyType="search"
-              onSubmitEditing={() => {
-                const trimmed = query.trim();
-                setQuery(trimmed);
-                loadItems(trimmed).catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
-              }}
-            />
-            <View style={{ height: 12 }} />
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-              <AppButton title="Scan RFID" onPress={() => searchRef.current?.focus()} variant="secondary" />
-              <AppButton
-                title="Search"
-                onPress={() => loadItems().catch((e) => setError(e instanceof Error ? e.message : "Failed"))}
-                variant="secondary"
-                disabled={loading}
-                loading={loading}
-              />
               <Badge label={`Selected: ${cart.length}`} tone={cart.length ? "primary" : "default"} size="header" responsive={false} />
               <Badge label={`Total units: ${cartTotal}`} tone={cartTotal ? "primary" : "default"} size="header" responsive={false} />
             </View>
+            <MutedText style={{ marginTop: 8 }}>Use the search button to add inventory items.</MutedText>
           </Card>
 
           <Card>
@@ -418,6 +469,79 @@ export function OrderCreateScreen({ navigation }: Props) {
           </Card>
         </View>
       )}
+
+      {!isDesktopWeb && Platform.OS !== "web" && showFloatingSearch && !searchOverlayOpen ? (
+        <Animated.View
+          style={{
+            position: "absolute",
+            left: floatingMargin,
+            top: floatingTop,
+            zIndex: 50,
+            elevation: 50,
+            transform: floatingPos.getTranslateTransform(),
+          }}
+          pointerEvents="box-none"
+          {...floatingPan.panHandlers}
+        >
+          <AppButton title="Search" iconName="search" iconOnly iconSize={28} variant="secondary" onPress={openSearchOverlay} />
+        </Animated.View>
+      ) : null}
+
+      {Platform.OS !== "web" && searchOverlayOpen ? (
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 60, elevation: 60 }} pointerEvents="box-none">
+          <Animated.View
+            style={{
+              padding: theme.spacing.md,
+              paddingTop: theme.spacing.md + insets.top,
+              transform: [
+                {
+                  translateY: overlayAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-180, 0],
+                  }),
+                },
+              ],
+              opacity: overlayAnim,
+            }}
+          >
+            <Card>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <TextField
+                    ref={overlaySearchRef}
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder="Search inventory"
+                    autoCapitalize="none"
+                    returnKeyType="search"
+                    onSubmitEditing={() => {
+                      const trimmed = query.trim();
+                      setQuery(trimmed);
+                      loadItems(trimmed).catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
+                    }}
+                  />
+                </View>
+                <AppButton title="Close" iconName="close" iconOnly variant="secondary" onPress={closeSearchOverlay} />
+              </View>
+              <View style={{ height: 12 }} />
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+                <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
+                <AppButton
+                  title="Search"
+                  onPress={() => {
+                    const trimmed = query.trim();
+                    setQuery(trimmed);
+                    loadItems(trimmed).catch((e) => setError(e instanceof Error ? e.message : "Failed"));
+                  }}
+                  variant="secondary"
+                  disabled={loading}
+                  loading={loading}
+                />
+              </View>
+            </Card>
+          </Animated.View>
+        </View>
+      ) : null}
     </Screen>
   );
 }
