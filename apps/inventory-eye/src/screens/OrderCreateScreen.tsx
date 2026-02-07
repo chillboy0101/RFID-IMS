@@ -65,7 +65,7 @@ export function OrderCreateScreen({ navigation }: Props) {
   const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const overlaySearchRef = useRef<TextInput>(null);
-  const overlaySpace = theme.spacing.md + insets.top + 160;
+  const overlaySpace = theme.spacing.md + insets.top + 104;
 
   const floatingPos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const floatingDraggedRef = useRef(false);
