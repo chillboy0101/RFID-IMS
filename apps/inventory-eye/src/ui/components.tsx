@@ -50,7 +50,7 @@ export function Screen({ title, children, scroll, right, refreshControl, busy, c
   const sidebarWidth = 240;
   const sidebarInsetWidth = sidebarWidth + theme.spacing.md * 2;
 
-  const logoUri = "https://vdlfulfilment.com/wp-content/uploads/2022/01/cropped-VDL-Logo-Site-icon-coloured-150x150.webp";
+  const logoUri = "https://vdlfulfilment.com/wp-content/uploads/2023/05/cropped-VDL-Logo-compositions-15-300x141.png";
 
   const floatingTabBarPadding = tabBarPadding ? (isWideWeb ? theme.spacing.lg : 112) : 0;
   const bottomPad = center ? theme.spacing.md : theme.spacing.lg + insets.bottom + floatingTabBarPadding;
@@ -78,7 +78,7 @@ export function Screen({ title, children, scroll, right, refreshControl, busy, c
             ]}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, paddingRight: theme.spacing.sm }}>
-              <Image source={{ uri: logoUri }} style={{ width: 22, height: 22, borderRadius: 6 }} resizeMode="contain" />
+              <Image source={{ uri: logoUri }} style={{ width: 54, height: 26 }} resizeMode="contain" />
               <Text style={[theme.typography.title, { color: theme.colors.text }]} numberOfLines={1}>
                 {title}
               </Text>
