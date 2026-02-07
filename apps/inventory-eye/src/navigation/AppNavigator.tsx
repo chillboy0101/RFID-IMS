@@ -1,5 +1,5 @@
 import React, { useContext, useState } from "react";
-import { Modal, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { Image, Modal, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -37,6 +37,9 @@ import { ReordersScreen } from "../screens/ReordersScreen";
 import { ReorderCreateScreen } from "../screens/ReorderCreateScreen";
 import { IntegrationsScreen } from "../screens/IntegrationsScreen";
 import { RfidScannerScreen } from "../screens/RfidScannerScreen";
+import { ReceivingScreen } from "../screens/ReceivingScreen";
+import { PutawayScreen } from "../screens/PutawayScreen";
+import { CycleCountScreen } from "../screens/CycleCountScreen";
 
 import { AppButton, Badge, FullScreenLoader, shadow, theme, useTheme } from "../ui";
 
@@ -66,6 +69,7 @@ function EnterpriseTabBar({ state, descriptors, navigation }: BottomTabBarProps)
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
 
   const activeTenantName = tenants.find((t) => t.id === activeTenantId)?.name ?? null;
+  const logoUri = "https://vdlfulfilment.com/wp-content/uploads/2023/05/cropped-VDL-Logo-compositions-15-300x141.png";
 
   const activeTab = state.routes[state.index];
   const nestedState = (activeTab as any)?.state;
@@ -77,6 +81,9 @@ function EnterpriseTabBar({ state, descriptors, navigation }: BottomTabBarProps)
     if (nestedName === "AdminFeedback") return "More/Feedback";
     if (nestedName === "VendorsCreate" || nestedName === "VendorsEdit") return "More/Vendors";
     if (nestedName === "ReordersCreate") return "More/Reorders";
+    if (nestedName === "Receiving") return "More/Receiving";
+    if (nestedName === "Putaway") return "More/Putaway";
+    if (nestedName === "CycleCount") return "More/CycleCount";
     return `More/${nestedName}`;
   })();
 
@@ -86,6 +93,9 @@ function EnterpriseTabBar({ state, descriptors, navigation }: BottomTabBarProps)
     { title: "Dashboard", icon: "speedometer-outline", match: "Dashboard", onPress: () => (navigation as any).navigate("Dashboard") },
     { title: "Inventory", icon: "cube-outline", match: "Inventory", onPress: () => (navigation as any).navigate("Inventory") },
     { title: "Fulfilment Orders", icon: "receipt-outline", match: "Orders", onPress: () => (navigation as any).navigate("Orders") },
+    { title: "Receiving", icon: "download-outline", match: "More/Receiving", onPress: () => (navigation as any).navigate("More", { screen: "Receiving" }) },
+    { title: "Putaway", icon: "file-tray-full-outline", match: "More/Putaway", onPress: () => (navigation as any).navigate("More", { screen: "Putaway" }) },
+    { title: "Cycle Count", icon: "checkmark-done-outline", match: "More/CycleCount", onPress: () => (navigation as any).navigate("More", { screen: "CycleCount" }) },
     { title: "Branches and Users", icon: "business-outline", match: "More/Branches", onPress: () => (navigation as any).navigate("More", { screen: "Branches" }) },
     { title: "Alerts", icon: "alert-circle-outline", match: "More/Alerts", onPress: () => (navigation as any).navigate("More", { screen: "Alerts" }) },
     { title: "Reports", icon: "bar-chart-outline", match: "More/Reports", onPress: () => (navigation as any).navigate("More", { screen: "Reports" }) },
@@ -220,6 +230,7 @@ function EnterpriseTabBar({ state, descriptors, navigation }: BottomTabBarProps)
                   {activeTenantName ? `Active branch: ${activeTenantName}` : "VDL Fulfilment Ops"}
                 </Text>
               </View>
+              <Image source={{ uri: logoUri }} style={{ width: 42, height: 20, opacity: 0.95 }} resizeMode="contain" />
             </View>
           </View>
         ) : null}
@@ -497,6 +508,9 @@ function MoreNavigator() {
   return (
     <MoreStack.Navigator screenOptions={{ headerShown: false }}>
       <MoreStack.Screen name="MoreMenu" component={MoreMenuScreen} />
+      <MoreStack.Screen name="Receiving" component={ReceivingScreen} />
+      <MoreStack.Screen name="Putaway" component={PutawayScreen} />
+      <MoreStack.Screen name="CycleCount" component={CycleCountScreen} />
       <MoreStack.Screen name="Branches" component={AdminBranchesScreen} />
       <MoreStack.Screen name="Alerts" component={AlertsScreen} />
       <MoreStack.Screen name="Reports" component={ReportsScreen} />
@@ -607,6 +621,9 @@ export function AppNavigator() {
         More: {
           screens: {
             MoreMenu: "more",
+            Receiving: "more/receiving",
+            Putaway: "more/putaway",
+            CycleCount: "more/cycle-count",
             Branches: "more/branches",
             Alerts: "more/alerts",
             Reports: "more/reports",

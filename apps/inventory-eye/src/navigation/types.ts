@@ -40,5 +40,8 @@ export type MoreStackParamList = {
   Reorders: undefined;
   ReordersCreate: undefined;
   RfidScanner: undefined;
+  Receiving: undefined;
+  Putaway: undefined;
+  CycleCount: undefined;
   Integrations: undefined;
 };

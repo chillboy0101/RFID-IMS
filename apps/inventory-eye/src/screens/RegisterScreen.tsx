@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Platform, Text, View, useWindowDimensions } from "react-native";
+import { Image, Platform, Text, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AuthContext } from "../auth/AuthContext";
@@ -29,6 +29,8 @@ export function RegisterScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const logoUri = "https://vdlfulfilment.com/wp-content/uploads/2023/05/cropped-VDL-Logo-compositions-15-300x141.png";
+
   const canSubmit = useMemo(
     () => name.trim().length > 0 && email.trim().length > 0 && password.length >= 6,
     [name, email, password]
@@ -50,6 +52,7 @@ export function RegisterScreen({ navigation }: Props) {
   return (
     <Screen scroll center tabBarPadding={false} sidebarInset={false}>
       <View style={{ width: "100%", maxWidth: 520, alignItems: "center" }}>
+        <Image source={{ uri: logoUri }} style={{ width: 180, height: 85, marginBottom: 10 }} resizeMode="contain" />
         <Text style={[theme.typography.title, { color: theme.colors.text, textAlign: "center" }]}>VDL Fulfilment Ops</Text>
         <View style={{ height: 18 }} />
 

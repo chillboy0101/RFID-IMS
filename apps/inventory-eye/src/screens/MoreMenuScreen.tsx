@@ -24,6 +24,9 @@ export function MoreMenuScreen({ navigation }: Props) {
 
   return (
     <Screen title="More" scroll>
+      <ListRow title="Receiving" subtitle="Inbound receiving and tag assignment" onPress={() => navigation.navigate("Receiving")} />
+      <ListRow title="Putaway" subtitle="Move received stock to bins" onPress={() => navigation.navigate("Putaway")} />
+      <ListRow title="Cycle Count" subtitle="Location counts and variance" onPress={() => navigation.navigate("CycleCount")} />
       <ListRow title="Branches and Users" subtitle="Switch active branch" onPress={() => navigation.navigate("Branches")} />
       <ListRow title="Alerts" subtitle="Low stock, expiring soon, unusual movements" onPress={() => navigation.navigate("Alerts")} />
       <ListRow title="Reports" subtitle="Stock levels and fulfillment" onPress={() => navigation.navigate("Reports")} />
