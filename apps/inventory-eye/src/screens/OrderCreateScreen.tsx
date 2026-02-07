@@ -528,28 +528,22 @@ export function OrderCreateScreen({ navigation }: Props) {
               pointerEvents="none"
               style={{
                 position: "absolute",
-                right: 6,
-                top: 6,
-                backgroundColor: "rgba(255,255,255,0.55)",
-                borderRadius: 8,
-                paddingHorizontal: 4,
-                paddingVertical: 4,
+                left: "50%",
+                top: "50%",
+                width: 26,
+                height: 26,
+                marginLeft: -13,
+                marginTop: -13,
+                borderRadius: 6,
                 borderWidth: 1,
                 borderColor: theme.colors.border,
+                backgroundColor: "rgba(255,255,255,0.35)",
               }}
             >
-              <View style={{ flexDirection: "row", gap: 3 }}>
-                <View style={{ gap: 3 }}>
-                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
-                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
-                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
-                </View>
-                <View style={{ gap: 3 }}>
-                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
-                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
-                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
-                </View>
-              </View>
+              <View style={{ position: "absolute", left: 3, top: 3, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
+              <View style={{ position: "absolute", right: 3, top: 3, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
+              <View style={{ position: "absolute", left: 3, bottom: 3, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
+              <View style={{ position: "absolute", right: 3, bottom: 3, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
             </View>
           </View>
         </Animated.View>

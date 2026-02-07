@@ -38,6 +38,7 @@ export function OrdersListScreen({ navigation }: Props) {
   const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const overlaySearchRef = useRef<TextInput>(null);
+  const overlaySpace = theme.spacing.md + insets.top + 160;
 
   const scrollOffsetRef = useRef(0);
   const restoreRef = useRef<{ q: string; offset: number } | null>(null);
@@ -312,7 +313,7 @@ export function OrdersListScreen({ navigation }: Props) {
         Platform.OS === "web" ? (
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={{ gap: 12, paddingBottom: theme.spacing.lg + insets.bottom + 156 }}
+            contentContainerStyle={{ gap: 12, paddingBottom: theme.spacing.lg + insets.bottom + 156, paddingTop: searchOverlayOpen ? overlaySpace : 0 }}
             keyboardShouldPersistTaps="handled"
             onScroll={(e) => {
               const y = (e as any)?.nativeEvent?.contentOffset?.y ?? 0;
@@ -349,7 +350,7 @@ export function OrdersListScreen({ navigation }: Props) {
           <FlatList
             ref={listRef}
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 156 }}
+            contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 156, paddingTop: searchOverlayOpen ? overlaySpace : 0 }}
             data={filtered}
             keyExtractor={(o) => o._id}
             onScroll={(e) => {
@@ -403,28 +404,22 @@ export function OrdersListScreen({ navigation }: Props) {
               pointerEvents="none"
               style={{
                 position: "absolute",
-                right: 6,
-                top: 6,
-                backgroundColor: "rgba(255,255,255,0.55)",
-                borderRadius: 8,
-                paddingHorizontal: 4,
-                paddingVertical: 4,
+                left: "50%",
+                top: "50%",
+                width: 26,
+                height: 26,
+                marginLeft: -13,
+                marginTop: -13,
+                borderRadius: 6,
                 borderWidth: 1,
                 borderColor: theme.colors.border,
+                backgroundColor: "rgba(255,255,255,0.35)",
               }}
             >
-              <View style={{ flexDirection: "row", gap: 3 }}>
-                <View style={{ gap: 3 }}>
-                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
-                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
-                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
-                </View>
-                <View style={{ gap: 3 }}>
-                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
-                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
-                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
-                </View>
-              </View>
+              <View style={{ position: "absolute", left: 3, top: 3, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
+              <View style={{ position: "absolute", right: 3, top: 3, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
+              <View style={{ position: "absolute", left: 3, bottom: 3, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
+              <View style={{ position: "absolute", right: 3, bottom: 3, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
             </View>
           </View>
         </Animated.View>
