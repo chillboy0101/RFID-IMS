@@ -429,16 +429,10 @@ export function OrderCreateScreen({ navigation }: Props) {
           keyboardShouldPersistTaps="handled"
         >
           <Card>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Badge label={`Selected: ${cart.length}`} tone={cart.length ? "primary" : "default"} size="header" responsive={false} fullWidth />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Badge label={`Total units: ${cartTotal}`} tone={cartTotal ? "primary" : "default"} size="header" responsive={false} fullWidth />
-              </View>
-              <View style={{ flex: 0 }}>
-                <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
-              </View>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <Badge label={`Selected: ${cart.length}`} tone={cart.length ? "primary" : "default"} size="header" responsive={false} />
+              <Badge label={`Total units: ${cartTotal}`} tone={cartTotal ? "primary" : "default"} size="header" responsive={false} />
+              <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
             </View>
             <MutedText style={{ marginTop: 8 }}>Use the search button to add inventory items.</MutedText>
           </Card>
