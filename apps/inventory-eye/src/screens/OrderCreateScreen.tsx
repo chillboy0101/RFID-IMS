@@ -57,6 +57,10 @@ export function OrderCreateScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const autoSearchInitialSkipRef = useRef(true);
+  const autoSearchReqIdRef = useRef(0);
+  const autoSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [showFloatingSearch] = useState(true);
   const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
   const overlayAnim = useRef(new Animated.Value(0)).current;
@@ -143,6 +147,34 @@ export function OrderCreateScreen({ navigation }: Props) {
     }, [loadItems])
   );
 
+  React.useEffect(() => {
+    if (!token) return;
+
+    if (autoSearchInitialSkipRef.current) {
+      autoSearchInitialSkipRef.current = false;
+      return;
+    }
+
+    if (autoSearchTimerRef.current) clearTimeout(autoSearchTimerRef.current);
+
+    autoSearchTimerRef.current = setTimeout(() => {
+      const trimmed = query.trim();
+      if (trimmed !== query) setQuery(trimmed);
+
+      const reqId = ++autoSearchReqIdRef.current;
+      setLoading(true);
+      loadItems(trimmed)
+        .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
+        .finally(() => {
+          if (autoSearchReqIdRef.current === reqId) setLoading(false);
+        });
+    }, 300);
+
+    return () => {
+      if (autoSearchTimerRef.current) clearTimeout(autoSearchTimerRef.current);
+    };
+  }, [loadItems, query, token]);
+
   const cartTotal = useMemo(() => cart.reduce((sum, l) => sum + l.quantity, 0), [cart]);
 
   function addToCart(it: InventoryItem) {
@@ -226,22 +258,11 @@ export function OrderCreateScreen({ navigation }: Props) {
                 placeholder="Search: name, SKU, barcode, location, RFID tag"
                 autoCapitalize="none"
                 returnKeyType="search"
-                onSubmitEditing={() => {
-                  const trimmed = query.trim();
-                  setQuery(trimmed);
-                  loadItems(trimmed).catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
-                }}
+                onSubmitEditing={() => setQuery((prev) => prev.trim())}
               />
               <View style={{ height: 12 }} />
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
                 <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
-                <AppButton
-                  title="Search"
-                  onPress={() => loadItems().catch((e) => setError(e instanceof Error ? e.message : "Failed"))}
-                  variant="secondary"
-                  disabled={loading}
-                  loading={loading}
-                />
                 <View style={{ flexGrow: 1 }} />
                 <Badge label={`Selected: ${cart.length}`} tone={cart.length ? "primary" : "default"} size="header" />
                 <Badge label={`Units: ${cartTotal}`} tone={cartTotal ? "primary" : "default"} size="header" />
@@ -514,11 +535,7 @@ export function OrderCreateScreen({ navigation }: Props) {
                     placeholder="Search inventory"
                     autoCapitalize="none"
                     returnKeyType="search"
-                    onSubmitEditing={() => {
-                      const trimmed = query.trim();
-                      setQuery(trimmed);
-                      loadItems(trimmed).catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
-                    }}
+                    onSubmitEditing={() => setQuery((prev) => prev.trim())}
                   />
                 </View>
                 <AppButton title="Close" iconName="close" iconOnly variant="secondary" onPress={closeSearchOverlay} />
@@ -526,17 +543,7 @@ export function OrderCreateScreen({ navigation }: Props) {
               <View style={{ height: 12 }} />
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
                 <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
-                <AppButton
-                  title="Search"
-                  onPress={() => {
-                    const trimmed = query.trim();
-                    setQuery(trimmed);
-                    loadItems(trimmed).catch((e) => setError(e instanceof Error ? e.message : "Failed"));
-                  }}
-                  variant="secondary"
-                  disabled={loading}
-                  loading={loading}
-                />
+                {loading ? <MutedText>Searching…</MutedText> : null}
               </View>
             </Card>
           </Animated.View>
