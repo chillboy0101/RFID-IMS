@@ -1,5 +1,5 @@
 import React, { useCallback, useContext, useMemo, useRef, useState } from "react";
-import { Animated, FlatList, PanResponder, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Animated, FlatList, PanResponder, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -68,6 +68,7 @@ export function OrderCreateScreen({ navigation }: Props) {
 
   const floatingPos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const floatingDraggedRef = useRef(false);
+  const floatingStartRef = useRef({ x: 0, y: 0 });
 
   const buttonSize = 52;
   const floatingMargin = theme.spacing.md;
@@ -83,14 +84,19 @@ export function OrderCreateScreen({ navigation }: Props) {
         onStartShouldSetPanResponder: () => false,
         onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
         onPanResponderGrant: () => {
+          floatingStartRef.current = {
+            x: (floatingPos.x as any).__getValue?.() ?? 0,
+            y: (floatingPos.y as any).__getValue?.() ?? 0,
+          };
           floatingPos.extractOffset();
         },
         onPanResponderMove: (_, g) => {
           if (Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2) floatingDraggedRef.current = true;
-          floatingPos.setValue({
-            x: g.dx,
-            y: g.dy,
-          });
+
+          const start = floatingStartRef.current;
+          const nextX = clamp(start.x + g.dx, 0, maxX);
+          const nextY = clamp(start.y + g.dy, 0, maxY);
+          floatingPos.setValue({ x: nextX - start.x, y: nextY - start.y });
         },
         onPanResponderRelease: () => {
           floatingPos.flattenOffset();
@@ -231,7 +237,7 @@ export function OrderCreateScreen({ navigation }: Props) {
   }
 
   return (
-    <Screen title="New order" scroll right={<AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />}>
+    <Screen title="New order" right={<AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />}>
       <BarcodeScanModal
         visible={scanOpen}
         title="Scan barcode"
@@ -416,7 +422,11 @@ export function OrderCreateScreen({ navigation }: Props) {
           </View>
         </View>
       ) : (
-        <View style={{ gap: theme.spacing.md }}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ gap: theme.spacing.md, paddingBottom: theme.spacing.lg + insets.bottom + 156 }}
+          keyboardShouldPersistTaps="handled"
+        >
           <Card>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
               <Badge label={`Selected: ${cart.length}`} tone={cart.length ? "primary" : "default"} size="header" responsive={false} />
@@ -488,7 +498,7 @@ export function OrderCreateScreen({ navigation }: Props) {
               />
             )}
           </Card>
-        </View>
+        </ScrollView>
       )}
 
       {!isDesktopWeb && showFloatingSearch && !searchOverlayOpen ? (

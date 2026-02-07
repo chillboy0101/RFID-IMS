@@ -400,8 +400,8 @@ export function Badge({ label, tone = "default", size = "default", responsive = 
   return (
     <View
       style={{
-        flexGrow: fullWidth ? 1 : 0,
-        flexBasis: fullWidth ? 0 : undefined,
+        alignSelf: fullWidth ? "stretch" : "flex-start",
+        width: fullWidth ? "100%" : undefined,
         backgroundColor: bg,
         borderWidth: 1,
         borderColor: theme.colors.border,
