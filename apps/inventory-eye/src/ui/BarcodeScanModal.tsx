@@ -22,7 +22,6 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const [last, setLast] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [webVideoReady, setWebVideoReady] = useState(0);
-  const [webVideoElReady, setWebVideoElReady] = useState(0);
   const [webNeedsTap, setWebNeedsTap] = useState(false);
 
   const webVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -295,7 +294,6 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
             <video
               ref={(el) => {
                 webVideoRef.current = el;
-                if (el) setWebVideoElReady((v) => v + 1);
               }}
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
               muted
