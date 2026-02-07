@@ -96,50 +96,6 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   }, [permission, requestPermission, visible]);
 
   useEffect(() => {
-    if (Platform.OS !== "web") return;
-    if (!visible) return;
-    setError(null);
-    if (typeof navigator === "undefined") return;
-    const videoEl = webVideoRef.current;
-    if (!videoEl) return;
-
-    let cancelled = false;
-    let stream: MediaStream | null = null;
-
-    (async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false } as any);
-        if (cancelled) return;
-        (videoEl as any).srcObject = stream;
-        await (videoEl as any).play?.();
-        if (!cancelled) setWebVideoReady((v) => v + 1);
-      } catch (e) {
-        if (!cancelled) {
-          setError(
-            e instanceof Error
-              ? e.message
-              : "Failed to start camera. On web you may need HTTPS (or localhost) and to allow camera permission."
-          );
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      try {
-        stream?.getTracks?.().forEach((t) => t.stop());
-      } catch {
-        // ignore
-      }
-      try {
-        if (videoEl) (videoEl as any).srcObject = null;
-      } catch {
-        // ignore
-      }
-    };
-  }, [visible]);
-
-  useEffect(() => {
     if (!visible) {
       setBusy(false);
       setLast("");
@@ -149,6 +105,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     if (!visible) return;
     if (busy) return;
     setError(null);
+    setWebVideoReady(0);
 
     if (!webReaderRef.current) {
       webReaderRef.current = new BrowserMultiFormatReader(webHints, { delayBetweenScanAttempts: 200 } as any);
@@ -160,8 +117,11 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
 
     let cancelled = false;
 
+    const constraints = { video: { facingMode: { ideal: "environment" } }, audio: false } as any;
+
     try {
-      void reader.decodeFromVideoDevice(undefined, videoEl, (result: any) => {
+      if (!cancelled) setWebVideoReady(1);
+      void reader.decodeFromConstraints(constraints, videoEl, (result: any) => {
         if (cancelled) return;
         if (!result) return;
         const value = String(result.getText?.() ?? "").trim();
@@ -174,7 +134,13 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         setTimeout(() => setBusy(false), 800);
       });
     } catch (e) {
-      if (!cancelled) setError(e instanceof Error ? e.message : "Failed to start camera");
+      if (!cancelled) {
+        setError(
+          e instanceof Error
+            ? e.message
+            : "Failed to start camera. On web you may need HTTPS (or localhost) and to allow camera permission."
+        );
+      }
     }
 
     return () => {
@@ -187,7 +153,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         // ignore
       }
     };
-  }, [busy, onScanned, visible, webHints, webVideoReady]);
+  }, [busy, onScanned, visible, webHints]);
 
   const handleScan = useCallback(
     (result: BarcodeScanningResult) => {
