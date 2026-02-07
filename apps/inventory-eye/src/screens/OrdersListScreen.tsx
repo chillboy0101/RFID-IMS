@@ -48,7 +48,7 @@ export function OrdersListScreen({ navigation }: Props) {
 
   const buttonSize = 52;
   const floatingMargin = theme.spacing.md;
-  const floatingTop = theme.spacing.md + insets.top + 64;
+  const floatingTop = theme.spacing.md + insets.top + 16;
   const floatingBottomLimit = theme.spacing.md + insets.bottom + 168;
   const maxX = Math.max(0, width - buttonSize - floatingMargin * 2);
   const maxY = Math.max(0, height - buttonSize - floatingTop - floatingBottomLimit);

@@ -213,12 +213,13 @@ type AppButtonProps = {
   disabled?: boolean;
   loading?: boolean;
   variant?: ButtonVariant;
-  iconName?: React.ComponentProps<typeof Ionicons>["name"];
+  iconName?: keyof typeof Ionicons.glyphMap;
   iconOnly?: boolean;
   iconSize?: number;
+  style?: ViewStyle;
 };
 
-export function AppButton({ title, onPress, disabled, loading, variant = "primary", iconName, iconOnly, iconSize }: AppButtonProps) {
+export function AppButton({ title, onPress, disabled, loading, variant = "primary", iconName, iconOnly, iconSize, style }: AppButtonProps) {
   const bg = useMemo(() => {
     if (variant === "danger") return theme.colors.danger;
     if (variant === "secondary") return theme.colors.surface2;
@@ -269,6 +270,7 @@ export function AppButton({ title, onPress, disabled, loading, variant = "primar
             borderColor: variant === "secondary" ? theme.colors.border : "transparent",
             ...(Platform.OS === "web" ? ({ cursor: disabled || loading ? "default" : "pointer" } as any) : null),
           },
+          style,
           hovered && !pressed && !(disabled || loading) ? ({ transform: [{ translateY: -0.5 }] } as any) : null,
           pressed ? ({ transform: [{ translateY: 1 }] } as any) : null,
           variant === "secondary" ? null : shadow(1),
