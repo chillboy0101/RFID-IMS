@@ -395,10 +395,22 @@ export function InventoryListScreen({ navigation }: Props) {
             scrollEventThrottle={32}
           >
             <Card>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                <Badge label={`Total: ${items.length}`} tone="default" size="header" responsive={false} />
-                <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} size="header" responsive={false} />
-                <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Badge label={`Total: ${items.length}`} tone="default" size="header" responsive={false} fullWidth />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Badge
+                    label={`Low stock: ${lowStockCount}`}
+                    tone={lowStockCount > 0 ? "warning" : "default"}
+                    size="header"
+                    responsive={false}
+                    fullWidth
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" style={{ width: "100%" }} />
+                </View>
               </View>
               {error ? (
                 <View style={{ marginTop: 10 }}>
