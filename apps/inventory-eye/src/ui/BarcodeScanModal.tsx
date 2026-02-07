@@ -30,6 +30,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const lastScanRef = useRef<{ value: string; at: number }>({ value: "", at: 0 });
   const busyRef = useRef(false);
   const webHiddenRef = useRef(false);
+  const webFocusedRef = useRef(true);
 
   const webScanIntervalRef = useRef<any>(null);
   const webStartTimeoutRef = useRef<any>(null);
@@ -65,6 +66,34 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     return () => {
       try {
         document.removeEventListener("visibilitychange", update);
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    if (typeof window === "undefined") return;
+
+    const onFocus = () => {
+      webFocusedRef.current = true;
+    };
+    const onBlur = () => {
+      webFocusedRef.current = false;
+    };
+
+    try {
+      window.addEventListener("focus", onFocus);
+      window.addEventListener("blur", onBlur);
+    } catch {
+      // ignore
+    }
+
+    return () => {
+      try {
+        window.removeEventListener("focus", onFocus);
+        window.removeEventListener("blur", onBlur);
       } catch {
         // ignore
       }
@@ -444,6 +473,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
             if (inFlight) return;
             if (busyRef.current) return;
             if (webHiddenRef.current) return;
+            if (!webFocusedRef.current) return;
 
             try {
               if (((videoEl as any).videoWidth ?? 0) === 0) return;
@@ -479,13 +509,13 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
               .finally(() => {
                 inFlight = false;
               });
-          }, 120);
+          }, 250);
 
           webScanIntervalRef.current = id;
           return;
         }
         if (!webReaderRef.current) {
-          webReaderRef.current = new BrowserMultiFormatReader(webHints, { delayBetweenScanAttempts: 90 } as any);
+          webReaderRef.current = new BrowserMultiFormatReader(webHints, { delayBetweenScanAttempts: 150 } as any);
         }
         const reader = webReaderRef.current;
 
