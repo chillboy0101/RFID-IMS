@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import type { OrdersStackParamList } from "../navigation/types";
-import { AppButton, Badge, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
+import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
 
 type Order = {
   _id: string;
@@ -32,6 +32,7 @@ export function OrdersListScreen({ navigation }: Props) {
   const [q, setQ] = useState("");
   const searchRef = useRef<TextInput>(null);
   const listRef = useRef<FlatList<Order>>(null);
+  const [scanOpen, setScanOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showFloatingSearch] = useState(true);
@@ -173,6 +174,19 @@ export function OrdersListScreen({ navigation }: Props) {
       tabBarPadding={isDesktopWeb}
       right={<AppButton title="New" onPress={() => navigation.navigate("OrderCreate")} variant="secondary" iconName="add" iconOnly />}
     >
+      <BarcodeScanModal
+        visible={scanOpen}
+        title="Scan barcode"
+        onClose={() => setScanOpen(false)}
+        onScanned={(value) => {
+          setQ(value);
+          setScanOpen(false);
+          setTimeout(() => {
+            if (searchOverlayOpen) overlaySearchRef.current?.focus();
+            else searchRef.current?.focus();
+          }, 50);
+        }}
+      />
       {error ? <ErrorText>{error}</ErrorText> : null}
 
       {isDesktopWeb ? (
@@ -180,8 +194,9 @@ export function OrdersListScreen({ navigation }: Props) {
           <Card>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <TextField value={q} onChangeText={setQ} placeholder="Search: order ID or status" autoCapitalize="none" />
+                <TextField ref={searchRef} value={q} onChangeText={setQ} placeholder="Search: order ID or status" autoCapitalize="none" />
               </View>
+              <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
               <View style={{ flexDirection: "row", flexWrap: "nowrap", gap: 10, justifyContent: "flex-end", alignItems: "center", flexShrink: 0 }}>
                 <Badge label={`Total: ${filtered.length}`} size="header" />
                 <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} size="header" />
@@ -329,6 +344,9 @@ export function OrdersListScreen({ navigation }: Props) {
                 <View style={{ flex: 1 }}>
                   <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} size="header" responsive={false} fullWidth />
                 </View>
+                <View style={{ flex: 1 }}>
+                  <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" style={{ width: "100%" }} />
+                </View>
               </View>
             </Card>
 
@@ -367,6 +385,9 @@ export function OrdersListScreen({ navigation }: Props) {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} size="header" responsive={false} fullWidth />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" style={{ width: "100%" }} />
                   </View>
                 </View>
               </Card>
@@ -410,10 +431,25 @@ export function OrdersListScreen({ navigation }: Props) {
                 bottom: 0,
               }}
             >
-              <View style={{ position: "absolute", left: 6, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.8 }} />
-              <View style={{ position: "absolute", right: 6, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.8 }} />
-              <View style={{ position: "absolute", left: 6, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.8 }} />
-              <View style={{ position: "absolute", right: 6, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.8 }} />
+              <View style={{ position: "absolute", left: 10, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 21, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 32, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 43, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+
+              <View style={{ position: "absolute", left: 10, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 21, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 32, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 43, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+
+              <View style={{ position: "absolute", left: 6, top: 10, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 6, top: 21, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 6, top: 32, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 6, top: 43, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+
+              <View style={{ position: "absolute", right: 6, top: 10, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", right: 6, top: 21, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", right: 6, top: 32, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", right: 6, top: 43, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
             </View>
           </View>
         </Animated.View>

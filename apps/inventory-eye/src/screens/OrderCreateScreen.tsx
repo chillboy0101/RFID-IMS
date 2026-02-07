@@ -534,10 +534,25 @@ export function OrderCreateScreen({ navigation }: Props) {
                 bottom: 0,
               }}
             >
-              <View style={{ position: "absolute", left: 6, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.8 }} />
-              <View style={{ position: "absolute", right: 6, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.8 }} />
-              <View style={{ position: "absolute", left: 6, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.8 }} />
-              <View style={{ position: "absolute", right: 6, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.8 }} />
+              <View style={{ position: "absolute", left: 10, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 21, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 32, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 43, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+
+              <View style={{ position: "absolute", left: 10, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 21, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 32, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 43, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+
+              <View style={{ position: "absolute", left: 6, top: 10, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 6, top: 21, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 6, top: 32, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", left: 6, top: 43, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+
+              <View style={{ position: "absolute", right: 6, top: 10, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", right: 6, top: 21, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", right: 6, top: 32, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
+              <View style={{ position: "absolute", right: 6, top: 43, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.75 }} />
             </View>
           </View>
         </Animated.View>
