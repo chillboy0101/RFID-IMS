@@ -404,22 +404,16 @@ export function OrdersListScreen({ navigation }: Props) {
               pointerEvents="none"
               style={{
                 position: "absolute",
-                left: "50%",
-                top: "50%",
-                width: 26,
-                height: 26,
-                marginLeft: -13,
-                marginTop: -13,
-                borderRadius: 6,
-                borderWidth: 1,
-                borderColor: theme.colors.border,
-                backgroundColor: "rgba(255,255,255,0.35)",
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0,
               }}
             >
-              <View style={{ position: "absolute", left: 3, top: 3, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
-              <View style={{ position: "absolute", right: 3, top: 3, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
-              <View style={{ position: "absolute", left: 3, bottom: 3, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
-              <View style={{ position: "absolute", right: 3, bottom: 3, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
+              <View style={{ position: "absolute", left: 6, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.8 }} />
+              <View style={{ position: "absolute", right: 6, top: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.8 }} />
+              <View style={{ position: "absolute", left: 6, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.8 }} />
+              <View style={{ position: "absolute", right: 6, bottom: 6, width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted, opacity: 0.8 }} />
             </View>
           </View>
         </Animated.View>
