@@ -97,6 +97,11 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     webStreamRef.current = null;
     try {
       const videoEl = webVideoRef.current;
+      try {
+        (videoEl as any)?.pause?.();
+      } catch {
+        // ignore
+      }
       if (videoEl) (videoEl as any).srcObject = null;
     } catch {
       // ignore
@@ -168,10 +173,52 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     webStreamRef.current = stream;
     (videoEl as any).srcObject = stream;
 
+    const waitForMeta = () =>
+      new Promise<void>((resolve, reject) => {
+        let done = false;
+        const t = setTimeout(() => {
+          if (done) return;
+          done = true;
+          cleanup();
+          reject(new Error("Camera did not start (no video frames)"));
+        }, 2500);
+
+        const cleanup = () => {
+          try {
+            clearTimeout(t);
+          } catch {
+            // ignore
+          }
+          try {
+            (videoEl as any).removeEventListener?.("loadedmetadata", onLoaded);
+          } catch {
+            // ignore
+          }
+        };
+
+        const onLoaded = () => {
+          if (done) return;
+          done = true;
+          cleanup();
+          resolve();
+        };
+
+        try {
+          if (((videoEl as any).videoWidth ?? 0) > 0) {
+            done = true;
+            cleanup();
+            resolve();
+            return;
+          }
+          (videoEl as any).addEventListener?.("loadedmetadata", onLoaded);
+        } catch {
+          // ignore
+        }
+      });
+
     try {
-      if ((videoEl as any).paused) {
-        await (videoEl as any).play?.();
-      }
+      await waitForMeta();
+      await (videoEl as any).play?.();
       setWebVideoReady((v) => v + 1);
     } catch {
       setWebNeedsTap(true);
@@ -208,7 +255,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     }
     if (Platform.OS !== "web") return;
     if (!visible) return;
-    setWebNeedsTap(true);
+    void startWebCamera();
     return () => stopWebCamera();
   }, [startWebCamera, stopWebCamera, visible]);
 
@@ -352,13 +399,18 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
               autoPlay
             />
             {webVideoReady ? null : (
-              <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
+              <Pressable
+                style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}
+                onPress={() => {
+                  if (webNeedsTap) void startWebCamera();
+                }}
+              >
                 {webNeedsTap ? (
-                  <AppButton title="Tap to start camera" onPress={startWebCamera as any} variant="secondary" />
+                  <MutedText style={{ color: "#fff" as any }}>Tap anywhere to enable camera</MutedText>
                 ) : (
                   <MutedText style={{ color: "#fff" as any }}>Starting camera…</MutedText>
                 )}
-              </View>
+              </Pressable>
             )}
           </View>
         ) : canUseCamera ? (
