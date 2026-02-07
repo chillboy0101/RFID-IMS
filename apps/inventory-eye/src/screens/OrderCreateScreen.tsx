@@ -238,7 +238,7 @@ export function OrderCreateScreen({ navigation }: Props) {
   }
 
   return (
-    <Screen title="New order" right={<AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />}>
+    <Screen title="New order" tabBarPadding={false} right={<AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />}>
       <BarcodeScanModal
         visible={scanOpen}
         title="Scan barcode"
