@@ -231,18 +231,18 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         }
         const reader = webReaderRef.current;
 
-        while (!cancelled) {
-          const result = await reader.decodeFromVideoElement(videoEl);
+        void reader.decodeFromVideoElement(videoEl, (result: any) => {
           if (cancelled) return;
+          if (!result) return;
           const value = String(result?.getText?.() ?? "").trim();
-          if (!value) continue;
+          if (!value) return;
+          if (busy) return;
 
           setBusy(true);
           setLast(value);
           onScanned(value);
           setTimeout(() => setBusy(false), 800);
-          return;
-        }
+        });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed to scan barcode");
       }
