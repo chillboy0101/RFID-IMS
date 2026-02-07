@@ -29,6 +29,10 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
 
   const lastScanRef = useRef<{ value: string; at: number }>({ value: "", at: 0 });
 
+  const webScanIntervalRef = useRef<any>(null);
+  const webStartTimeoutRef = useRef<any>(null);
+  const busyTimeoutRef = useRef<any>(null);
+
   const webVideoRef = useRef<HTMLVideoElement | null>(null);
   const webReaderRef = useRef<any>(null);
   const webStreamRef = useRef<MediaStream | null>(null);
@@ -94,6 +98,25 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const stopWebCamera = useCallback(() => {
     setWebStatus("");
     setWebDiag("");
+    try {
+      if (webScanIntervalRef.current) clearInterval(webScanIntervalRef.current);
+    } catch {
+      // ignore
+    }
+    webScanIntervalRef.current = null;
+    try {
+      if (webStartTimeoutRef.current) clearTimeout(webStartTimeoutRef.current);
+    } catch {
+      // ignore
+    }
+    webStartTimeoutRef.current = null;
+    try {
+      if (busyTimeoutRef.current) clearTimeout(busyTimeoutRef.current);
+    } catch {
+      // ignore
+    }
+    busyTimeoutRef.current = null;
+
     try {
       webStreamRef.current?.getTracks?.().forEach((t) => t.stop());
     } catch {
@@ -268,7 +291,13 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
       }
     }
 
-    setTimeout(() => {
+    try {
+      if (webStartTimeoutRef.current) clearTimeout(webStartTimeoutRef.current);
+    } catch {
+      // ignore
+    }
+
+    webStartTimeoutRef.current = setTimeout(() => {
       try {
         if (webStreamRef.current && (videoEl as any) && ((videoEl as any).videoWidth ?? 0) === 0) {
           setWebNeedsTap(true);
@@ -337,12 +366,19 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     if (Platform.OS !== "web") return;
     if (!visible) return;
     if (!webVideoReady) return;
-    if (busy) return;
 
     const videoEl = webVideoRef.current;
     if (!videoEl) return;
 
     let cancelled = false;
+
+    // Ensure any prior scan loop is stopped before starting a new one
+    try {
+      if (webScanIntervalRef.current) clearInterval(webScanIntervalRef.current);
+    } catch {
+      // ignore
+    }
+    webScanIntervalRef.current = null;
 
     const run = async () => {
       try {
@@ -383,27 +419,27 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
 
                 const now = Date.now();
                 if (lastScanRef.current.value === value && now - lastScanRef.current.at < 1200) return;
+
                 lastScanRef.current = { value, at: now };
 
                 setBusy(true);
                 setLast(value);
                 onScanned(value);
-                setTimeout(() => setBusy(false), 800);
+                try {
+                  if (busyTimeoutRef.current) clearTimeout(busyTimeoutRef.current);
+                } catch {
+                  // ignore
+                }
+                busyTimeoutRef.current = setTimeout(() => setBusy(false), 800);
               })
               .finally(() => {
                 inFlight = false;
               });
           }, 120);
 
-          return () => {
-            try {
-              clearInterval(id);
-            } catch {
-              // ignore
-            }
-          };
+          webScanIntervalRef.current = id;
+          return;
         }
-
         if (!webReaderRef.current) {
           webReaderRef.current = new BrowserMultiFormatReader(webHints, { delayBetweenScanAttempts: 90 } as any);
         }
@@ -423,7 +459,12 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
           setBusy(true);
           setLast(value);
           onScanned(value);
-          setTimeout(() => setBusy(false), 800);
+          try {
+            if (busyTimeoutRef.current) clearTimeout(busyTimeoutRef.current);
+          } catch {
+            // ignore
+          }
+          busyTimeoutRef.current = setTimeout(() => setBusy(false), 800);
         });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed to scan barcode");
@@ -434,6 +475,12 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
 
     return () => {
       cancelled = true;
+      try {
+        if (webScanIntervalRef.current) clearInterval(webScanIntervalRef.current);
+      } catch {
+        // ignore
+      }
+      webScanIntervalRef.current = null;
       try {
         (webReaderRef.current as any)?.reset?.();
       } catch {
@@ -457,7 +504,12 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
       setError(null);
 
       onScanned(value);
-      setTimeout(() => setBusy(false), 800);
+      try {
+        if (busyTimeoutRef.current) clearTimeout(busyTimeoutRef.current);
+      } catch {
+        // ignore
+      }
+      busyTimeoutRef.current = setTimeout(() => setBusy(false), 800);
     },
     [busy, onScanned]
   );
