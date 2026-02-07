@@ -29,6 +29,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
 
   const lastScanRef = useRef<{ value: string; at: number }>({ value: "", at: 0 });
   const busyRef = useRef(false);
+  const webHiddenRef = useRef(false);
 
   const webScanIntervalRef = useRef<any>(null);
   const webStartTimeoutRef = useRef<any>(null);
@@ -41,6 +42,34 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   useEffect(() => {
     busyRef.current = busy;
   }, [busy]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    if (typeof document === "undefined") return;
+
+    const update = () => {
+      try {
+        webHiddenRef.current = !!(document as any).hidden;
+      } catch {
+        webHiddenRef.current = false;
+      }
+    };
+
+    update();
+    try {
+      document.addEventListener("visibilitychange", update);
+    } catch {
+      // ignore
+    }
+
+    return () => {
+      try {
+        document.removeEventListener("visibilitychange", update);
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
 
   const { width, height } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
@@ -346,6 +375,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
 
     const id = setInterval(() => {
       try {
+        if (webHiddenRef.current) return;
         const videoEl = webVideoRef.current as any;
         if (!videoEl) return;
         setWebDiag((prev) => {
@@ -413,6 +443,15 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
             if (cancelled) return;
             if (inFlight) return;
             if (busyRef.current) return;
+            if (webHiddenRef.current) return;
+
+            try {
+              if (((videoEl as any).videoWidth ?? 0) === 0) return;
+              if (((videoEl as any).readyState ?? 0) < 2) return;
+            } catch {
+              // ignore
+            }
+
             inFlight = true;
             Promise.resolve()
               .then(() => detector.detect(videoEl))
@@ -453,6 +492,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         void reader.decodeFromVideoElement(videoEl, (result: any) => {
           if (cancelled) return;
           if (!result) return;
+          if (webHiddenRef.current) return;
           const value = String(result?.getText?.() ?? "").trim();
           if (!value) return;
           if (busyRef.current) return;
