@@ -40,12 +40,15 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const webReaderRef = useRef<any>(null);
   const webStreamRef = useRef<MediaStream | null>(null);
 
+  const webScanDisabled = Platform.OS === "web";
+
   useEffect(() => {
     busyRef.current = busy;
   }, [busy]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
+    if (webScanDisabled) return;
     if (typeof document === "undefined") return;
 
     const update = () => {
@@ -70,10 +73,11 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         // ignore
       }
     };
-  }, []);
+  }, [webScanDisabled]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
+    if (webScanDisabled) return;
     if (typeof window === "undefined") return;
 
     const onFocus = () => {
@@ -159,6 +163,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   }, [permission?.granted]);
 
   const stopWebCamera = useCallback(() => {
+    if (webScanDisabled) return;
     setWebStatus("");
     setWebDiag("");
     try {
@@ -204,9 +209,13 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     } catch {
       // ignore
     }
-  }, []);
+  }, [webScanDisabled]);
 
   const startWebCamera = useCallback(async () => {
+    if (webScanDisabled) {
+      setError("Scanning is disabled on web. Please use the mobile app to scan.");
+      return;
+    }
     setError(null);
     setWebNeedsTap(false);
     setWebStatus("Requesting camera…");
@@ -369,7 +378,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         // ignore
       }
     }, 1200);
-  }, [stopWebCamera]);
+  }, [stopWebCamera, webScanDisabled]);
 
   useEffect(() => {
     if (!visible) return;
@@ -390,14 +399,16 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
       setError(null);
     }
     if (Platform.OS !== "web") return;
+    if (webScanDisabled) return;
     if (!visible) return;
     setWebNeedsTap(true);
     setWebStatus("Tap anywhere on the black area to start camera");
     return () => stopWebCamera();
-  }, [startWebCamera, stopWebCamera, visible]);
+  }, [startWebCamera, stopWebCamera, visible, webScanDisabled]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
+    if (webScanDisabled) return;
     if (!visible) return;
 
     if (webVideoReady) return;
@@ -424,10 +435,11 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         // ignore
       }
     };
-  }, [visible, webVideoReady]);
+  }, [visible, webVideoReady, webScanDisabled]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
+    if (webScanDisabled) return;
     if (!visible) return;
     if (!webVideoReady) return;
 
@@ -562,12 +574,12 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         // ignore
       }
     };
-  }, [onScanned, visible, webHints, webVideoReady]);
+  }, [onScanned, visible, webHints, webVideoReady, webScanDisabled]);
 
   const handleClose = useCallback(() => {
-    if (Platform.OS === "web") stopWebCamera();
+    if (Platform.OS === "web" && !webScanDisabled) stopWebCamera();
     onClose();
-  }, [onClose, stopWebCamera]);
+  }, [onClose, stopWebCamera, webScanDisabled]);
 
   const handleScan = useCallback(
     (result: BarcodeScanningResult) => {
@@ -598,50 +610,17 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     <Card style={{ padding: 0, overflow: "hidden" as any }}>
       <View style={{ width: "100%", aspectRatio: 1, backgroundColor: "#000" }}>
         {Platform.OS === "web" ? (
-          <View style={{ flex: 1 }}>
-            <video
-              ref={(el) => {
-                webVideoRef.current = el;
-              }}
-              style={{
-                position: "absolute",
-                inset: 0 as any,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                zIndex: 1,
-                transform: webMirror ? "scaleX(-1)" : "none",
-              }}
-              muted
-              playsInline
-              autoPlay
-            />
-            {webVideoReady ? null : (
-              <Pressable
-                style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center", zIndex: 2 }}
-                onPress={() => {
-                  void startWebCamera();
-                }}
-              >
-                {webNeedsTap ? (
-                  <MutedText style={{ color: "#fff" as any }}>Tap anywhere to start camera</MutedText>
-                ) : (
-                  <MutedText style={{ color: "#fff" as any }}>Starting camera…</MutedText>
-                )}
-              </Pressable>
-            )}
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 16 }}>
+            <MutedText style={{ color: "#fff", textAlign: "center" }}>Scanning is disabled on web to keep the app fast.</MutedText>
+            <View style={{ height: 10 }} />
+            <MutedText style={{ color: "#fff", textAlign: "center", opacity: 0.8 }}>Use the mobile app to scan barcodes/QR codes.</MutedText>
           </View>
-        ) : canUseCamera ? (
-          <CameraView
-            style={{ flex: 1 }}
-            facing="back"
-            barcodeScannerSettings={{ barcodeTypes }}
-            onBarcodeScanned={handleScan}
-          />
         ) : (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <MutedText style={{ color: "#fff" as any }}>Waiting for camera permission…</MutedText>
-          </View>
+          <CameraView
+            style={{ width: "100%", height: "100%" }}
+            onBarcodeScanned={canUseCamera ? handleScan : undefined}
+            barcodeScannerSettings={{ barcodeTypes }}
+          />
         )}
       </View>
       <View style={{ padding: theme.spacing.md, gap: 10 }}>
