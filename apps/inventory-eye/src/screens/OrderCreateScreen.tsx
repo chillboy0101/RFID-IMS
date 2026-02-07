@@ -429,10 +429,16 @@ export function OrderCreateScreen({ navigation }: Props) {
           keyboardShouldPersistTaps="handled"
         >
           <Card>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-              <Badge label={`Selected: ${cart.length}`} tone={cart.length ? "primary" : "default"} size="header" responsive={false} />
-              <Badge label={`Total units: ${cartTotal}`} tone={cartTotal ? "primary" : "default"} size="header" responsive={false} />
-              <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Badge label={`Selected: ${cart.length}`} tone={cart.length ? "primary" : "default"} size="header" responsive={false} fullWidth />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Badge label={`Total units: ${cartTotal}`} tone={cartTotal ? "primary" : "default"} size="header" responsive={false} fullWidth />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" style={{ width: "100%" }} />
+              </View>
             </View>
             <MutedText style={{ marginTop: 8 }}>Use the search button to add inventory items.</MutedText>
           </Card>
@@ -516,7 +522,36 @@ export function OrderCreateScreen({ navigation }: Props) {
           pointerEvents="box-none"
           {...floatingPan.panHandlers}
         >
-          <AppButton title="Search" iconName="search" iconOnly iconSize={28} variant="secondary" onPress={openSearchOverlay} />
+          <View style={{ position: "relative" }}>
+            <AppButton title="Search" iconName="search" iconOnly iconSize={28} variant="secondary" onPress={openSearchOverlay} />
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                right: 6,
+                top: 6,
+                backgroundColor: "rgba(255,255,255,0.55)",
+                borderRadius: 8,
+                paddingHorizontal: 4,
+                paddingVertical: 4,
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+              }}
+            >
+              <View style={{ flexDirection: "row", gap: 3 }}>
+                <View style={{ gap: 3 }}>
+                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
+                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
+                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
+                </View>
+                <View style={{ gap: 3 }}>
+                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
+                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
+                  <View style={{ width: 3, height: 3, borderRadius: 999, backgroundColor: theme.colors.textMuted }} />
+                </View>
+              </View>
+            </View>
+          </View>
         </Animated.View>
       ) : null}
 
