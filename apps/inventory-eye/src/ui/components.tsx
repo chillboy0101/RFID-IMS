@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -49,6 +50,8 @@ export function Screen({ title, children, scroll, right, refreshControl, busy, c
   const sidebarWidth = 240;
   const sidebarInsetWidth = sidebarWidth + theme.spacing.md * 2;
 
+  const logoUri = "https://vdlfulfilment.com/wp-content/uploads/2022/01/cropped-VDL-Logo-Site-icon-coloured-150x150.webp";
+
   const floatingTabBarPadding = tabBarPadding ? (isWideWeb ? theme.spacing.lg : 112) : 0;
   const bottomPad = center ? theme.spacing.md : theme.spacing.lg + insets.bottom + floatingTabBarPadding;
   const topPad = center ? theme.spacing.md : undefined;
@@ -74,7 +77,12 @@ export function Screen({ title, children, scroll, right, refreshControl, busy, c
               webContainerStyle,
             ]}
           >
-            <Text style={[theme.typography.title, { color: theme.colors.text }]}>{title}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, paddingRight: theme.spacing.sm }}>
+              <Image source={{ uri: logoUri }} style={{ width: 22, height: 22, borderRadius: 6 }} resizeMode="contain" />
+              <Text style={[theme.typography.title, { color: theme.colors.text }]} numberOfLines={1}>
+                {title}
+              </Text>
+            </View>
             {right ? <View style={{ marginLeft: theme.spacing.sm }}>{right}</View> : null}
           </View>
         ) : null}
@@ -223,23 +231,24 @@ export function AppButton({ title, onPress, disabled, loading, variant = "primar
   const bg = useMemo(() => {
     if (variant === "danger") return theme.colors.danger;
     if (variant === "secondary") return theme.colors.surface2;
-    return "#0B0F17";
+    return theme.colors.primary;
   }, [variant]);
 
   const bgPressed = useMemo(() => {
     if (variant === "danger") return theme.colors.dangerPressed;
     if (variant === "secondary") return theme.colors.surface;
-    return "#111827";
+    return theme.colors.primaryPressed;
   }, [variant]);
 
   const bgHover = useMemo(() => {
     if (variant === "danger") return theme.colors.dangerPressed;
     if (variant === "secondary") return theme.colors.surface;
-    return "#111827";
+    return theme.colors.primaryPressed;
   }, [variant]);
 
   const textColor = useMemo(() => {
     if (variant === "secondary") return theme.colors.text;
+    if (variant === "primary") return "#0B0F17";
     return "#fff";
   }, [variant]);
 
