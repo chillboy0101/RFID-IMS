@@ -25,6 +25,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const [webNeedsTap, setWebNeedsTap] = useState(false);
   const [webStatus, setWebStatus] = useState<string>("");
   const [webDiag, setWebDiag] = useState<string>("");
+  const [webMirror, setWebMirror] = useState(false);
 
   const lastScanRef = useRef<{ value: string; at: number }>({ value: "", at: 0 });
 
@@ -124,6 +125,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     setWebNeedsTap(false);
     setWebStatus("Requesting camera…");
     setWebDiag("");
+    setWebMirror(false);
 
     if (Platform.OS !== "web") return;
     if (typeof window === "undefined" || typeof navigator === "undefined") return;
@@ -160,9 +162,20 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
 
     let stream: MediaStream;
     try {
+      let deviceId: string | undefined = undefined;
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cams = devices.filter((d) => d.kind === "videoinput");
+        const preferred = cams.find((d) => /back|rear|environment/i.test(String(d.label ?? "")));
+        deviceId = (preferred ?? cams[cams.length - 1])?.deviceId;
+      } catch {
+        // ignore
+      }
+
       stream = await navigator.mediaDevices.getUserMedia(
         {
           video: {
+            ...(deviceId ? { deviceId: { exact: deviceId } } : null),
             facingMode: { ideal: "environment" },
             width: { ideal: 1280 },
             height: { ideal: 720 },
@@ -185,6 +198,8 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     try {
       const track = stream.getVideoTracks?.()?.[0];
       const s = track?.getSettings?.();
+      const facing = String((s as any)?.facingMode ?? "").toLowerCase();
+      if (facing === "user") setWebMirror(true);
       setWebDiag(
         `track:${track ? "yes" : "no"} enabled:${String(track?.enabled)} muted:${String((track as any)?.muted)} ` +
           `w:${String((s as any)?.width ?? "?")} h:${String((s as any)?.height ?? "?")}`
@@ -378,7 +393,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
               .finally(() => {
                 inFlight = false;
               });
-          }, 250);
+          }, 120);
 
           return () => {
             try {
@@ -390,7 +405,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         }
 
         if (!webReaderRef.current) {
-          webReaderRef.current = new BrowserMultiFormatReader(webHints, { delayBetweenScanAttempts: 200 } as any);
+          webReaderRef.current = new BrowserMultiFormatReader(webHints, { delayBetweenScanAttempts: 90 } as any);
         }
         const reader = webReaderRef.current;
 
@@ -456,7 +471,15 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
               ref={(el) => {
                 webVideoRef.current = el;
               }}
-              style={{ position: "absolute", inset: 0 as any, width: "100%", height: "100%", objectFit: "cover", zIndex: 1 }}
+              style={{
+                position: "absolute",
+                inset: 0 as any,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                zIndex: 1,
+                transform: webMirror ? "scaleX(-1)" : "none",
+              }}
               muted
               playsInline
               autoPlay
