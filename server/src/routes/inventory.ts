@@ -5,6 +5,7 @@ import { requireAuth, requireRole, type AuthRequest } from "../middleware/auth.j
 import { requireTenant, type TenantRequest } from "../middleware/tenant.js";
 import { InventoryItemModel } from "../models/InventoryItem.js";
 import { InventoryLogModel } from "../models/InventoryLog.js";
+import { InventoryUnitModel } from "../models/InventoryUnit.js";
 import { VendorModel } from "../models/Vendor.js";
 import { getPagination } from "../utils/pagination.js";
 import { asEnum, asNumber, asObjectId, asString, asDateFromString } from "../utils/validate.js";
@@ -175,6 +176,92 @@ router.post("/items", async (req: TenantRequest, res) => {
   });
 
   res.status(201).json({ ok: true, item });
+});
+
+router.post("/receiving/units", async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const itemIdR = asObjectId(body.itemId, { field: "itemId", required: true });
+  if (!itemIdR.ok || !itemIdR.value) {
+    res.status(400).json({ ok: false, error: itemIdR.ok ? "itemId is required" : itemIdR.error });
+    return;
+  }
+  const tagIdR = asString(body.tagId, { field: "tagId", trim: true, maxLen: 120 });
+  if (!tagIdR.ok) {
+    res.status(400).json({ ok: false, error: tagIdR.error });
+    return;
+  }
+  const locationR = asString(body.location, { field: "location", trim: true, maxLen: 120 });
+  if (!locationR.ok) {
+    res.status(400).json({ ok: false, error: locationR.error });
+    return;
+  }
+  const qtyR = asNumber(body.quantity, { field: "quantity", required: true, integer: true, min: 1, max: 1000 });
+  if (!qtyR.ok) {
+    res.status(400).json({ ok: false, error: qtyR.error });
+    return;
+  }
+
+  const item = await InventoryItemModel.findOne({ _id: itemIdR.value, tenantId }).exec();
+  if (!item) {
+    res.status(404).json({ ok: false, error: "Item not found" });
+    return;
+  }
+
+  const tagId = tagIdR.value?.trim() || "";
+  const location = locationR.value?.trim() || "RECEIVING_STAGING";
+  const quantity = qtyR.value;
+
+  if (tagId && quantity !== 1) {
+    res.status(400).json({ ok: false, error: "When tagId is provided, quantity must be 1" });
+    return;
+  }
+
+  if (tagId) {
+    const existing = await InventoryUnitModel.findOne({ tenantId, tagId }).select({ _id: 1, itemId: 1 }).exec();
+    if (existing) {
+      res.status(409).json({ ok: false, error: "RFID tag already exists" });
+      return;
+    }
+  }
+
+  const createdUnits = [] as any[];
+  for (let i = 0; i < quantity; i += 1) {
+    const u = await InventoryUnitModel.create({
+      tenantId,
+      itemId: item._id,
+      tagId: tagId || undefined,
+      location,
+      status: "received",
+    });
+    createdUnits.push(u);
+  }
+
+  const previousQuantity = item.quantity;
+  item.quantity = previousQuantity + quantity;
+  item.location = item.location || location;
+  if (tagId) item.rfidTagId = tagId;
+  await item.save();
+
+  await InventoryLogModel.create({
+    tenantId,
+    itemId: item._id,
+    action: "add",
+    delta: quantity,
+    previousQuantity,
+    newQuantity: item.quantity,
+    actorUserId: auth.id,
+    reason: "Receiving",
+    meta: { location, tagId: tagId || undefined, unitIds: createdUnits.map((u) => String(u._id)) },
+  });
+
+  res.status(201).json({ ok: true, item, units: createdUnits });
 });
 
 router.get("/items/:id", async (req, res) => {
