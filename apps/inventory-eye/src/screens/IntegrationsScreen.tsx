@@ -34,11 +34,13 @@ export function IntegrationsScreen({ navigation }: Props) {
 
   const [exportType, setExportType] = useState<ExportType>("inventory");
   const [exportCsv, setExportCsv] = useState<string>("");
+  const [exportPreviewOpen, setExportPreviewOpen] = useState(true);
 
   const [importJson, setImportJson] = useState<string>("");
   const [importFileName, setImportFileName] = useState<string>("");
   const [importPreviewCount, setImportPreviewCount] = useState<number | null>(null);
   const [importCsv, setImportCsv] = useState<string>("");
+  const [importPreviewOpen, setImportPreviewOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [resultJson, setResultJson] = useState<string>("");
@@ -157,6 +159,7 @@ export function IntegrationsScreen({ navigation }: Props) {
         }
         setImportPreviewCount(Math.max(0, rows.length - 1));
         setImportCsv(text);
+        setImportPreviewOpen(true);
       } catch (e) {
         setImportFileName("");
         setImportPreviewCount(null);
@@ -174,6 +177,7 @@ export function IntegrationsScreen({ navigation }: Props) {
         const rows = parseCsv(text);
         if (rows.length >= 2) {
           setImportPreviewCount(Math.max(0, rows.length - 1));
+          setImportPreviewOpen(true);
         } else {
           setImportPreviewCount(null);
         }
@@ -204,6 +208,7 @@ export function IntegrationsScreen({ navigation }: Props) {
         throw new Error(text || `HTTP ${res.status}`);
       }
       setExportCsv(text);
+      setExportPreviewOpen(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export failed");
     } finally {
@@ -384,8 +389,13 @@ export function IntegrationsScreen({ navigation }: Props) {
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
                 <Badge label={`Rows: ${exportPreview.totalRows}`} tone="primary" />
                 <Badge label="Preview (first 50)" tone="default" />
+                <AppButton
+                  title={exportPreviewOpen ? "Hide preview" : "Show preview"}
+                  variant="secondary"
+                  onPress={() => setExportPreviewOpen((v) => !v)}
+                />
               </View>
-              <Table header={exportPreview.header} body={exportPreview.body} />
+              {exportPreviewOpen ? <Table header={exportPreview.header} body={exportPreview.body} /> : null}
             </View>
           ) : null}
         </Card>
@@ -435,8 +445,13 @@ export function IntegrationsScreen({ navigation }: Props) {
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
                 <Badge label={`Rows: ${importPreview.totalRows}`} tone="primary" />
                 <Badge label="Preview (first 50)" tone="default" />
+                <AppButton
+                  title={importPreviewOpen ? "Hide preview" : "Show preview"}
+                  variant="secondary"
+                  onPress={() => setImportPreviewOpen((v) => !v)}
+                />
               </View>
-              <Table header={importPreview.header} body={importPreview.body} />
+              {importPreviewOpen ? <Table header={importPreview.header} body={importPreview.body} /> : null}
             </View>
           ) : null}
 
