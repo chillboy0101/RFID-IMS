@@ -28,6 +28,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const [webMirror, setWebMirror] = useState(false);
 
   const lastScanRef = useRef<{ value: string; at: number }>({ value: "", at: 0 });
+  const busyRef = useRef(false);
 
   const webScanIntervalRef = useRef<any>(null);
   const webStartTimeoutRef = useRef<any>(null);
@@ -36,6 +37,10 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const webVideoRef = useRef<HTMLVideoElement | null>(null);
   const webReaderRef = useRef<any>(null);
   const webStreamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
 
   const { width, height } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
@@ -407,7 +412,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
           const id = setInterval(() => {
             if (cancelled) return;
             if (inFlight) return;
-            if (busy) return;
+            if (busyRef.current) return;
             inFlight = true;
             Promise.resolve()
               .then(() => detector.detect(videoEl))
@@ -450,7 +455,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
           if (!result) return;
           const value = String(result?.getText?.() ?? "").trim();
           if (!value) return;
-          if (busy) return;
+          if (busyRef.current) return;
 
           const now = Date.now();
           if (lastScanRef.current.value === value && now - lastScanRef.current.at < 1200) return;
@@ -487,7 +492,12 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         // ignore
       }
     };
-  }, [busy, onScanned, visible, webHints, webVideoReady]);
+  }, [onScanned, visible, webHints, webVideoReady]);
+
+  const handleClose = useCallback(() => {
+    if (Platform.OS === "web") stopWebCamera();
+    onClose();
+  }, [onClose, stopWebCamera]);
 
   const handleScan = useCallback(
     (result: BarcodeScanningResult) => {
@@ -584,11 +594,11 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   );
 
   const header = (
-    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
       <Text style={[theme.typography.h2, { color: theme.colors.text, flex: 1 }]} numberOfLines={1}>
         {title}
       </Text>
-      <AppButton title="Close" onPress={onClose} variant="secondary" />
+      <AppButton title="Close" onPress={handleClose} variant="secondary" />
     </View>
   );
 
@@ -604,7 +614,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
 
   const body = (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing.md }}>
-      <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} onPress={onClose} />
+      <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} onPress={handleClose} />
       <View
         style={{
           width: "100%",
@@ -628,7 +638,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   );
 
   return (
-    <Modal visible={visible} transparent animationType={isDesktopWeb ? "fade" : "fade"} onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType={isDesktopWeb ? "fade" : "fade"} onRequestClose={handleClose}>
       <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)" }}>{body}</View>
     </Modal>
   );
