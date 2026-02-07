@@ -23,6 +23,8 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const [error, setError] = useState<string | null>(null);
   const [webVideoReady, setWebVideoReady] = useState(0);
   const [webNeedsTap, setWebNeedsTap] = useState(false);
+  const [webStatus, setWebStatus] = useState<string>("");
+  const [webDiag, setWebDiag] = useState<string>("");
 
   const lastScanRef = useRef<{ value: string; at: number }>({ value: "", at: 0 });
 
@@ -89,6 +91,8 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   }, [permission?.granted]);
 
   const stopWebCamera = useCallback(() => {
+    setWebStatus("");
+    setWebDiag("");
     try {
       webStreamRef.current?.getTracks?.().forEach((t) => t.stop());
     } catch {
@@ -118,6 +122,8 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const startWebCamera = useCallback(async () => {
     setError(null);
     setWebNeedsTap(false);
+    setWebStatus("Requesting camera…");
+    setWebDiag("");
 
     if (Platform.OS !== "web") return;
     if (typeof window === "undefined" || typeof navigator === "undefined") return;
@@ -129,16 +135,19 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     const isLocalhost = host === "localhost" || host === "127.0.0.1";
     if (!isSecure && !isLocalhost) {
       setError("Camera requires HTTPS (or localhost). Open the app over HTTPS then try again.");
+      setWebStatus("Blocked: insecure context");
       return;
     }
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setError("Camera is not supported in this browser.");
+      setWebStatus("Blocked: getUserMedia unavailable");
       return;
     }
 
     stopWebCamera();
     setWebVideoReady(0);
+    setWebStatus("Starting stream…");
 
     try {
       (videoEl as any).setAttribute?.("playsinline", "true");
@@ -172,6 +181,17 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
 
     webStreamRef.current = stream;
     (videoEl as any).srcObject = stream;
+
+    try {
+      const track = stream.getVideoTracks?.()?.[0];
+      const s = track?.getSettings?.();
+      setWebDiag(
+        `track:${track ? "yes" : "no"} enabled:${String(track?.enabled)} muted:${String((track as any)?.muted)} ` +
+          `w:${String((s as any)?.width ?? "?")} h:${String((s as any)?.height ?? "?")}`
+      );
+    } catch {
+      // ignore
+    }
 
     const waitForMeta = () =>
       new Promise<void>((resolve, reject) => {
@@ -217,11 +237,20 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
       });
 
     try {
+      setWebStatus("Waiting for camera frames…");
       await waitForMeta();
+      setWebStatus("Starting preview…");
       await (videoEl as any).play?.();
       setWebVideoReady((v) => v + 1);
-    } catch {
+      setWebStatus("Camera ready");
+    } catch (e) {
       setWebNeedsTap(true);
+      setWebStatus("Tap required");
+      if (e instanceof Error && e.message.includes("no video frames")) {
+        setError(
+          "Camera permission may be allowed, but no frames are arriving. If using Brave, disable Shields for this site, or close other apps using the camera, then try again."
+        );
+      }
     }
 
     setTimeout(() => {
@@ -255,9 +284,37 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     }
     if (Platform.OS !== "web") return;
     if (!visible) return;
-    void startWebCamera();
+    setWebNeedsTap(true);
+    setWebStatus("Tap anywhere on the black area to start camera");
     return () => stopWebCamera();
   }, [startWebCamera, stopWebCamera, visible]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    if (!visible) return;
+
+    const id = setInterval(() => {
+      try {
+        const videoEl = webVideoRef.current as any;
+        if (!videoEl) return;
+        setWebDiag((prev) => {
+          const base = prev?.split(" | ")?.[0] ?? prev;
+          const meta = `video:readyState:${String(videoEl.readyState)} w:${String(videoEl.videoWidth ?? 0)} h:${String(videoEl.videoHeight ?? 0)}`;
+          return base ? `${base} | ${meta}` : meta;
+        });
+      } catch {
+        // ignore
+      }
+    }, 700);
+
+    return () => {
+      try {
+        clearInterval(id);
+      } catch {
+        // ignore
+      }
+    };
+  }, [visible]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -402,11 +459,11 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
               <Pressable
                 style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}
                 onPress={() => {
-                  if (webNeedsTap) void startWebCamera();
+                  void startWebCamera();
                 }}
               >
                 {webNeedsTap ? (
-                  <MutedText style={{ color: "#fff" as any }}>Tap anywhere to enable camera</MutedText>
+                  <MutedText style={{ color: "#fff" as any }}>Tap anywhere to start camera</MutedText>
                 ) : (
                   <MutedText style={{ color: "#fff" as any }}>Starting camera…</MutedText>
                 )}
@@ -427,6 +484,12 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         )}
       </View>
       <View style={{ padding: theme.spacing.md, gap: 10 }}>
+        {Platform.OS === "web" ? (
+          <View style={{ gap: 6 }}>
+            {webStatus ? <MutedText>{webStatus}</MutedText> : null}
+            {webDiag ? <MutedText>{webDiag}</MutedText> : null}
+          </View>
+        ) : null}
         {last ? (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
             <Badge label={busy ? "Processing" : "Scanned"} tone={busy ? "warning" : "success"} />
