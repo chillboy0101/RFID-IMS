@@ -39,7 +39,7 @@ export function InventoryListScreen({ navigation }: Props) {
   const [scanOpen, setScanOpen] = useState(false);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [showFloatingSearch, setShowFloatingSearch] = useState(false);
+  const [showFloatingSearch] = useState(true);
   const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const overlaySearchRef = useRef<TextInput>(null);
@@ -385,18 +385,20 @@ export function InventoryListScreen({ navigation }: Props) {
             onScroll={(e) => {
               const y = (e as any)?.nativeEvent?.contentOffset?.y ?? 0;
               scrollOffsetRef.current = y;
-              const next = y > 80;
-              setShowFloatingSearch((prev) => (prev === next ? prev : next));
             }}
             scrollEventThrottle={32}
           >
             <Card>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, flex: 1, alignItems: "center" }}>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View style={{ flex: 1, alignItems: "flex-start" }}>
                   <Badge label={`Total: ${items.length}`} tone="default" />
+                </View>
+                <View style={{ flex: 1, alignItems: "center" }}>
                   <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} />
                 </View>
-                <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
+                <View style={{ flex: 1, alignItems: "flex-end" }}>
+                  <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
+                </View>
               </View>
               {error ? (
                 <View style={{ marginTop: 10 }}>
@@ -443,19 +445,21 @@ export function InventoryListScreen({ navigation }: Props) {
             onScroll={(e) => {
               const y = e.nativeEvent.contentOffset.y;
               scrollOffsetRef.current = y;
-              const next = y > 80;
-              setShowFloatingSearch((prev) => (prev === next ? prev : next));
             }}
             scrollEventThrottle={32}
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
             ListHeaderComponent={
               <Card>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, flex: 1, alignItems: "center" }}>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <View style={{ flex: 1, alignItems: "flex-start" }}>
                     <Badge label={`Total: ${items.length}`} tone="default" />
+                  </View>
+                  <View style={{ flex: 1, alignItems: "center" }}>
                     <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} />
                   </View>
-                  <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
+                  <View style={{ flex: 1, alignItems: "flex-end" }}>
+                    <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
+                  </View>
                 </View>
                 {error ? (
                   <View style={{ marginTop: 10 }}>

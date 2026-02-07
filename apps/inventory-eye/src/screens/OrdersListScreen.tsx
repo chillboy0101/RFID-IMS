@@ -34,7 +34,7 @@ export function OrdersListScreen({ navigation }: Props) {
   const listRef = useRef<FlatList<Order>>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [showFloatingSearch, setShowFloatingSearch] = useState(false);
+  const [showFloatingSearch] = useState(true);
   const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const overlaySearchRef = useRef<TextInput>(null);
@@ -311,15 +311,17 @@ export function OrdersListScreen({ navigation }: Props) {
             onScroll={(e) => {
               const y = (e as any)?.nativeEvent?.contentOffset?.y ?? 0;
               scrollOffsetRef.current = y;
-              const next = y > 80;
-              setShowFloatingSearch((prev) => (prev === next ? prev : next));
             }}
             scrollEventThrottle={32}
           >
             <Card>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                <Badge label={`Total: ${filtered.length}`} />
-                <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} />
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View style={{ flex: 1, alignItems: "flex-start" }}>
+                  <Badge label={`Total: ${filtered.length}`} />
+                </View>
+                <View style={{ flex: 1, alignItems: "flex-end" }}>
+                  <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} />
+                </View>
               </View>
             </Card>
 
@@ -347,16 +349,18 @@ export function OrdersListScreen({ navigation }: Props) {
             onScroll={(e) => {
               const y = e.nativeEvent.contentOffset.y;
               scrollOffsetRef.current = y;
-              const next = y > 80;
-              setShowFloatingSearch((prev) => (prev === next ? prev : next));
             }}
             scrollEventThrottle={32}
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
             ListHeaderComponent={
               <Card>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                  <Badge label={`Total: ${filtered.length}`} />
-                  <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} />
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <View style={{ flex: 1, alignItems: "flex-start" }}>
+                    <Badge label={`Total: ${filtered.length}`} />
+                  </View>
+                  <View style={{ flex: 1, alignItems: "flex-end" }}>
+                    <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} />
+                  </View>
                 </View>
               </Card>
             }
