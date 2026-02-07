@@ -491,7 +491,7 @@ export function OrderCreateScreen({ navigation }: Props) {
         </View>
       )}
 
-      {!isDesktopWeb && Platform.OS !== "web" && showFloatingSearch && !searchOverlayOpen ? (
+      {!isDesktopWeb && showFloatingSearch && !searchOverlayOpen ? (
         <Animated.View
           style={{
             position: "absolute",
@@ -508,7 +508,7 @@ export function OrderCreateScreen({ navigation }: Props) {
         </Animated.View>
       ) : null}
 
-      {Platform.OS !== "web" && searchOverlayOpen ? (
+      {searchOverlayOpen ? (
         <View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 60, elevation: 60 }} pointerEvents="box-none">
           <Animated.View
             style={{

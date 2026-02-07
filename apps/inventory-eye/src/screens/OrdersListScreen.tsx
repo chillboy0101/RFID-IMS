@@ -44,10 +44,11 @@ export function OrdersListScreen({ navigation }: Props) {
 
   const floatingPos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const floatingDraggedRef = useRef(false);
+  const floatingStartRef = useRef({ x: 0, y: 0 });
 
   const buttonSize = 52;
   const floatingMargin = theme.spacing.md;
-  const floatingTop = theme.spacing.md + insets.top + 64;
+  const floatingTop = theme.spacing.md + insets.top + 96;
   const floatingBottomLimit = theme.spacing.md + insets.bottom + 112;
   const maxX = Math.max(0, width - buttonSize - floatingMargin * 2);
   const maxY = Math.max(0, height - buttonSize - floatingTop - floatingBottomLimit);
@@ -58,14 +59,19 @@ export function OrdersListScreen({ navigation }: Props) {
         onStartShouldSetPanResponder: () => false,
         onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
         onPanResponderGrant: () => {
+          floatingStartRef.current = {
+            x: (floatingPos.x as any).__getValue?.() ?? 0,
+            y: (floatingPos.y as any).__getValue?.() ?? 0,
+          };
           floatingPos.extractOffset();
         },
-        onPanResponderMove: (e, g) => {
+        onPanResponderMove: (_, g) => {
           if (Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2) floatingDraggedRef.current = true;
-          floatingPos.setValue({
-            x: g.dx,
-            y: g.dy,
-          });
+
+          const start = floatingStartRef.current;
+          const nextX = clamp(start.x + g.dx, 0, maxX);
+          const nextY = clamp(start.y + g.dy, 0, maxY);
+          floatingPos.setValue({ x: nextX - start.x, y: nextY - start.y });
         },
         onPanResponderRelease: () => {
           floatingPos.flattenOffset();
@@ -306,7 +312,7 @@ export function OrdersListScreen({ navigation }: Props) {
         Platform.OS === "web" ? (
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={{ gap: 12 }}
+            contentContainerStyle={{ gap: 12, paddingBottom: theme.spacing.lg + insets.bottom + 156 }}
             keyboardShouldPersistTaps="handled"
             onScroll={(e) => {
               const y = (e as any)?.nativeEvent?.contentOffset?.y ?? 0;
@@ -315,12 +321,12 @@ export function OrdersListScreen({ navigation }: Props) {
             scrollEventThrottle={32}
           >
             <Card>
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <View style={{ flex: 1, alignItems: "flex-start" }}>
-                  <Badge label={`Total: ${filtered.length}`} />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Badge label={`Total: ${filtered.length}`} fullWidth />
                 </View>
-                <View style={{ flex: 1, alignItems: "flex-end" }}>
-                  <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} />
+                <View style={{ flex: 1 }}>
+                  <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} fullWidth />
                 </View>
               </View>
             </Card>

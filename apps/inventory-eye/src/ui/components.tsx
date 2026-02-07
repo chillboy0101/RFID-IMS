@@ -400,8 +400,8 @@ export function Badge({ label, tone = "default", size = "default", responsive = 
   return (
     <View
       style={{
-        alignSelf: fullWidth ? "stretch" : "flex-start",
-        width: fullWidth ? "100%" : undefined,
+        flexGrow: fullWidth ? 1 : 0,
+        flexBasis: fullWidth ? 0 : undefined,
         backgroundColor: bg,
         borderWidth: 1,
         borderColor: theme.colors.border,
@@ -410,7 +410,7 @@ export function Badge({ label, tone = "default", size = "default", responsive = 
         minHeight: effectiveSize === "header" ? 46 : undefined,
         borderRadius: 999,
         justifyContent: "center",
-        alignItems: fullWidth ? "center" : undefined,
+        alignItems: "center",
       }}
     >
       <Text style={[theme.typography.label, { color: fg }]} numberOfLines={1}>
