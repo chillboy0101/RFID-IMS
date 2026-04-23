@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Image, Platform, Text, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useSearchParams } from "../hooks/useSearchParams";
 
 import { apiRequest } from "../api/client";
 import type { AuthStackParamList } from "../navigation/types";
@@ -13,12 +12,15 @@ export function VerifyEmailScreen({ route, navigation }: Props) {
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
 
-  // Get token from route params first (React Navigation deep linking),
-  // then fall back to URL search params for web
-  const routeToken = route.params?.token;
-  const searchParams = useSearchParams();
-  const urlToken = searchParams?.token as string | undefined;
-  const token = routeToken ?? urlToken;
+  // Get token directly from URL on web (synchronous), fallback to route params
+  const token = (() => {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const urlToken = params.get("token");
+      if (urlToken) return urlToken;
+    }
+    return route.params?.token ?? "";
+  })();
 
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState<string>("");

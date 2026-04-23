@@ -1,11 +1,10 @@
-import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Image, Platform, Text, View, useWindowDimensions, Linking } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Image, Platform, Text, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import type { AuthStackParamList } from "../navigation/types";
 import { AppButton, Card, ErrorText, MutedText, Screen, TextField, theme } from "../ui";
 import { apiRequest } from "../api/client";
-import { useSearchParams } from "../hooks/useSearchParams";
 
 type Props = NativeStackScreenProps<AuthStackParamList, "ResetPassword">;
 
@@ -13,11 +12,15 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
 
-  // Use URL search params directly since it works reliably on web
-  const searchParams = useSearchParams();
-  const routeToken = route.params?.token;
-  const urlToken = searchParams?.token as string | undefined;
-  const token = urlToken ?? routeToken ?? "";
+  // Get token directly from URL on web (synchronous), fallback to route params
+  const token = (() => {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const urlToken = params.get("token");
+      if (urlToken) return urlToken;
+    }
+    return route.params?.token ?? "";
+  })();
 
   const [email, setEmail] = useState<string | null>(null);
   const [password, setPassword] = useState("");
@@ -26,7 +29,6 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
   const [verifying, setVerifying] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [paramsLoaded, setParamsLoaded] = useState(false);
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -39,25 +41,13 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
 
   const logoUri = "https://vdlfulfilment.com/wp-content/uploads/2023/05/cropped-VDL-Logo-compositions-15-300x141.png";
 
-  // Track when search params have loaded
-  useEffect(() => {
-    // Mark params as loaded once we have a non-empty search
-    if (Object.keys(searchParams).length > 0 || routeToken) {
-      setParamsLoaded(true);
-    }
-  }, [searchParams, routeToken]);
-
-  // Handle case where params loaded but no token provided
-  useEffect(() => {
-    if (paramsLoaded && !token && mountedRef.current) {
-      setVerifying(false);
-      setError("No reset token provided");
-    }
-  }, [paramsLoaded, token]);
-
-  // Verify token when we have one
+  // Verify token on mount
   useEffect(() => {
     if (!token) {
+      if (mountedRef.current) {
+        setVerifying(false);
+        setError("No reset token provided");
+      }
       return;
     }
 
@@ -162,7 +152,7 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
     );
   }
 
-  if (error && !token) {
+  if (error) {
     return (
       <Screen scroll center tabBarPadding={false} sidebarInset={false}>
         <View style={{ width: "100%", maxWidth: 520, alignItems: "center" }}>
@@ -174,10 +164,12 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
             <View style={{ alignItems: "center", paddingVertical: 16 }}>
               <Text style={{ fontSize: 48, marginBottom: 16 }}>❌</Text>
               <Text style={[theme.typography.heading, { color: theme.colors.text, textAlign: "center", marginBottom: 8 }]}>
-                Invalid Reset Link
+                {error === "No reset token provided" ? "Invalid Reset Link" : "Reset Failed"}
               </Text>
               <Text style={{ color: theme.colors.textMuted, textAlign: "center", lineHeight: 22, marginBottom: 16 }}>
-                This password reset link is invalid or has expired. Please request a new one.
+                {error === "No reset token provided"
+                  ? "This password reset link is invalid or has expired. Please request a new one."
+                  : error}
               </Text>
             </View>
 
@@ -220,13 +212,6 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
                 Resetting password for <Text style={{ fontWeight: "600" }}>{email}</Text>
               </MutedText>
             )}
-
-            {error ? (
-              <>
-                <ErrorText>{error}</ErrorText>
-                <View style={{ height: 12 }} />
-              </>
-            ) : null}
 
             <TextField
               label="New Password"
