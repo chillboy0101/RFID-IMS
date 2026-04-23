@@ -11,6 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../auth/AuthContext";
 import { LoginScreen } from "../screens/LoginScreen";
 import { RegisterScreen } from "../screens/RegisterScreen";
+import { VerifyEmailScreen } from "../screens/VerifyEmailScreen";
 import { ForgotPasswordScreen } from "../screens/ForgotPasswordScreen";
 import { ResetPasswordScreen } from "../screens/ResetPasswordScreen";
 import { DashboardScreen } from "../screens/DashboardScreen";
@@ -479,6 +480,7 @@ function AuthNavigator() {
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
       <AuthStack.Screen name="Login" component={LoginScreen} options={{ title: "Login" }} />
       <AuthStack.Screen name="Register" component={RegisterScreen} options={{ title: "Register" }} />
+      <AuthStack.Screen name="VerifyEmail" component={VerifyEmailScreen} options={{ title: "Verify Email" }} />
       <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: "Forgot Password" }} />
       <AuthStack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ title: "Reset Password" }} />
     </AuthStack.Navigator>

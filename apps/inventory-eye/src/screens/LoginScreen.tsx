@@ -3,6 +3,7 @@ import { Image, Platform, Pressable, Text, View, useWindowDimensions } from "rea
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AuthContext } from "../auth/AuthContext";
+import { apiRequest } from "../api/client";
 import type { AuthStackParamList } from "../navigation/types";
 import { AppButton, Card, ErrorText, MutedText, Screen, TextField, theme } from "../ui";
 
@@ -26,6 +27,9 @@ export function LoginScreen({ navigation }: Props) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showResend, setShowResend] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
 
   const logoUri = "https://vdlfulfilment.com/wp-content/uploads/2023/05/cropped-VDL-Logo-compositions-15-300x141.png";
 
@@ -35,6 +39,8 @@ export function LoginScreen({ navigation }: Props) {
     if (!canSubmit || loading) return;
     setLoading(true);
     setError(null);
+    setShowResend(false);
+    setResendSuccess(false);
     try {
       await signIn(email.trim(), password);
     } catch (e) {
@@ -43,11 +49,32 @@ export function LoginScreen({ navigation }: Props) {
         setError("Server not responding. Please try again in a moment.");
       } else if (msg.toLowerCase().includes("network")) {
         setError("Network error. Check your connection and try again.");
+      } else if (msg.toLowerCase().includes("verify") || msg.toLowerCase().includes("verification")) {
+        setError(msg);
+        setShowResend(true);
       } else {
         setError(msg);
       }
     } finally {
       if (mountedRef.current) setLoading(false);
+    }
+  }
+
+  async function onResendVerification() {
+    setResending(true);
+    setResendSuccess(false);
+    try {
+      await apiRequest<{ ok: true; message: string }>("/auth/resend-verification", {
+        method: "POST",
+        timeoutMs: 25000,
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      setResendSuccess(true);
+    } catch (e) {
+      // Silently fail - the API always returns success to prevent enumeration
+      setResendSuccess(true);
+    } finally {
+      if (mountedRef.current) setResending(false);
     }
   }
 
@@ -88,6 +115,26 @@ export function LoginScreen({ navigation }: Props) {
             <View style={{ height: 12 }} />
 
             {error ? <ErrorText>{error}</ErrorText> : null}
+
+            {showResend && !resendSuccess && (
+              <>
+                <View style={{ height: 8 }} />
+                <Pressable onPress={onResendVerification} disabled={resending} style={{ alignSelf: "center" }}>
+                  <Text style={{ color: theme.colors.primary, fontWeight: "600", fontSize: 14 }}>
+                    {resending ? "Sending..." : "Resend verification email"}
+                  </Text>
+                </Pressable>
+              </>
+            )}
+
+            {resendSuccess && (
+              <>
+                <View style={{ height: 8 }} />
+                <MutedText style={{ color: theme.colors.success, textAlign: "center" }}>
+                  Verification email sent! Check your inbox.
+                </MutedText>
+              </>
+            )}
 
             <View style={{ height: 12 }} />
 

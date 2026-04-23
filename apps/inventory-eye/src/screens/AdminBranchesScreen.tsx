@@ -190,14 +190,10 @@ export function AdminBranchesScreen({ navigation }: Props) {
   const [email, setEmail] = useState("");
   const [memberRole, setMemberRole] = useState<UserRole>("inventory_staff");
   const [memberMakeSuperAdmin, setMemberMakeSuperAdmin] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<UserRole>("inventory_staff");
-  const [inviteMakeSuperAdmin, setInviteMakeSuperAdmin] = useState(false);
-  const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [members, setMembers] = useState<BranchMember[]>([]);
   const [allUsers, setAllUsers] = useState<AdminUserRow[]>([]);
   const [branchTab, setBranchTab] = useState<"list" | "create">("list");
-  const [adminTab, setAdminTab] = useState<"members" | "add" | "invites" | "sessions" | "users">("members");
+  const [adminTab, setAdminTab] = useState<"members" | "add" | "sessions" | "users">("members");
   const [createUserName, setCreateUserName] = useState("");
   const [createUserEmail, setCreateUserEmail] = useState("");
   const [createUserPassword, setCreateUserPassword] = useState("");
@@ -379,40 +375,6 @@ export function AdminBranchesScreen({ navigation }: Props) {
     [busy, confirmAction, isSuperAdmin, loadAllUsers, refreshTenants, token]
   );
 
-  async function createInvite() {
-    if (!token || !isBranchAdmin) return;
-    if (!activeTenantId) {
-      setError("Select a branch first");
-      return;
-    }
-
-    const clean = inviteEmail.trim().toLowerCase();
-    if (!clean) {
-      setError("Invite email is required");
-      return;
-    }
-
-    setBusy(true);
-    setError(null);
-    setInviteCode(null);
-    try {
-      const res = await apiRequest<{ ok: true; invite: { code: string } }>(`/tenants/${activeTenantId}/invites`, {
-        method: "POST",
-        token,
-        body: JSON.stringify({
-          email: clean,
-          role: inviteRole,
-          makeSuperAdmin: isSuperAdmin ? inviteMakeSuperAdmin : false,
-        }),
-      });
-      setInviteCode(res.invite.code);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create invite");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const deleteUser = useCallback(async (userId: string, email: string) => {
     if (!token || !isSuperAdmin) return;
 
@@ -569,7 +531,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
   }
 
   const selectAdminTab = useCallback(
-    async (tab: "members" | "add" | "invites" | "sessions" | "users") => {
+    async (tab: "members" | "add" | "sessions" | "users") => {
       setAdminTab(tab);
       if (tab === "sessions") {
         await refreshMe().catch(() => undefined);
@@ -730,7 +692,6 @@ export function AdminBranchesScreen({ navigation }: Props) {
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                     <AppButton title="Members" onPress={() => selectAdminTab("members")} variant={adminTab === "members" ? "primary" : "secondary"} />
                     <AppButton title="Add user" onPress={() => selectAdminTab("add")} variant={adminTab === "add" ? "primary" : "secondary"} />
-                    <AppButton title="Invites" onPress={() => selectAdminTab("invites")} variant={adminTab === "invites" ? "primary" : "secondary"} />
                     <AppButton title="Active sessions" onPress={() => selectAdminTab("sessions")} variant={adminTab === "sessions" ? "primary" : "secondary"} />
                     {isSuperAdmin ? (
                       <AppButton title="All users" onPress={() => selectAdminTab("users")} variant={adminTab === "users" ? "primary" : "secondary"} />
@@ -795,44 +756,6 @@ export function AdminBranchesScreen({ navigation }: Props) {
                       </View>
                       <View style={{ height: 12 }} />
                       <AppButton title="Create user" onPress={createUserInActiveBranch} disabled={busy} loading={busy} variant="secondary" />
-                    </>
-                  ) : null}
-
-                  {adminTab === "invites" ? (
-                    <>
-                      <View style={{ height: theme.spacing.md }} />
-                      <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Invites</Text>
-                      <MutedText>Create an invite code and share it with the user to join this branch.</MutedText>
-                      <View style={{ height: 12 }} />
-                      <TextField
-                        value={inviteEmail}
-                        onChangeText={setInviteEmail}
-                        placeholder="Invite email (required)"
-                        autoCapitalize="none"
-                        keyboardType="email-address"
-                      />
-                      <View style={{ height: 10 }} />
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                        {roles.map((r) => (
-                          <AppButton key={r} title={r} onPress={() => setInviteRole(r)} variant={inviteRole === r ? "primary" : "secondary"} />
-                        ))}
-                        {isSuperAdmin ? (
-                          <AppButton
-                            title="super_admin"
-                            onPress={() => setInviteMakeSuperAdmin((v) => !v)}
-                            variant={inviteMakeSuperAdmin ? "primary" : "secondary"}
-                            disabled={busy}
-                          />
-                        ) : null}
-                      </View>
-                      <View style={{ height: 12 }} />
-                      <AppButton title="Create invite" onPress={createInvite} disabled={busy} loading={busy} variant="secondary" />
-                      {inviteCode ? (
-                        <>
-                          <View style={{ height: 12 }} />
-                          <Text selectable style={[theme.typography.body, { color: theme.colors.text }]}>Invite code: {inviteCode}</Text>
-                        </>
-                      ) : null}
                     </>
                   ) : null}
 

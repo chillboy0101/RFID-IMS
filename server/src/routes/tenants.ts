@@ -1,6 +1,5 @@
 import express from "express";
 import mongoose from "mongoose";
-import crypto from "crypto";
 import bcrypt from "bcryptjs";
 
 import { requireAuth, requireRole, type AuthRequest } from "../middleware/auth.js";
@@ -9,7 +8,6 @@ import { AuthSessionModel } from "../models/AuthSession.js";
 import { TenantModel } from "../models/Tenant.js";
 import { TenantAuditLogModel } from "../models/TenantAuditLog.js";
 import { TenantMembershipModel } from "../models/TenantMembership.js";
-import { InviteModel } from "../models/Invite.js";
 import { UserModel, userRoles, type UserRole } from "../models/User.js";
 
 const router = express.Router();
@@ -350,83 +348,6 @@ router.post("/:id/users", requireTenant, requireRole("admin"), async (req: Tenan
     ok: true,
     user: { id: user._id.toString(), name: user.name, email: user.email, role: user.role },
     membership: { tenantId: tenant._id.toString(), userId: user._id.toString(), role: memberRole },
-  });
-});
-
-router.post("/:id/invites", requireTenant, requireRole("admin"), async (req: TenantRequest, res) => {
-  const auth = req.auth;
-  if (!auth) {
-    res.status(401).json({ ok: false, error: "Unauthorized" });
-    return;
-  }
-
-  const { id } = req.params;
-  const tenantId = req.tenantId as string;
-  if (String(tenantId) !== String(id)) {
-    res.status(400).json({ ok: false, error: "X-Tenant-ID must match :id" });
-    return;
-  }
-
-  if (!mongoose.isValidObjectId(id)) {
-    res.status(400).json({ ok: false, error: "Invalid id" });
-    return;
-  }
-
-  const tenant = await TenantModel.findById(id).exec();
-  if (!tenant) {
-    res.status(404).json({ ok: false, error: "Tenant not found" });
-    return;
-  }
-
-  const { email, role, expiresInDays, makeSuperAdmin } = req.body as {
-    email?: string;
-    role?: UserRole;
-    expiresInDays?: number;
-    makeSuperAdmin?: boolean;
-  };
-
-  const cleanEmail = email ? email.toLowerCase().trim() : "";
-  if (!cleanEmail) {
-    res.status(400).json({ ok: false, error: "email is required" });
-    return;
-  }
-  const effectiveRole = role && userRoles.includes(role) ? role : undefined;
-  const days = typeof expiresInDays === "number" && expiresInDays > 0 ? expiresInDays : 14;
-  const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-
-  let canMakeSuperAdmin = false;
-  if (Boolean(makeSuperAdmin)) {
-    const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL ?? "equalizerjr@gmail.com").toLowerCase().trim();
-    const actor = await UserModel.findById(auth.id).select({ email: 1 }).exec();
-    const actorEmail = String((actor as any)?.email ?? "").toLowerCase().trim();
-    canMakeSuperAdmin = Boolean(actorEmail && actorEmail === superAdminEmail);
-    if (!canMakeSuperAdmin) {
-      res.status(403).json({ ok: false, error: "Forbidden" });
-      return;
-    }
-  }
-
-  const code = crypto.randomBytes(16).toString("hex");
-
-  const invite = await InviteModel.create({
-    code,
-    tenantId: tenant._id,
-    email: cleanEmail,
-    role: effectiveRole,
-    ...(canMakeSuperAdmin ? { makeSuperAdmin: true } : null),
-    createdByUserId: auth.id,
-    expiresAt,
-  });
-
-  res.status(201).json({
-    ok: true,
-    invite: {
-      code: invite.code,
-      tenantId: String(invite.tenantId),
-      email: invite.email ?? null,
-      role: invite.role ?? null,
-      expiresAt: invite.expiresAt ?? null,
-    },
   });
 });
 

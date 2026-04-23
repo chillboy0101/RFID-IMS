@@ -367,6 +367,41 @@ router.patch("/users/:id/role", requireRole("admin"), async (req: AuthRequest, r
   });
 });
 
+router.post("/users/:id/verify-email", requireRole("admin"), async (req: AuthRequest, res) => {
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const { id } = req.params;
+  if (!mongoose.isValidObjectId(id)) {
+    res.status(400).json({ ok: false, error: "Invalid id" });
+    return;
+  }
+
+  const user = await UserModel.findById(id).exec();
+  if (!user) {
+    res.status(404).json({ ok: false, error: "User not found" });
+    return;
+  }
+
+  user.emailVerified = true;
+  await user.save();
+
+  res.json({
+    ok: true,
+    message: `Email verified for ${user.email}`,
+    user: {
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      emailVerified: user.emailVerified,
+    },
+  });
+});
+
 router.delete("/users/:id", requireRole("admin"), async (req: AuthRequest, res) => {
   const auth = req.auth;
   if (!auth) {

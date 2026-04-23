@@ -5,12 +5,9 @@ import mongoose from "mongoose";
 
 import { requireAuth, signAccessToken, type AuthRequest } from "../middleware/auth.js";
 import { AuthSessionModel } from "../models/AuthSession.js";
-import { InviteModel } from "../models/Invite.js";
-import { TenantModel } from "../models/Tenant.js";
-import { TenantMembershipModel } from "../models/TenantMembership.js";
 import { UserModel } from "../models/User.js";
 import { PasswordResetTokenModel } from "../models/PasswordResetToken.js";
-import { sendEmail, buildResetPasswordEmail } from "../utils/email.js";
+import { sendEmail, buildResetPasswordEmail, buildVerificationEmail } from "../utils/email.js";
 
 const router = express.Router();
 
@@ -26,11 +23,10 @@ router.get("/", async (_req, res) => {
 });
 
 router.post("/register", async (req, res) => {
-  const { name, email, password, inviteCode } = req.body as {
+  const { name, email, password } = req.body as {
     name?: string;
     email?: string;
     password?: string;
-    inviteCode?: string;
   };
 
   if (!name || !email || !password) {
@@ -50,7 +46,6 @@ router.post("/register", async (req, res) => {
   const session = await mongoose.startSession();
   try {
     let userId: string | null = null;
-    let userRole: string | null = null;
 
     await session.withTransaction(async () => {
       const user = await UserModel.create(
@@ -59,6 +54,7 @@ router.post("/register", async (req, res) => {
             name: name.trim(),
             email: cleanEmail,
             passwordHash,
+            emailVerified: false,
           },
         ],
         { session }
@@ -66,84 +62,44 @@ router.post("/register", async (req, res) => {
 
       userId = user[0]!._id.toString();
 
-      const code = (inviteCode ?? "").trim();
-      if (code) {
-        const invite = await InviteModel.findOne({ code }).session(session).exec();
-        if (!invite) {
-          throw new Error("Invalid invite code");
-        }
-        if (invite.usedAt || invite.usedByUserId) {
-          throw new Error("Invite code already used");
-        }
-        if (invite.expiresAt && invite.expiresAt.getTime() < Date.now()) {
-          throw new Error("Invite code expired");
-        }
-        if (invite.email && invite.email.toLowerCase().trim() !== cleanEmail) {
-          throw new Error("Invite code is not for this email");
-        }
+      // Create verification token
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-        if ((invite as any).makeSuperAdmin) {
-          user[0]!.role = "admin" as any;
-          await user[0]!.save({ session });
-        }
+      // Import VerificationTokenModel here to avoid circular dependency issues
+      const { VerificationTokenModel } = await import("../models/VerificationToken.js");
+      await VerificationTokenModel.create(
+        [
+          {
+            userId: user[0]!._id,
+            email: cleanEmail,
+            token,
+            expiresAt,
+          },
+        ],
+        { session }
+      );
 
-        await TenantMembershipModel.findOneAndUpdate(
-          { tenantId: invite.tenantId, userId: user[0]!._id },
-          { $set: { role: (invite.role as any) ?? user[0]!.role } },
-          { upsert: true, new: true, session }
-        ).exec();
-
-        invite.usedByUserId = user[0]!._id;
-        invite.usedAt = new Date();
-        await invite.save({ session });
-      } else {
-        const tenants = await TenantModel.find({}).select({ _id: 1 }).sort({ createdAt: 1 }).limit(2).session(session).exec();
-        if (tenants.length === 1) {
-          await TenantMembershipModel.findOneAndUpdate(
-            { tenantId: tenants[0]!._id, userId: user[0]!._id },
-            { $set: { role: user[0]!.role } },
-            { upsert: true, new: true, session }
-          ).exec();
-        }
-      }
-
-      userRole = user[0]!.role;
+      // Send verification email
+      const baseUrl = process.env.APP_BASE_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
+      const { subject, html, text } = buildVerificationEmail(token, baseUrl);
+      
+      // Fire and forget - don't fail registration if email fails
+      sendEmail({ to: cleanEmail, subject, html, text }).catch((err) => {
+        console.error("Failed to send verification email:", err);
+      });
     });
 
-    if (!userId || !userRole) {
+    if (!userId) {
       res.status(500).json({ ok: false, error: "Failed to create user" });
       return;
     }
 
-    const jti = crypto.randomUUID();
-    const now = new Date();
-    await AuthSessionModel.create({
-      userId,
-      jti,
-      createdAt: now,
-      lastSeenAt: now,
-      userAgent: req.header("user-agent") ?? undefined,
-      ip: req.ip ?? undefined,
-    });
-
-    const token = signAccessToken({ id: userId, role: userRole as any, jti });
-
-    const user = await UserModel.findById(userId).exec();
-    if (!user) {
-      res.status(500).json({ ok: false, error: "Failed to create user" });
-      return;
-    }
-
+    // Return success - user must verify email before logging in
     res.status(201).json({
       ok: true,
-      token,
-      user: {
-        id: user._id.toString(),
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        mustChangePassword: Boolean((user as any).mustChangePassword),
-      },
+      message: "Account created. Please check your email to verify your account before logging in.",
+      email: cleanEmail,
     });
   } catch (e) {
     res.status(400).json({ ok: false, error: e instanceof Error ? e.message : "Registration failed" });
@@ -166,6 +122,14 @@ router.post("/login", async (req, res) => {
   const user = await UserModel.findOne({ email: email.toLowerCase().trim() }).exec();
   if (!user) {
     res.status(401).json({ ok: false, error: "Invalid credentials" });
+    return;
+  }
+
+  // Check if email is verified (skip for super admin)
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL ?? "equalizerjr@gmail.com").toLowerCase().trim();
+  const isSuperAdmin = user.email.toLowerCase().trim() === superAdminEmail;
+  if (!user.emailVerified && !isSuperAdmin) {
+    res.status(401).json({ ok: false, error: "Please verify your email before logging in. Check your inbox for the verification link." });
     return;
   }
 
@@ -401,6 +365,97 @@ router.post("/forgot-password", async (req, res) => {
   res.json({
     ok: true,
     message: "If an account with that email exists, we've sent a password reset link.",
+  });
+});
+
+// Verify email with token
+router.get("/verify-email", async (req, res) => {
+  const { token } = req.query as { token?: string };
+
+  if (!token) {
+    res.status(400).json({ ok: false, error: "Token is required" });
+    return;
+  }
+
+  const { VerificationTokenModel } = await import("../models/VerificationToken.js");
+
+  const resetToken = await VerificationTokenModel.findOne({
+    token: token.trim(),
+    expiresAt: { $gt: new Date() },
+  }).exec();
+
+  if (!resetToken) {
+    res.status(400).json({ ok: false, error: "Invalid or expired verification token" });
+    return;
+  }
+
+  const user = await UserModel.findById(resetToken.userId).exec();
+  if (!user) {
+    res.status(404).json({ ok: false, error: "User not found" });
+    return;
+  }
+
+  // Mark user as verified
+  user.emailVerified = true;
+  await user.save();
+
+  // Mark token as used (delete it)
+  await VerificationTokenModel.deleteOne({ _id: resetToken._id }).exec();
+
+  res.json({
+    ok: true,
+    message: "Email verified successfully. You can now log in to your account.",
+  });
+});
+
+// Resend verification email
+router.post("/resend-verification", async (req, res) => {
+  const { email } = req.body as { email?: string };
+
+  if (!email) {
+    res.status(400).json({ ok: false, error: "Email is required" });
+    return;
+  }
+
+  const cleanEmail = email.toLowerCase().trim();
+  const user = await UserModel.findOne({ email: cleanEmail }).exec();
+
+  // Always return success to prevent email enumeration
+  if (!user || user.emailVerified) {
+    res.json({
+      ok: true,
+      message: "If an account with that email exists and is unverified, we've sent a new verification link.",
+    });
+    return;
+  }
+
+  // Delete any existing verification tokens
+  const { VerificationTokenModel } = await import("../models/VerificationToken.js");
+  await VerificationTokenModel.deleteMany({ userId: user._id }).exec();
+
+  // Create new verification token
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+  await VerificationTokenModel.create({
+    userId: user._id,
+    email: cleanEmail,
+    token,
+    expiresAt,
+  });
+
+  // Send verification email
+  const baseUrl = process.env.APP_BASE_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
+  const { subject, html, text } = buildVerificationEmail(token, baseUrl);
+
+  const sent = await sendEmail({ to: cleanEmail, subject, html, text });
+  if (!sent) {
+    console.error(`Failed to send verification email to ${cleanEmail}`);
+  }
+
+  res.json({
+    ok: true,
+    message: "If an account with that email exists and is unverified, we've sent a new verification link.",
   });
 });
 

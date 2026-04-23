@@ -2,14 +2,13 @@ import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Image, Platform, Text, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
-import { AuthContext } from "../auth/AuthContext";
+import { apiRequest } from "../api/client";
 import type { AuthStackParamList } from "../navigation/types";
 import { AppButton, Card, ErrorText, MutedText, Screen, TextField, theme } from "../ui";
 
 type Props = NativeStackScreenProps<AuthStackParamList, "Register">;
 
 export function RegisterScreen({ navigation }: Props) {
-  const { signUp } = useContext(AuthContext);
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
 
@@ -25,9 +24,9 @@ export function RegisterScreen({ navigation }: Props) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const logoUri = "https://vdlfulfilment.com/wp-content/uploads/2023/05/cropped-VDL-Logo-compositions-15-300x141.png";
 
@@ -40,8 +39,18 @@ export function RegisterScreen({ navigation }: Props) {
     if (!canSubmit || loading) return;
     setLoading(true);
     setError(null);
+    setSuccess(null);
     try {
-      await signUp(name.trim(), email.trim(), password, inviteCode.trim() || undefined);
+      const res = await apiRequest<{ ok: true; message: string; email?: string }>("/auth/register", {
+        method: "POST",
+        timeoutMs: 25000,
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), password }),
+      });
+      setSuccess(res.message || "Account created! Please check your email to verify your account before logging in.");
+      // Clear form
+      setName("");
+      setEmail("");
+      setPassword("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Registration failed");
     } finally {
@@ -64,55 +73,60 @@ export function RegisterScreen({ navigation }: Props) {
           }}
         >
           <Card>
-            <TextField label="Name" value={name} onChangeText={setName} placeholder="Full name" />
+            {success ? (
+              <>
+                <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 12, textAlign: "center" }]}>
+                  Check your email
+                </Text>
+                <MutedText style={{ textAlign: "center", marginBottom: 16 }}>
+                  {success}
+                </MutedText>
+                <View style={{ height: 12 }} />
+                <AppButton title="Go to login" onPress={() => navigation.navigate("Login")} variant="primary" />
+              </>
+            ) : (
+              <>
+                <TextField label="Name" value={name} onChangeText={setName} placeholder="Full name" />
 
-            <View style={{ height: 12 }} />
+                <View style={{ height: 12 }} />
 
-            <TextField
-              label="Email"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              placeholder="you@example.com"
-            />
+                <TextField
+                  label="Email"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  placeholder="you@example.com"
+                />
 
-            <View style={{ height: 12 }} />
+                <View style={{ height: 12 }} />
 
-            <TextField
-              label="Password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholder="At least 6 characters"
-            />
+                <TextField
+                  label="Password"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  placeholder="At least 6 characters"
+                />
 
-            <View style={{ height: 12 }} />
+                <View style={{ height: 12 }} />
 
-            <TextField
-              label="Invite code (optional)"
-              value={inviteCode}
-              onChangeText={setInviteCode}
-              autoCapitalize="none"
-              placeholder="Paste invite code"
-            />
+                {error ? <ErrorText>{error}</ErrorText> : null}
 
-            <View style={{ height: 12 }} />
+                <View style={{ height: 12 }} />
 
-            {error ? <ErrorText>{error}</ErrorText> : null}
+                <AppButton
+                  title="Create account"
+                  onPress={onSubmit}
+                  disabled={!canSubmit || loading}
+                  loading={loading}
+                />
 
-            <View style={{ height: 12 }} />
+                <View style={{ height: 10 }} />
 
-            <AppButton
-              title="Create account"
-              onPress={onSubmit}
-              disabled={!canSubmit || loading}
-              loading={loading}
-            />
-
-            <View style={{ height: 10 }} />
-
-            <AppButton title="Back to login" onPress={() => navigation.navigate("Login")} variant="secondary" />
+                <AppButton title="Back to login" onPress={() => navigation.navigate("Login")} variant="secondary" />
+              </>
+            )}
           </Card>
         </Form>
       </View>
