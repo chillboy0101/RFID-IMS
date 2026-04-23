@@ -610,6 +610,7 @@ export function AppNavigator() {
           screens: {
             Login: "login",
             Register: "register",
+            VerifyEmail: "verify-email",
             ForgotPassword: "forgot-password",
             ResetPassword: "reset-password",
           },

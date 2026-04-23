@@ -9,11 +9,16 @@ import { AppButton, Card, ErrorText, MutedText, Screen, theme } from "../ui";
 
 type Props = NativeStackScreenProps<AuthStackParamList, "VerifyEmail">;
 
-export function VerifyEmailScreen({ navigation }: Props) {
+export function VerifyEmailScreen({ route, navigation }: Props) {
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
+
+  // Get token from route params first (React Navigation deep linking),
+  // then fall back to URL search params for web
+  const routeToken = route.params?.token;
   const searchParams = useSearchParams();
-  const token = searchParams?.token as string | undefined;
+  const urlToken = searchParams?.token as string | undefined;
+  const token = routeToken ?? urlToken;
 
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState<string>("");

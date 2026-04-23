@@ -34,16 +34,16 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
 
   const logoUri = "https://vdlfulfilment.com/wp-content/uploads/2023/05/cropped-VDL-Logo-compositions-15-300x141.png";
 
-  // Extract token from URL on web if not in params
+  // Extract token from URL on web deep link
   useEffect(() => {
-    if (Platform.OS === "web" && !initialToken && typeof window !== "undefined") {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const urlToken = params.get("token");
-      if (urlToken) {
+      if (urlToken && !token) {
         setToken(urlToken);
       }
     }
-  }, [initialToken]);
+  }, []); // Run once on mount
 
   // Verify token on mount
   useEffect(() => {
