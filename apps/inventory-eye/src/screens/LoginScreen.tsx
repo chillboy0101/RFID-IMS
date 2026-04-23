@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Image, Platform, Text, View, useWindowDimensions } from "react-native";
+import { Image, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AuthContext } from "../auth/AuthContext";
@@ -97,6 +97,14 @@ export function LoginScreen({ navigation }: Props) {
               disabled={!canSubmit || loading}
               loading={loading}
             />
+
+            <View style={{ height: 8 }} />
+
+            <Pressable onPress={() => navigation.navigate("ForgotPassword")} style={{ alignSelf: "center" }}>
+              <Text style={{ color: theme.colors.primary, fontWeight: "600", fontSize: 14 }}>
+                Forgot Password?
+              </Text>
+            </Pressable>
 
             <View style={{ height: 10 }} />
 

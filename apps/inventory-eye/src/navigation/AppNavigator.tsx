@@ -11,6 +11,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../auth/AuthContext";
 import { LoginScreen } from "../screens/LoginScreen";
 import { RegisterScreen } from "../screens/RegisterScreen";
+import { ForgotPasswordScreen } from "../screens/ForgotPasswordScreen";
+import { ResetPasswordScreen } from "../screens/ResetPasswordScreen";
 import { DashboardScreen } from "../screens/DashboardScreen";
 import { InventoryListScreen } from "../screens/InventoryListScreen";
 import { OrdersListScreen } from "../screens/OrdersListScreen";
@@ -477,6 +479,8 @@ function AuthNavigator() {
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
       <AuthStack.Screen name="Login" component={LoginScreen} options={{ title: "Login" }} />
       <AuthStack.Screen name="Register" component={RegisterScreen} options={{ title: "Register" }} />
+      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: "Forgot Password" }} />
+      <AuthStack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ title: "Reset Password" }} />
     </AuthStack.Navigator>
   );
 }
@@ -600,6 +604,14 @@ export function AppNavigator() {
         : [],
     config: {
       screens: {
+        Auth: {
+          screens: {
+            Login: "login",
+            Register: "register",
+            ForgotPassword: "forgot-password",
+            ResetPassword: "reset-password",
+          },
+        },
         Dashboard: "",
         Inventory: {
           screens: {

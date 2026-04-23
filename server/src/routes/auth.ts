@@ -9,6 +9,8 @@ import { InviteModel } from "../models/Invite.js";
 import { TenantModel } from "../models/Tenant.js";
 import { TenantMembershipModel } from "../models/TenantMembership.js";
 import { UserModel } from "../models/User.js";
+import { PasswordResetTokenModel } from "../models/PasswordResetToken.js";
+import { sendEmail, buildResetPasswordEmail } from "../utils/email.js";
 
 const router = express.Router();
 
@@ -278,6 +280,127 @@ router.get("/me", requireAuth, async (req: AuthRequest, res) => {
       role: user.role,
       mustChangePassword: Boolean((user as any).mustChangePassword),
     },
+  });
+});
+
+router.post("/reset-password", async (req, res) => {
+  const { token, password } = req.body as { token?: string; password?: string };
+
+  if (!token || !password) {
+    res.status(400).json({ ok: false, error: "Missing required fields" });
+    return;
+  }
+
+  if (password.length < 8) {
+    res.status(400).json({ ok: false, error: "Password must be at least 8 characters" });
+    return;
+  }
+
+  const resetToken = await PasswordResetTokenModel.findOne({
+    token: token.trim(),
+    usedAt: null,
+    expiresAt: { $gt: new Date() },
+  }).exec();
+
+  if (!resetToken) {
+    res.status(400).json({ ok: false, error: "Invalid or expired reset token" });
+    return;
+  }
+
+  const user = await UserModel.findById(resetToken.userId).exec();
+  if (!user) {
+    res.status(404).json({ ok: false, error: "User not found" });
+    return;
+  }
+
+  // Mark token as used
+  resetToken.usedAt = new Date();
+  await resetToken.save();
+
+  // Update password
+  user.passwordHash = await bcrypt.hash(password, 12);
+  await user.save();
+
+  // Revoke all existing sessions for this user for security
+  await AuthSessionModel.updateMany(
+    { userId: user._id, revokedAt: null },
+    { $set: { revokedAt: new Date(), revokedByRole: "password_reset" } }
+  ).exec();
+
+  res.json({
+    ok: true,
+    message: "Password has been reset. Please sign in with your new password.",
+  });
+});
+
+router.get("/reset-password/:token", async (req, res) => {
+  const { token } = req.params;
+
+  if (!token) {
+    res.status(400).json({ ok: false, error: "Token is required" });
+    return;
+  }
+
+  const resetToken = await PasswordResetTokenModel.findOne({
+    token: token.trim(),
+    usedAt: null,
+    expiresAt: { $gt: new Date() },
+  }).exec();
+
+  if (!resetToken) {
+    res.status(400).json({ ok: false, error: "Invalid or expired reset token" });
+    return;
+  }
+
+  const user = await UserModel.findById(resetToken.userId).select({ email: 1, name: 1 }).exec();
+  if (!user) {
+    res.status(404).json({ ok: false, error: "User not found" });
+    return;
+  }
+
+  res.json({
+    ok: true,
+    valid: true,
+    email: user.email,
+  });
+});
+
+router.post("/forgot-password", async (req, res) => {
+  const { email } = req.body as { email?: string };
+
+  if (!email) {
+    res.status(400).json({ ok: false, error: "Email is required" });
+    return;
+  }
+
+  const cleanEmail = email.toLowerCase().trim();
+  const user = await UserModel.findOne({ email: cleanEmail }).exec();
+
+  // Always return success to prevent email enumeration attacks
+  // But only send email if user exists
+  if (user) {
+    const token = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await PasswordResetTokenModel.create({
+      userId: user._id,
+      token,
+      expiresAt,
+    });
+
+    const baseUrl = process.env.APP_BASE_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
+    const { subject, html, text } = buildResetPasswordEmail(token, baseUrl);
+    const sent = await sendEmail({ to: user.email, subject, html, text });
+
+    if (!sent) {
+      console.error(`Failed to send password reset email to ${user.email}`);
+    }
+  }
+
+  // Return success regardless to prevent email enumeration
+  res.json({
+    ok: true,
+    message: "If an account with that email exists, we've sent a password reset link.",
   });
 });
 
