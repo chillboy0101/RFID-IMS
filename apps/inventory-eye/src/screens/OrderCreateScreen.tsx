@@ -489,21 +489,18 @@ export function OrderCreateScreen({ navigation }: Props) {
                 ))}
               </View>
             ) : (
-              <FlatList
-                scrollEnabled={false}
-                data={items}
-                keyExtractor={(i) => i._id}
-                ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-                renderItem={({ item }) => (
+              <View style={{ gap: 10 }}>
+                {items.map((item) => (
                   <ListRow
+                    key={item._id}
                     title={item.name}
                     subtitle={`SKU: ${item.sku}`}
                     meta={`Available: ${item.quantity}`}
                     right={<Badge label="Add" tone="primary" />}
                     onPress={() => addToCart(item)}
                   />
-                )}
-              />
+                ))}
+              </View>
             )}
           </Card>
         </ScrollView>
