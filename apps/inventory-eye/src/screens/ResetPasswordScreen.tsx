@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { AuthStackParamList } from "../navigation/types";
 import { AppButton, Card, ErrorText, MutedText, Screen, TextField, theme } from "../ui";
 import { apiRequest } from "../api/client";
+import { useSearchParams } from "../hooks/useSearchParams";
 
 type Props = NativeStackScreenProps<AuthStackParamList, "ResetPassword">;
 
@@ -12,9 +13,12 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
 
-  // Get token from route params (preferred) or from URL query string (web deep link)
-  const initialToken = route.params?.token ?? "";
-  const [token, setToken] = useState(initialToken);
+  // Use URL search params directly since it works reliably on web
+  const searchParams = useSearchParams();
+  const routeToken = route.params?.token;
+  const urlToken = searchParams?.token as string | undefined;
+  const token = urlToken ?? routeToken ?? "";
+
   const [email, setEmail] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -22,6 +26,7 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
   const [verifying, setVerifying] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [paramsLoaded, setParamsLoaded] = useState(false);
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -34,24 +39,25 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
 
   const logoUri = "https://vdlfulfilment.com/wp-content/uploads/2023/05/cropped-VDL-Logo-compositions-15-300x141.png";
 
-  // Extract token from URL on web deep link
+  // Track when search params have loaded
   useEffect(() => {
-    if (Platform.OS === "web" && typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const urlToken = params.get("token");
-      if (urlToken && !token) {
-        setToken(urlToken);
-      }
+    // Mark params as loaded once we have a non-empty search
+    if (Object.keys(searchParams).length > 0 || routeToken) {
+      setParamsLoaded(true);
     }
-  }, []); // Run once on mount
+  }, [searchParams, routeToken]);
 
-  // Verify token on mount
+  // Handle case where params loaded but no token provided
+  useEffect(() => {
+    if (paramsLoaded && !token && mountedRef.current) {
+      setVerifying(false);
+      setError("No reset token provided");
+    }
+  }, [paramsLoaded, token]);
+
+  // Verify token when we have one
   useEffect(() => {
     if (!token) {
-      if (mountedRef.current) {
-        setVerifying(false);
-        setError("No reset token provided");
-      }
       return;
     }
 
