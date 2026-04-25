@@ -42,9 +42,10 @@ export type MoreStackParamList = {
   VendorsEdit: { id: string };
   Reorders: undefined;
   ReordersCreate: undefined;
-  RfidScanner: undefined;
-  Receiving: undefined;
-  Putaway: undefined;
-  CycleCount: undefined;
+  SupplyChain: undefined;
+  PeopleData: undefined;
+  AdminHub: undefined;
+  RfidHub: undefined;
+  GateKeys: undefined;
   Integrations: undefined;
 };

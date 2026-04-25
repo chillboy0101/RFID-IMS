@@ -255,8 +255,9 @@ export function OrderCreateScreen({ navigation }: Props) {
       {error ? <ErrorText>{error}</ErrorText> : null}
 
       {isDesktopWeb ? (
-        <View style={{ flexDirection: "row", gap: theme.spacing.md, alignItems: "flex-start" }}>
-          <View style={{ flex: 1, minWidth: 0, gap: theme.spacing.md }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flex: 1 }} nestedScrollEnabled>
+          <View style={{ flexDirection: "row", gap: theme.spacing.md, alignItems: "stretch", flex: 1 }}>
+            <View style={{ flex: 1, minWidth: 0, gap: theme.spacing.md }}>
             <Card>
               <TextField
                 ref={searchRef}
@@ -422,11 +423,19 @@ export function OrderCreateScreen({ navigation }: Props) {
             </Card>
           </View>
         </View>
+        </ScrollView>
       ) : (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ gap: theme.spacing.md, paddingBottom: theme.spacing.lg + insets.bottom + 156, paddingTop: searchOverlayOpen ? overlaySpace : 0 }}
+          contentContainerStyle={{
+            gap: theme.spacing.md,
+            paddingBottom: theme.spacing.lg + insets.bottom + 156,
+            paddingTop: searchOverlayOpen ? overlaySpace : 0,
+            minHeight: height - insets.top - 100,
+            flexGrow: 1,
+          }}
           keyboardShouldPersistTaps="handled"
+          alwaysBounceVertical
         >
           <Card>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>

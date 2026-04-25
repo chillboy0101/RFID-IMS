@@ -24,18 +24,10 @@ export function MoreMenuScreen({ navigation }: Props) {
 
   return (
     <Screen title="More" scroll>
-      <ListRow title="Receiving" subtitle="Inbound receiving and tag assignment" onPress={() => navigation.navigate("Receiving")} />
-      <ListRow title="Putaway" subtitle="Move received stock to bins" onPress={() => navigation.navigate("Putaway")} />
-      <ListRow title="Cycle Count" subtitle="Location counts and variance" onPress={() => navigation.navigate("CycleCount")} />
-      <ListRow title="Branches and Users" subtitle="Switch active branch" onPress={() => navigation.navigate("Branches")} />
-      <ListRow title="Alerts" subtitle="Low stock, expiring soon, unusual movements" onPress={() => navigation.navigate("Alerts")} />
-      <ListRow title="Reports" subtitle="Stock levels and fulfillment" onPress={() => navigation.navigate("Reports")} />
-      <ListRow title="Feedback" subtitle="Send feedback and track status" onPress={() => navigation.navigate("Feedback")} />
-      <ListRow title="Progress" subtitle="Sessions and performance summary" onPress={() => navigation.navigate("Progress")} />
-      <ListRow title="Vendors" subtitle="Create, update, manage suppliers" onPress={() => navigation.navigate("Vendors")} />
-      <ListRow title="Reorders" subtitle="Create and manage reorder requests" onPress={() => navigation.navigate("Reorders")} />
-      <ListRow title="RFID Scanner" subtitle="Scanner hardware integration and test" onPress={() => navigation.navigate("RfidScanner")} />
-      {isAdmin ? <ListRow title="Import & Export" subtitle="Export/import data" onPress={() => navigation.navigate("Integrations")} /> : null}
+      <ListRow title="RFID Hub" subtitle="Receive, putaway, tag, count, exit scan" onPress={() => navigation.navigate("RfidHub")} />
+      <ListRow title="Supply Chain" subtitle="Vendors and reorder requests" onPress={() => navigation.navigate("SupplyChain")} />
+      <ListRow title="People & Data" subtitle="Branches, users, alerts, reports, feedback, progress" onPress={() => navigation.navigate("PeopleData")} />
+      {isAdmin ? <ListRow title="Admin" subtitle="Gate keys, import/export, all feedback" onPress={() => navigation.navigate("AdminHub")} /> : null}
       <ListRow
         title="Settings"
         subtitle="Account and app settings"

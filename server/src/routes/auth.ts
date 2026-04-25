@@ -11,6 +11,55 @@ import { sendEmail, buildResetPasswordEmail, buildVerificationEmail } from "../u
 
 const router = express.Router();
 
+// Dev-only: register a pre-verified user (bypasses email verification)
+// Use X-Dev-Secret: dev-secret header or ?secret=dev-secret query param
+router.post("/register-dev", async (req, res) => {
+  const secret = req.header("X-Dev-Secret") ?? req.query.secret ?? "";
+  const devSecret = process.env.DEV_BYPASS_SECRET ?? "dev-bypass-123";
+  if (secret !== devSecret) {
+    res.status(404).json({ ok: false, error: "Not found" });
+    return;
+  }
+  const { name, email, password } = req.body as {
+    name?: string;
+    email?: string;
+    password?: string;
+  };
+  if (!name || !email || !password) {
+    res.status(400).json({ ok: false, error: "Missing required fields" });
+    return;
+  }
+  const cleanEmail = email.toLowerCase().trim();
+  const existing = await UserModel.findOne({ email: cleanEmail }).exec();
+  if (existing) {
+    const ok = await bcrypt.compare(password, existing.passwordHash);
+    if (ok) {
+      existing.emailVerified = true;
+      await existing.save();
+      const jti = crypto.randomUUID();
+      const now = new Date();
+      await AuthSessionModel.create({
+        userId: existing._id.toString(),
+        jti,
+        createdAt: now,
+        lastSeenAt: now,
+      });
+      const token = signAccessToken({ id: existing._id.toString(), role: existing.role, jti });
+      res.json({ ok: true, token, user: { id: existing._id.toString(), name: existing.name, email: existing.email, role: existing.role } });
+      return;
+    }
+    res.status(409).json({ ok: false, error: "Email already in use" });
+    return;
+  }
+  const passwordHash = await bcrypt.hash(password, 12);
+  const user = await UserModel.create({ name: name.trim(), email: cleanEmail, passwordHash, emailVerified: true });
+  const jti = crypto.randomUUID();
+  const now = new Date();
+  await AuthSessionModel.create({ userId: user._id.toString(), jti, createdAt: now, lastSeenAt: now });
+  const token = signAccessToken({ id: user._id.toString(), role: user.role, jti });
+  res.json({ ok: true, token, user: { id: user._id.toString(), name: user.name, email: user.email, role: user.role } });
+});
+
 router.get("/", async (_req, res) => {
   res.json({
     ok: true,

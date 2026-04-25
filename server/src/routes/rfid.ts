@@ -2,8 +2,9 @@ import express from "express";
 import mongoose from "mongoose";
 
 import { requireAuth, requireRole, type AuthRequest } from "../middleware/auth.js";
-import { requireGateApiKey, requireGateTenant, type GateRequest } from "../middleware/gate.js";
+import { requireGateApiKey, requireGateTenant, generateKey, hashKey, type GateRequest } from "../middleware/gate.js";
 import { requireTenant, type TenantRequest } from "../middleware/tenant.js";
+import { GateApiKeyModel } from "../models/GateApiKey.js";
 import { ExitAuthorizationModel } from "../models/ExitAuthorization.js";
 import { InventoryItemModel, type InventoryItemDocument } from "../models/InventoryItem.js";
 import { InventoryLogModel } from "../models/InventoryLog.js";
@@ -98,16 +99,22 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
 router.use(requireAuth);
 router.use(requireTenant);
 
-router.get("/", async (_req, res) => {
-  res.json({
-    ok: true,
-    endpoints: {
-      ingest: "POST /rfid/events",
-    },
-  });
+router.get("/events/latest", async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const location = (req.query.location as string | undefined)?.trim();
+  const filter: Record<string, unknown> = { tenantId };
+  if (location) filter.location = location;
+
+  const event = await RfidEventModel.findOne(filter)
+    .sort({ observedAt: -1 })
+    .limit(1)
+    .exec();
+
+  if (!event) { res.json({ ok: true, event: null }); return; }
+  res.json({ ok: true, event });
 });
 
-router.post("/events", async (req: TenantRequest, res) => {
+router.get("/events", async (req: TenantRequest, res) => {
   const tenantId = req.tenantId as string;
   const auth = req.auth;
   if (!auth) {
@@ -308,6 +315,91 @@ router.get("/exit-authorizations", requireRole("manager", "admin"), async (req: 
 
   const docs = await ExitAuthorizationModel.find(filter).sort({ createdAt: -1 }).limit(500).exec();
   res.json({ ok: true, authorizations: docs });
+});
+
+// ─── Gate API Key Management (admin only) ─────────────────────────────────────
+
+/** List all gate API keys for the tenant (never returns the raw key) */
+router.get("/gate-keys", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const docs = await GateApiKeyModel
+    .find({ tenantId })
+    .sort({ createdAt: -1 })
+    .select("name keyPrefix locationHint lastSeenAt lastSeenSource expiresAt revokedAt createdAt")
+    .exec();
+  res.json({ ok: true, keys: docs });
+});
+
+/** Create a new gate API key. Returns the raw key ONCE — store it securely. */
+router.post("/gate-keys", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const auth = req.auth;
+  if (!auth) { res.status(401).json({ ok: false, error: "Unauthorized" }); return; }
+
+  const { name, locationHint, minutes } = req.body as {
+    name?: string;
+    locationHint?: string;
+    minutes?: number;
+  };
+
+  if (!name || !String(name).trim()) {
+    res.status(400).json({ ok: false, error: "name is required" });
+    return;
+  }
+
+  const { raw, prefix, hash } = generateKey();
+  const expiresAt = minutes
+    ? new Date(Date.now() + Math.min(43200, Math.max(1, Number(minutes))) * 60 * 1000)
+    : undefined;
+
+  const doc = await GateApiKeyModel.create({
+    tenantId,
+    name: String(name).trim(),
+    keyPrefix: prefix,
+    keyHash: hash,
+    createdByUserId: auth.id,
+    locationHint: locationHint ? String(locationHint).trim() : undefined,
+    expiresAt,
+  });
+
+  res.status(201).json({
+    ok: true,
+    // The raw key is only returned here — it cannot be recovered
+    key: raw,
+    keyPrefix: prefix,
+    keyDoc: {
+      _id: doc._id,
+      name: doc.name,
+      keyPrefix: doc.keyPrefix,
+      locationHint: doc.locationHint,
+      expiresAt: doc.expiresAt,
+      createdAt: doc.createdAt,
+    },
+  });
+});
+
+/** Revoke a gate API key immediately */
+router.delete("/gate-keys/:id", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const { id } = req.params;
+
+  if (!mongoose.isValidObjectId(id)) {
+    res.status(400).json({ ok: false, error: "Invalid key ID" });
+    return;
+  }
+
+  const doc = await GateApiKeyModel.findOneAndUpdate(
+    { _id: id, tenantId, revokedAt: { $exists: false } },
+    { $set: { revokedAt: new Date() } },
+    { new: true }
+  ).exec();
+
+  if (!doc) {
+    res.status(404).json({ ok: false, error: "Key not found or already revoked" });
+    return;
+  }
+
+  res.json({ ok: true, revoked: { _id: doc._id, name: doc.name, revokedAt: doc.revokedAt } });
 });
 
 export default router;

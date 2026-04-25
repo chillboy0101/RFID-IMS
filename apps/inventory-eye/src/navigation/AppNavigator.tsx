@@ -39,10 +39,11 @@ import { VendorsEditScreen } from "../screens/VendorsEditScreen";
 import { ReordersScreen } from "../screens/ReordersScreen";
 import { ReorderCreateScreen } from "../screens/ReorderCreateScreen";
 import { IntegrationsScreen } from "../screens/IntegrationsScreen";
-import { RfidScannerScreen } from "../screens/RfidScannerScreen";
-import { ReceivingScreen } from "../screens/ReceivingScreen";
-import { PutawayScreen } from "../screens/PutawayScreen";
-import { CycleCountScreen } from "../screens/CycleCountScreen";
+import { RfidHubScreen } from "../screens/RfidHubScreen";
+import { SupplyChainScreen } from "../screens/SupplyChainScreen";
+import { PeopleDataScreen } from "../screens/PeopleDataScreen";
+import { AdminHubScreen } from "../screens/AdminHubScreen";
+import { GateKeysScreen } from "../screens/GateKeysScreen";
 
 import { AppButton, Badge, FullScreenLoader, shadow, theme, useTheme } from "../ui";
 
@@ -84,41 +85,25 @@ function EnterpriseTabBar({ state, descriptors, navigation }: BottomTabBarProps)
     if (nestedName === "AdminFeedback") return "More/Feedback";
     if (nestedName === "VendorsCreate" || nestedName === "VendorsEdit") return "More/Vendors";
     if (nestedName === "ReordersCreate") return "More/Reorders";
-    if (nestedName === "Receiving") return "More/Receiving";
-    if (nestedName === "Putaway") return "More/Putaway";
-    if (nestedName === "CycleCount") return "More/CycleCount";
     return `More/${nestedName}`;
   })();
 
   const activeKey = activeTab?.name === "More" ? moreActiveKey : activeTab?.name;
 
-  const sidebarLinks = [
+  const sidebarLinks: Array<{ title: string; icon?: string; match: string; onPress: () => void }> = [
     { title: "Dashboard", icon: "speedometer-outline", match: "Dashboard", onPress: () => (navigation as any).navigate("Dashboard") },
     { title: "Inventory", icon: "cube-outline", match: "Inventory", onPress: () => (navigation as any).navigate("Inventory") },
     { title: "Fulfilment Orders", icon: "receipt-outline", match: "Orders", onPress: () => (navigation as any).navigate("Orders") },
-    { title: "Receiving", icon: "download-outline", match: "More/Receiving", onPress: () => (navigation as any).navigate("More", { screen: "Receiving" }) },
-    { title: "Putaway", icon: "file-tray-full-outline", match: "More/Putaway", onPress: () => (navigation as any).navigate("More", { screen: "Putaway" }) },
-    { title: "Cycle Count", icon: "checkmark-done-outline", match: "More/CycleCount", onPress: () => (navigation as any).navigate("More", { screen: "CycleCount" }) },
-    { title: "Branches and Users", icon: "business-outline", match: "More/Branches", onPress: () => (navigation as any).navigate("More", { screen: "Branches" }) },
-    { title: "Alerts", icon: "alert-circle-outline", match: "More/Alerts", onPress: () => (navigation as any).navigate("More", { screen: "Alerts" }) },
-    { title: "Reports", icon: "bar-chart-outline", match: "More/Reports", onPress: () => (navigation as any).navigate("More", { screen: "Reports" }) },
-    { title: "Feedback", icon: "chatbox-ellipses-outline", match: "More/Feedback", onPress: () => (navigation as any).navigate("More", { screen: "Feedback" }) },
-    { title: "Progress", icon: "analytics-outline", match: "More/Progress", onPress: () => (navigation as any).navigate("More", { screen: "Progress" }) },
-    { title: "Vendors", icon: "people-outline", match: "More/Vendors", onPress: () => (navigation as any).navigate("More", { screen: "Vendors" }) },
-    { title: "Reorders", icon: "repeat-outline", match: "More/Reorders", onPress: () => (navigation as any).navigate("More", { screen: "Reorders" }) },
-    { title: "RFID Scanner", icon: "radio-outline", match: "More/RfidScanner", onPress: () => (navigation as any).navigate("More", { screen: "RfidScanner" }) },
-    ...(isAdmin
-      ? ([
-          {
-            title: "Import & Export",
-            icon: "swap-horizontal-outline",
-            match: "More/Integrations",
-            onPress: () => (navigation as any).navigate("More", { screen: "Integrations" }),
-          },
-        ] as const)
-      : []),
+    { title: "RFID Hub", icon: "radio-outline", match: "More/RfidHub", onPress: () => (navigation as any).navigate("More", { screen: "RfidHub" }) },
+    { title: "Supply Chain", icon: "swap-horizontal-outline", match: "More/SupplyChain", onPress: () => (navigation as any).navigate("More", { screen: "SupplyChain" }) },
+    { title: "People & Data", icon: "people-outline", match: "More/PeopleData", onPress: () => (navigation as any).navigate("More", { screen: "PeopleData" }) },
     { title: "Settings", icon: "settings-outline", match: "Settings", onPress: () => (navigation as any).navigate("Settings") },
-  ] as const;
+    ...(isAdmin
+      ? [
+          { title: "Admin", icon: "shield-checkmark-outline", match: "More/AdminHub", onPress: () => (navigation as any).navigate("More", { screen: "AdminHub" }) },
+        ]
+      : []),
+  ];
 
   return (
     <View
@@ -246,8 +231,7 @@ function EnterpriseTabBar({ state, descriptors, navigation }: BottomTabBarProps)
           >
             <View style={{ flexGrow: 1, gap: isCompactSidebar ? 10 : 12 }}>
               <View style={{ flexGrow: 1, gap: isCompactSidebar ? 2 : 4 }}>
-                {sidebarLinks.map((l) => (
-                  (() => {
+                {sidebarLinks.map((l, idx) => {
                     const isActive = activeKey === l.match;
                     const itemBg = isActive ? "#0B0F17" : "transparent";
                     const itemBorder = isActive ? "#0B0F17" : "transparent";
@@ -255,8 +239,8 @@ function EnterpriseTabBar({ state, descriptors, navigation }: BottomTabBarProps)
                     const textColor = isActive ? "#fff" : theme.colors.text;
 
                     return (
+                  <View key={l.title}>
                   <Pressable
-                    key={l.title}
                     onPress={l.onPress}
                     style={(state) => {
                       const pressed = state.pressed;
@@ -288,9 +272,9 @@ function EnterpriseTabBar({ state, descriptors, navigation }: BottomTabBarProps)
                       {l.title}
                     </Text>
                   </Pressable>
+                  </View>
                     );
-                  })()
-                ))}
+                  })}
               </View>
 
               <View
@@ -514,21 +498,21 @@ function MoreNavigator() {
   return (
     <MoreStack.Navigator screenOptions={{ headerShown: false }}>
       <MoreStack.Screen name="MoreMenu" component={MoreMenuScreen} />
-      <MoreStack.Screen name="Receiving" component={ReceivingScreen} />
-      <MoreStack.Screen name="Putaway" component={PutawayScreen} />
-      <MoreStack.Screen name="CycleCount" component={CycleCountScreen} />
-      <MoreStack.Screen name="Branches" component={AdminBranchesScreen} />
-      <MoreStack.Screen name="Alerts" component={AlertsScreen} />
-      <MoreStack.Screen name="Reports" component={ReportsScreen} />
-      <MoreStack.Screen name="Feedback" component={FeedbackScreen} />
-      <MoreStack.Screen name="AdminFeedback" component={AdminFeedbackScreen} />
-      <MoreStack.Screen name="Progress" component={ProgressScreen} />
       <MoreStack.Screen name="Vendors" component={VendorsScreen} />
       <MoreStack.Screen name="VendorsCreate" component={VendorsCreateScreen} />
       <MoreStack.Screen name="VendorsEdit" component={VendorsEditScreen} />
       <MoreStack.Screen name="Reorders" component={ReordersScreen} />
       <MoreStack.Screen name="ReordersCreate" component={ReorderCreateScreen} />
-      <MoreStack.Screen name="RfidScanner" component={RfidScannerScreen} />
+      <MoreStack.Screen name="Feedback" component={FeedbackScreen} />
+      <MoreStack.Screen name="Branches" component={AdminBranchesScreen} />
+      <MoreStack.Screen name="Alerts" component={AlertsScreen} />
+      <MoreStack.Screen name="Reports" component={ReportsScreen} />
+      <MoreStack.Screen name="Progress" component={ProgressScreen} />
+      <MoreStack.Screen name="RfidHub" component={RfidHubScreen} />
+      <MoreStack.Screen name="SupplyChain" component={SupplyChainScreen} />
+      <MoreStack.Screen name="PeopleData" component={PeopleDataScreen} />
+      <MoreStack.Screen name="AdminHub" component={AdminHubScreen} />
+      <MoreStack.Screen name="GateKeys" component={GateKeysScreen} />
       <MoreStack.Screen name="Integrations" component={IntegrationsScreen} />
     </MoreStack.Navigator>
   );
