@@ -26,6 +26,9 @@ import { OrderDetailScreen } from "../screens/OrderDetailScreen";
 import { OrderCreateScreen } from "../screens/OrderCreateScreen";
 import { MoreMenuScreen } from "../screens/MoreMenuScreen";
 import { BranchSelectGateScreen } from "../screens/BranchSelectGateScreen";
+import { ReceivingScreen } from "../screens/ReceivingScreen";
+import { PutawayScreen } from "../screens/PutawayScreen";
+import { CycleCountScreen } from "../screens/CycleCountScreen";
 import { AlertsScreen } from "../screens/AlertsScreen";
 import { ReportsScreen } from "../screens/ReportsScreen";
 import { FeedbackScreen } from "../screens/FeedbackScreen";
@@ -39,6 +42,7 @@ import { VendorsEditScreen } from "../screens/VendorsEditScreen";
 import { ReordersScreen } from "../screens/ReordersScreen";
 import { ReorderCreateScreen } from "../screens/ReorderCreateScreen";
 import { IntegrationsScreen } from "../screens/IntegrationsScreen";
+import { RfidScannerScreen } from "../screens/RfidScannerScreen";
 import { RfidHubScreen } from "../screens/RfidHubScreen";
 import { SupplyChainScreen } from "../screens/SupplyChainScreen";
 import { PeopleDataScreen } from "../screens/PeopleDataScreen";
@@ -498,17 +502,22 @@ function MoreNavigator() {
   return (
     <MoreStack.Navigator screenOptions={{ headerShown: false }}>
       <MoreStack.Screen name="MoreMenu" component={MoreMenuScreen} />
+      <MoreStack.Screen name="Receiving" component={ReceivingScreen} />
+      <MoreStack.Screen name="Putaway" component={PutawayScreen} />
+      <MoreStack.Screen name="CycleCount" component={CycleCountScreen} />
       <MoreStack.Screen name="Vendors" component={VendorsScreen} />
       <MoreStack.Screen name="VendorsCreate" component={VendorsCreateScreen} />
       <MoreStack.Screen name="VendorsEdit" component={VendorsEditScreen} />
       <MoreStack.Screen name="Reorders" component={ReordersScreen} />
       <MoreStack.Screen name="ReordersCreate" component={ReorderCreateScreen} />
       <MoreStack.Screen name="Feedback" component={FeedbackScreen} />
+      <MoreStack.Screen name="AdminFeedback" component={AdminFeedbackScreen} />
       <MoreStack.Screen name="Branches" component={AdminBranchesScreen} />
       <MoreStack.Screen name="Alerts" component={AlertsScreen} />
       <MoreStack.Screen name="Reports" component={ReportsScreen} />
       <MoreStack.Screen name="Progress" component={ProgressScreen} />
       <MoreStack.Screen name="RfidHub" component={RfidHubScreen} />
+      <MoreStack.Screen name="RfidScanner" component={RfidScannerScreen} />
       <MoreStack.Screen name="SupplyChain" component={SupplyChainScreen} />
       <MoreStack.Screen name="PeopleData" component={PeopleDataScreen} />
       <MoreStack.Screen name="AdminHub" component={AdminHubScreen} />
@@ -590,15 +599,11 @@ export function AppNavigator() {
         : [],
     config: {
       screens: {
-        Auth: {
-          screens: {
-            Login: "login",
-            Register: "register",
-            VerifyEmail: "verify-email",
-            ForgotPassword: "forgot-password",
-            ResetPassword: "reset-password",
-          },
-        },
+        Login: "login",
+        Register: "register",
+        VerifyEmail: "verify-email",
+        ForgotPassword: "forgot-password",
+        ResetPassword: "reset-password",
         Dashboard: "",
         Inventory: {
           screens: {

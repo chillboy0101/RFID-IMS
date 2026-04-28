@@ -31,6 +31,9 @@ export type OrdersStackParamList = {
 
 export type MoreStackParamList = {
   MoreMenu: undefined;
+  Receiving: undefined;
+  Putaway: undefined;
+  CycleCount: undefined;
   Branches: undefined;
   Alerts: undefined;
   Reports: undefined;
@@ -46,6 +49,7 @@ export type MoreStackParamList = {
   PeopleData: undefined;
   AdminHub: undefined;
   RfidHub: undefined;
+  RfidScanner: undefined;
   GateKeys: undefined;
   Integrations: undefined;
 };

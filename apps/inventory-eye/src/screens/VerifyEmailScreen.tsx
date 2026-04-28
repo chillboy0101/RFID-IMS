@@ -90,7 +90,7 @@ export function VerifyEmailScreen({ route, navigation }: Props) {
               </>
             ) : (
               <>
-                <Text style={[theme.typography.h3, { color: theme.colors.error, marginBottom: 12, textAlign: "center" }]}>
+                <Text style={[theme.typography.h3, { color: theme.colors.danger, marginBottom: 12, textAlign: "center" }]}>
                   Verification Failed
                 </Text>
                 <ErrorText style={{ textAlign: "center", marginBottom: 16 }}>

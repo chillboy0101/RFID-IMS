@@ -63,7 +63,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
           <Card style={{ width: "100%", maxWidth: isDesktopWeb ? 460 : 520 }}>
             <View style={{ alignItems: "center", paddingVertical: 16 }}>
               <Text style={{ fontSize: 48, marginBottom: 16 }}>✉️</Text>
-              <Text style={[theme.typography.heading, { color: theme.colors.text, textAlign: "center", marginBottom: 8 }]}>
+              <Text style={[theme.typography.h2, { color: theme.colors.text, textAlign: "center", marginBottom: 8 }]}>
                 Check your email
               </Text>
               <Text style={{ color: theme.colors.textMuted, textAlign: "center", lineHeight: 22 }}>
@@ -103,7 +103,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
           }}
         >
           <Card>
-            <Text style={[theme.typography.heading, { color: theme.colors.text, marginBottom: 8 }]}>
+            <Text style={[theme.typography.h2, { color: theme.colors.text, marginBottom: 8 }]}>
               Forgot Password?
             </Text>
             <MutedText style={{ marginBottom: 16 }}>

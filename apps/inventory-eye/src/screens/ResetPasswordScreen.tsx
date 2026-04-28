@@ -113,7 +113,7 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
           <Card style={{ width: "100%", maxWidth: isDesktopWeb ? 460 : 520 }}>
             <View style={{ alignItems: "center", paddingVertical: 32 }}>
               <Text style={{ fontSize: 32, marginBottom: 16 }}>🔐</Text>
-              <Text style={[theme.typography.heading, { color: theme.colors.text }]}>Verifying reset link...</Text>
+              <Text style={[theme.typography.h2, { color: theme.colors.text }]}>Verifying reset link...</Text>
             </View>
           </Card>
         </View>
@@ -132,7 +132,7 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
           <Card style={{ width: "100%", maxWidth: isDesktopWeb ? 460 : 520 }}>
             <View style={{ alignItems: "center", paddingVertical: 16 }}>
               <Text style={{ fontSize: 48, marginBottom: 16 }}>✅</Text>
-              <Text style={[theme.typography.heading, { color: theme.colors.text, textAlign: "center", marginBottom: 8 }]}>
+              <Text style={[theme.typography.h2, { color: theme.colors.text, textAlign: "center", marginBottom: 8 }]}>
                 Password Reset Complete
               </Text>
               <Text style={{ color: theme.colors.textMuted, textAlign: "center", lineHeight: 22, marginBottom: 16 }}>
@@ -163,7 +163,7 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
           <Card style={{ width: "100%", maxWidth: isDesktopWeb ? 460 : 520 }}>
             <View style={{ alignItems: "center", paddingVertical: 16 }}>
               <Text style={{ fontSize: 48, marginBottom: 16 }}>❌</Text>
-              <Text style={[theme.typography.heading, { color: theme.colors.text, textAlign: "center", marginBottom: 8 }]}>
+              <Text style={[theme.typography.h2, { color: theme.colors.text, textAlign: "center", marginBottom: 8 }]}>
                 {error === "No reset token provided" ? "Invalid Reset Link" : "Reset Failed"}
               </Text>
               <Text style={{ color: theme.colors.textMuted, textAlign: "center", lineHeight: 22, marginBottom: 16 }}>
@@ -204,7 +204,7 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
           }}
         >
           <Card>
-            <Text style={[theme.typography.heading, { color: theme.colors.text, marginBottom: 8 }]}>
+            <Text style={[theme.typography.h2, { color: theme.colors.text, marginBottom: 8 }]}>
               Set New Password
             </Text>
             {email && (
@@ -229,7 +229,7 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
               onChangeText={setConfirmPassword}
               secureTextEntry
               placeholder="Re-enter your password"
-              error={confirmPassword.length > 0 && !passwordsMatch ? "Passwords do not match" : undefined}
+              errorText={confirmPassword.length > 0 && !passwordsMatch ? "Passwords do not match" : undefined}
             />
 
             <View style={{ height: 16 }} />

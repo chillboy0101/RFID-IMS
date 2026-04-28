@@ -18,6 +18,7 @@ import vendorsRouter from "./routes/vendors.js";
 import reordersRouter from "./routes/reorders.js";
 import integrationsRouter from "./routes/integrations.js";
 import tenantsRouter from "./routes/tenants.js";
+import { resolveAppBaseUrl } from "./utils/appUrl.js";
 
 dotenv.config();
 
@@ -186,6 +187,33 @@ app.get("/", async (_req: Request, res: Response) => {
   res.json({
     ok: true,
     message: "Inventory Eye API running. See /health",
+  });
+});
+
+app.get("/verify-email", async (req: Request, res: Response) => {
+  const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
+  const appBaseUrl = resolveAppBaseUrl(req);
+
+  if (appBaseUrl) {
+    res.redirect(302, `${appBaseUrl}/verify-email${token ? `?token=${encodeURIComponent(token)}` : ""}`);
+    return;
+  }
+
+  res.redirect(302, `/auth/verify-email${token ? `?token=${encodeURIComponent(token)}` : ""}`);
+});
+
+app.get("/reset-password", async (req: Request, res: Response) => {
+  const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
+  const appBaseUrl = resolveAppBaseUrl(req);
+
+  if (appBaseUrl) {
+    res.redirect(302, `${appBaseUrl}/reset-password${token ? `?token=${encodeURIComponent(token)}` : ""}`);
+    return;
+  }
+
+  res.status(500).json({
+    ok: false,
+    error: "Password reset UI is not configured. Set APP_BASE_URL or CORS_ORIGIN to your web app origin.",
   });
 });
 

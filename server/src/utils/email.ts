@@ -1,6 +1,14 @@
 import nodemailer from "nodemailer";
 
-function createTransporter() {
+type MailTransportConfig = {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  pass: string;
+};
+
+function getTransportConfigs(): MailTransportConfig[] {
   const host = process.env.SMTP_HOST;
   const port = Number(process.env.SMTP_PORT ?? 587);
   const secure = String(process.env.SMTP_SECURE ?? "false").toLowerCase() === "true";
@@ -8,18 +16,56 @@ function createTransporter() {
   const pass = process.env.SMTP_PASS;
 
   if (!host || !user || !pass) {
-    return null;
+    return [];
   }
 
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: {
+  const configs: MailTransportConfig[] = [{ host, port, secure, user, pass }];
+  const isGmailHost = /(^|\.)gmail\.com$/i.test(host.trim());
+
+  if (isGmailHost && (port !== 465 || !secure)) {
+    configs.push({
+      host,
+      port: 465,
+      secure: true,
       user,
       pass,
+    });
+  }
+
+  return configs.filter(
+    (config, index, items) =>
+      index ===
+      items.findIndex(
+        (item) =>
+          item.host === config.host &&
+          item.port === config.port &&
+          item.secure === config.secure &&
+          item.user === config.user
+      )
+  );
+}
+
+function createTransporter(config: MailTransportConfig) {
+  return nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    auth: {
+      user: config.user,
+      pass: config.pass,
     },
   });
+}
+
+function resolveFromAddress(): string {
+  const configured = (process.env.SMTP_FROM ?? "").trim();
+  const smtpUser = (process.env.SMTP_USER ?? "").trim();
+
+  if (!configured || /@example\.com>?$/i.test(configured)) {
+    return smtpUser || "noreply@rfid-ims.example.com";
+  }
+
+  return configured;
 }
 
 interface SendEmailOptions {
@@ -30,28 +76,36 @@ interface SendEmailOptions {
 }
 
 export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
-  const transporter = createTransporter();
-  if (!transporter) {
+  const configs = getTransportConfigs();
+  if (!configs.length) {
     console.error("Email transporter not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS in environment.");
     return false;
   }
 
-  const from = process.env.SMTP_FROM ?? "noreply@rfid-ims.example.com";
+  const from = resolveFromAddress();
+  let lastError: unknown = null;
 
-  try {
-    await transporter.sendMail({
-      from,
-      to: options.to,
-      subject: options.subject,
-      html: options.html,
-      text: options.text ?? options.html.replace(/<[^>]*>/g, ""),
-    });
-    console.log(`Email sent successfully to ${options.to}`);
-    return true;
-  } catch (err) {
-    console.error("Failed to send email:", err);
-    return false;
+  for (const config of configs) {
+    const transporter = createTransporter(config);
+
+    try {
+      await transporter.sendMail({
+        from,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text ?? options.html.replace(/<[^>]*>/g, ""),
+      });
+      console.log(`Email sent successfully to ${options.to} via ${config.host}:${config.port} secure=${config.secure}`);
+      return true;
+    } catch (err) {
+      lastError = err;
+      console.error(`Failed to send email via ${config.host}:${config.port} secure=${config.secure}:`, err);
+    }
   }
+
+  console.error("All email delivery attempts failed.", lastError);
+  return false;
 }
 
 export function buildResetPasswordEmail(token: string, baseUrl: string): { subject: string; html: string; text: string } {

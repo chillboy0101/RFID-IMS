@@ -7,6 +7,7 @@ import { requireAuth, signAccessToken, type AuthRequest } from "../middleware/au
 import { AuthSessionModel } from "../models/AuthSession.js";
 import { UserModel } from "../models/User.js";
 import { PasswordResetTokenModel } from "../models/PasswordResetToken.js";
+import { resolveAppBaseUrl } from "../utils/appUrl.js";
 import { sendEmail, buildResetPasswordEmail, buildVerificationEmail } from "../utils/email.js";
 
 const router = express.Router();
@@ -95,6 +96,9 @@ router.post("/register", async (req, res) => {
   const session = await mongoose.startSession();
   try {
     let userId: string | null = null;
+    let verificationEmail:
+      | { to: string; subject: string; html: string; text: string }
+      | null = null;
 
     await session.withTransaction(async () => {
       const user = await UserModel.create(
@@ -129,14 +133,9 @@ router.post("/register", async (req, res) => {
         { session }
       );
 
-      // Send verification email
-      const baseUrl = process.env.APP_BASE_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
+      const baseUrl = resolveAppBaseUrl(req) ?? `http://localhost:${process.env.PORT ?? 4000}`;
       const { subject, html, text } = buildVerificationEmail(token, baseUrl);
-      
-      // Fire and forget - don't fail registration if email fails
-      sendEmail({ to: cleanEmail, subject, html, text }).catch((err) => {
-        console.error("Failed to send verification email:", err);
-      });
+      verificationEmail = { to: cleanEmail, subject, html, text };
     });
 
     if (!userId) {
@@ -144,11 +143,15 @@ router.post("/register", async (req, res) => {
       return;
     }
 
-    // Return success - user must verify email before logging in
+    const emailSent = verificationEmail ? await sendEmail(verificationEmail) : false;
+
     res.status(201).json({
       ok: true,
-      message: "Account created. Please check your email to verify your account before logging in.",
+      message: emailSent
+        ? "Account created. Please check your email to verify your account before logging in."
+        : "Account created, but we could not send the verification email just now. Please use resend verification from the login flow.",
       email: cleanEmail,
+      emailSent,
     });
   } catch (e) {
     res.status(400).json({ ok: false, error: e instanceof Error ? e.message : "Registration failed" });
@@ -401,7 +404,7 @@ router.post("/forgot-password", async (req, res) => {
       expiresAt,
     });
 
-    const baseUrl = process.env.APP_BASE_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
+    const baseUrl = resolveAppBaseUrl(req) ?? `http://localhost:${process.env.PORT ?? 4000}`;
     const { subject, html, text } = buildResetPasswordEmail(token, baseUrl);
     const sent = await sendEmail({ to: user.email, subject, html, text });
 
@@ -494,7 +497,7 @@ router.post("/resend-verification", async (req, res) => {
   });
 
   // Send verification email
-  const baseUrl = process.env.APP_BASE_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
+  const baseUrl = resolveAppBaseUrl(req) ?? `http://localhost:${process.env.PORT ?? 4000}`;
   const { subject, html, text } = buildVerificationEmail(token, baseUrl);
 
   const sent = await sendEmail({ to: cleanEmail, subject, html, text });
