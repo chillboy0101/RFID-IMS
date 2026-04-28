@@ -122,7 +122,11 @@ export function ForgotPasswordScreen({ navigation }: Props) {
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
               keyboardType="email-address"
+              textContentType="emailAddress"
+              autoComplete="email"
               placeholder="you@example.com"
             />
 

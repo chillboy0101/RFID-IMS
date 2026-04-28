@@ -267,6 +267,10 @@ export function RecoverAccountScreen({ route, navigation }: Props) {
               onChangeText={setOtp}
               keyboardType="number-pad"
               autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              textContentType="oneTimeCode"
+              autoComplete="one-time-code"
               placeholder="6-digit code"
             />
 
@@ -277,6 +281,11 @@ export function RecoverAccountScreen({ route, navigation }: Props) {
               value={password}
               onChangeText={setPassword}
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              textContentType="newPassword"
+              autoComplete="new-password"
               placeholder="At least 8 characters"
             />
 
@@ -287,6 +296,11 @@ export function RecoverAccountScreen({ route, navigation }: Props) {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              textContentType="newPassword"
+              autoComplete="new-password"
               placeholder="Re-enter your password"
               errorText={confirmPassword.length > 0 && !passwordsMatch ? "Passwords do not match" : undefined}
             />

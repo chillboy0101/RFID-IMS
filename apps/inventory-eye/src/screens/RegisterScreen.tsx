@@ -89,10 +89,16 @@ export function RegisterScreen({ navigation }: Props) {
               </>
             ) : (
               <>
-                <MutedText style={{ textAlign: "center", marginBottom: 16 }}>
-                  We&apos;ll send a verification email after your account is created.
-                </MutedText>
-                <TextField label="Name" value={name} onChangeText={setName} placeholder="Full name" />
+                <TextField
+                  label="Name"
+                  value={name}
+                  onChangeText={setName}
+                  autoCorrect={false}
+                  spellCheck={false}
+                  textContentType="name"
+                  autoComplete="name"
+                  placeholder="Full name"
+                />
 
                 <View style={{ height: 12 }} />
 
@@ -101,7 +107,11 @@ export function RegisterScreen({ navigation }: Props) {
                   value={email}
                   onChangeText={setEmail}
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
                   keyboardType="email-address"
+                  textContentType="emailAddress"
+                  autoComplete="email"
                   placeholder="you@example.com"
                 />
 
@@ -112,6 +122,11 @@ export function RegisterScreen({ navigation }: Props) {
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  textContentType="newPassword"
+                  autoComplete="new-password"
                   placeholder="At least 6 characters"
                 />
 

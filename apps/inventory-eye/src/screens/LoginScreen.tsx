@@ -1,4 +1,5 @@
-import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { Image, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
@@ -13,6 +14,7 @@ export function LoginScreen({ navigation }: Props) {
   const { signIn, authLastError } = useContext(AuthContext);
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
+  const isWeb = Platform.OS === "web";
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -30,10 +32,32 @@ export function LoginScreen({ navigation }: Props) {
   const [showResend, setShowResend] = useState(false);
   const [resending, setResending] = useState(false);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [credentialAssistEnabled, setCredentialAssistEnabled] = useState(!isWeb);
+  const [formResetKey, setFormResetKey] = useState(0);
 
   const logoUri = "https://vdlfulfilment.com/wp-content/uploads/2023/05/cropped-VDL-Logo-compositions-15-300x141.png";
 
   const canSubmit = useMemo(() => email.trim().length > 0 && password.length > 0, [email, password]);
+  const lockCredentialFields = isWeb && !credentialAssistEnabled;
+
+  const enableCredentialAssist = useCallback(() => {
+    if (Platform.OS === "web") {
+      setCredentialAssistEnabled(true);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setCredentialAssistEnabled(Platform.OS !== "web");
+      setFormResetKey((value) => value + 1);
+      setEmail("");
+      setPassword("");
+      setError(null);
+      setShowResend(false);
+      setResendMessage(null);
+      return undefined;
+    }, [])
+  );
 
   async function onSubmit() {
     if (!canSubmit || loading) return;
@@ -88,7 +112,11 @@ export function LoginScreen({ navigation }: Props) {
         <View style={{ height: 18 }} />
 
         <Form
+          key={`login-form-${formResetKey}`}
           style={{ width: "100%", maxWidth: isDesktopWeb ? 460 : 520 }}
+          autoComplete={credentialAssistEnabled ? "on" : "off"}
+          onMouseDownCapture={enableCredentialAssist}
+          onTouchStartCapture={enableCredentialAssist}
           onSubmit={(e: any) => {
             e?.preventDefault?.();
             onSubmit();
@@ -105,14 +133,33 @@ export function LoginScreen({ navigation }: Props) {
               label="Email"
               value={email}
               onChangeText={setEmail}
+              onFocus={enableCredentialAssist}
               autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
               keyboardType="email-address"
+              textContentType="username"
+              autoComplete={credentialAssistEnabled ? "username" : "off"}
               placeholder="you@example.com"
+              {...(lockCredentialFields ? ({ readOnly: true } as any) : null)}
             />
 
             <View style={{ height: 12 }} />
 
-            <TextField label="Password" value={password} onChangeText={setPassword} secureTextEntry placeholder="Password" />
+            <TextField
+              label="Password"
+              value={password}
+              onChangeText={setPassword}
+              onFocus={enableCredentialAssist}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              textContentType="password"
+              autoComplete={credentialAssistEnabled ? "current-password" : "off"}
+              placeholder="Password"
+              {...(lockCredentialFields ? ({ readOnly: true } as any) : null)}
+            />
 
             <View style={{ height: 12 }} />
 

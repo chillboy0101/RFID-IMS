@@ -217,6 +217,11 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
               value={password}
               onChangeText={setPassword}
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              textContentType="newPassword"
+              autoComplete="new-password"
               placeholder="At least 8 characters"
             />
 
@@ -227,6 +232,11 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              textContentType="newPassword"
+              autoComplete="new-password"
               placeholder="Re-enter your password"
               errorText={confirmPassword.length > 0 && !passwordsMatch ? "Passwords do not match" : undefined}
             />
