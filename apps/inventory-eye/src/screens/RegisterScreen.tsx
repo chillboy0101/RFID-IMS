@@ -24,15 +24,22 @@ export function RegisterScreen({ navigation }: Props) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   const logoUri = "https://vdlfulfilment.com/wp-content/uploads/2023/05/cropped-VDL-Logo-compositions-15-300x141.png";
+  const passwordsMatch = useMemo(() => password === confirmPassword, [password, confirmPassword]);
 
   const canSubmit = useMemo(
-    () => name.trim().length > 0 && email.trim().length > 0 && password.length >= 6,
-    [name, email, password]
+    () =>
+      name.trim().length > 0 &&
+      email.trim().length > 0 &&
+      password.length >= 6 &&
+      confirmPassword.length > 0 &&
+      passwordsMatch,
+    [name, email, password, confirmPassword, passwordsMatch]
   );
 
   async function onSubmit() {
@@ -51,6 +58,7 @@ export function RegisterScreen({ navigation }: Props) {
       setName("");
       setEmail("");
       setPassword("");
+      setConfirmPassword("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Registration failed");
     } finally {
@@ -67,6 +75,7 @@ export function RegisterScreen({ navigation }: Props) {
 
         <Form
           style={{ width: "100%", maxWidth: isDesktopWeb ? 520 : 520 }}
+          autoComplete="off"
           onSubmit={(e: any) => {
             e?.preventDefault?.();
             onSubmit();
@@ -128,6 +137,22 @@ export function RegisterScreen({ navigation }: Props) {
                   textContentType="newPassword"
                   autoComplete="new-password"
                   placeholder="At least 6 characters"
+                />
+
+                <View style={{ height: 12 }} />
+
+                <TextField
+                  label="Confirm Password"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  textContentType="newPassword"
+                  autoComplete="new-password"
+                  placeholder="Re-enter your password"
+                  errorText={confirmPassword.length > 0 && !passwordsMatch ? "Passwords do not match" : undefined}
                 />
 
                 <View style={{ height: 12 }} />
