@@ -332,7 +332,7 @@ export function OrderDetailScreen({ navigation, route }: Props) {
 
         {order?.status === "authorized" ? (
           <View style={{ marginTop: 12 }}>
-            <MutedText>Use RFID Hub > Exit to verify each tag or barcode as it leaves the gate. Those verified scans will move stock out and finish the order.</MutedText>
+            <MutedText>Use the RFID Hub exit step to verify each tag or barcode as it leaves the gate. Those verified scans will move stock out and finish the order.</MutedText>
           </View>
         ) : null}
       </Card>

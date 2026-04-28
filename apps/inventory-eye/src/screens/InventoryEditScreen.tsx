@@ -115,6 +115,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
   const initialRef = useRef<InventoryItem | null>(null);
 
   const title = id ? "Edit item" : "New item";
+  const stockLabel = id ? "On-hand quantity" : "Opening quantity";
 
   const nameError = showValidation && !name.trim() ? "Name is required" : undefined;
   const skuError = showValidation && !sku.trim() ? "SKU is required" : undefined;
@@ -320,6 +321,15 @@ export function InventoryEditScreen({ navigation, route }: Props) {
       />
       {error ? <ErrorText>{error}</ErrorText> : null}
 
+      <Card>
+        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>{id ? "Operational note" : "Create the SKU first"}</Text>
+        <MutedText>
+          {id
+            ? "Use this form for product master data and stock corrections. Use RFID Hub for per-unit receiving, tag assignment, gate authorization, and exit verification."
+            : "This form creates the product master record. After the item exists, receive the physical units and bind their RFID tags in RFID Hub so the warehouse flow stays traceable."}
+        </MutedText>
+      </Card>
+
       {isDesktopWeb ? (
         <>
           <View style={{ flexDirection: "row", gap: theme.spacing.md, alignItems: "flex-start" }}>
@@ -483,7 +493,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
             <View style={{ width: 380, gap: theme.spacing.md }}>
               <Card>
                 <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Stock</Text>
-                <TextField label="Quantity" value={quantity} onChangeText={setQuantity} keyboardType="numeric" errorText={quantityError} />
+                <TextField label={stockLabel} value={quantity} onChangeText={setQuantity} keyboardType="numeric" errorText={quantityError} />
                 <View style={{ height: 12 }} />
                 <TextField label="Reorder level" value={reorderLevel} onChangeText={setReorderLevel} keyboardType="numeric" errorText={reorderError} />
                 <View style={{ height: 12 }} />
@@ -603,7 +613,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
 
           <Card>
             <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Stock</Text>
-            <TextField label="Quantity" value={quantity} onChangeText={setQuantity} keyboardType="numeric" errorText={quantityError} />
+            <TextField label={stockLabel} value={quantity} onChangeText={setQuantity} keyboardType="numeric" errorText={quantityError} />
             <View style={{ height: 12 }} />
             <TextField label="Reorder level" value={reorderLevel} onChangeText={setReorderLevel} keyboardType="numeric" errorText={reorderError} />
             <View style={{ height: 12 }} />
