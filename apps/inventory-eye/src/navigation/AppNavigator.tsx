@@ -9,11 +9,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import { AuthContext } from "../auth/AuthContext";
+import { hasWebAuthBypassToken } from "../auth/authBypass";
 import { LoginScreen } from "../screens/LoginScreen";
 import { RegisterScreen } from "../screens/RegisterScreen";
 import { VerifyEmailScreen } from "../screens/VerifyEmailScreen";
 import { ForgotPasswordScreen } from "../screens/ForgotPasswordScreen";
 import { ResetPasswordScreen } from "../screens/ResetPasswordScreen";
+import { RecoverAccountScreen } from "../screens/RecoverAccountScreen";
 import { DashboardScreen } from "../screens/DashboardScreen";
 import { InventoryListScreen } from "../screens/InventoryListScreen";
 import { OrdersListScreen } from "../screens/OrdersListScreen";
@@ -471,6 +473,7 @@ function AuthNavigator() {
       <AuthStack.Screen name="VerifyEmail" component={VerifyEmailScreen} options={{ title: "Verify Email" }} />
       <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: "Forgot Password" }} />
       <AuthStack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ title: "Reset Password" }} />
+      <AuthStack.Screen name="RecoverAccount" component={RecoverAccountScreen} options={{ title: "Recover Account" }} />
     </AuthStack.Navigator>
   );
 }
@@ -587,6 +590,7 @@ function AppTabs() {
 
 export function AppNavigator() {
   const { loading, token, user, tenants, tenantsLoaded, tenantChosenThisSession, activeTenantId } = useContext(AuthContext);
+  const isAuthBypassRoute = Platform.OS === "web" && typeof window !== "undefined" ? hasWebAuthBypassToken() : false;
 
   if (loading) {
     return <FullScreenLoader />;
@@ -604,6 +608,7 @@ export function AppNavigator() {
         VerifyEmail: "verify-email",
         ForgotPassword: "forgot-password",
         ResetPassword: "reset-password",
+        RecoverAccount: "recover-account",
         Dashboard: "",
         Inventory: {
           screens: {
@@ -657,7 +662,7 @@ export function AppNavigator() {
 
   return (
     <NavigationContainer linking={Platform.OS === "web" ? (linking as any) : undefined}>
-      {token ? (
+      {token && !isAuthBypassRoute ? (
         mustChangePassword ? (
           <ForcePasswordChangeScreen />
         ) : !tenantsLoaded ? (

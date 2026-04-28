@@ -29,7 +29,7 @@ export function LoginScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [showResend, setShowResend] = useState(false);
   const [resending, setResending] = useState(false);
-  const [resendSuccess, setResendSuccess] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
 
   const logoUri = "https://vdlfulfilment.com/wp-content/uploads/2023/05/cropped-VDL-Logo-compositions-15-300x141.png";
 
@@ -40,7 +40,7 @@ export function LoginScreen({ navigation }: Props) {
     setLoading(true);
     setError(null);
     setShowResend(false);
-    setResendSuccess(false);
+    setResendMessage(null);
     try {
       await signIn(email.trim(), password);
     } catch (e) {
@@ -62,17 +62,19 @@ export function LoginScreen({ navigation }: Props) {
 
   async function onResendVerification() {
     setResending(true);
-    setResendSuccess(false);
+    setResendMessage(null);
     try {
-      await apiRequest<{ ok: true; message: string }>("/auth/resend-verification", {
+      const res = await apiRequest<{ ok: true; message: string }>("/auth/resend-verification", {
         method: "POST",
         timeoutMs: 25000,
         body: JSON.stringify({ email: email.trim() }),
       });
-      setResendSuccess(true);
+      setResendMessage(
+        res.message || "If the account is still unverified, we sent a fresh verification email."
+      );
     } catch (e) {
-      // Silently fail - the API always returns success to prevent enumeration
-      setResendSuccess(true);
+      // Keep the response generic to avoid email enumeration details.
+      setResendMessage("If the account is still unverified, we sent a fresh verification email.");
     } finally {
       if (mountedRef.current) setResending(false);
     }
@@ -116,7 +118,7 @@ export function LoginScreen({ navigation }: Props) {
 
             {error ? <ErrorText>{error}</ErrorText> : null}
 
-            {showResend && !resendSuccess && (
+            {showResend && !resendMessage && (
               <>
                 <View style={{ height: 8 }} />
                 <Pressable onPress={onResendVerification} disabled={resending} style={{ alignSelf: "center" }}>
@@ -127,11 +129,11 @@ export function LoginScreen({ navigation }: Props) {
               </>
             )}
 
-            {resendSuccess && (
+            {resendMessage && (
               <>
                 <View style={{ height: 8 }} />
                 <MutedText style={{ color: theme.colors.success, textAlign: "center" }}>
-                  Verification email sent! Check your inbox.
+                  {resendMessage}
                 </MutedText>
               </>
             )}

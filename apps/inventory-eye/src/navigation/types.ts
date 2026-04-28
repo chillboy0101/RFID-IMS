@@ -4,6 +4,7 @@ export type AuthStackParamList = {
   VerifyEmail: { token?: string } | undefined;
   ForgotPassword: undefined;
   ResetPassword: { token?: string };
+  RecoverAccount: { token?: string } | undefined;
 };
 
 export type AppTabsParamList = {

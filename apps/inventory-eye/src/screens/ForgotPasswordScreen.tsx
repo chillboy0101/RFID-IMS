@@ -24,7 +24,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const logoUri = "https://vdlfulfilment.com/wp-content/uploads/2023/05/cropped-VDL-Logo-compositions-15-300x141.png";
 
@@ -40,7 +40,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
         body: JSON.stringify({ email: email.trim() }),
       });
       if (mountedRef.current) {
-        setSuccess(true);
+        setSuccessMessage(res.message || `If an account with ${email.trim()} exists, we've sent a password reset link.`);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to send reset email";
@@ -52,7 +52,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
     }
   }
 
-  if (success) {
+  if (successMessage) {
     return (
       <Screen scroll center tabBarPadding={false} sidebarInset={false}>
         <View style={{ width: "100%", maxWidth: 520, alignItems: "center" }}>
@@ -67,11 +67,11 @@ export function ForgotPasswordScreen({ navigation }: Props) {
                 Check your email
               </Text>
               <Text style={{ color: theme.colors.textMuted, textAlign: "center", lineHeight: 22 }}>
-                If an account with <Text style={{ fontWeight: "700" }}>{email}</Text> exists, we've sent a password reset link.
+                {successMessage}
               </Text>
               <View style={{ height: 24 }} />
               <MutedText style={{ textAlign: "center" }}>
-                The link will expire in 1 hour. Check your spam folder if you don't see the email.
+                Check your spam folder if you do not see the email right away.
               </MutedText>
             </View>
 
@@ -107,7 +107,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
               Forgot Password?
             </Text>
             <MutedText style={{ marginBottom: 16 }}>
-              Enter your email and we'll send you a link to reset your password.
+              Enter your email and we&apos;ll send you a password reset email if the account exists.
             </MutedText>
 
             {error ? (

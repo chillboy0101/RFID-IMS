@@ -77,13 +77,21 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
         .exec();
 
       if (!session) {
-        const revoked = await AuthSessionModel.findOne({ jti: jtiStr }).select({ revokedAt: 1, revokedByRole: 1 }).exec();
-        if (revoked?.revokedAt) {
-          const by = String((revoked as any).revokedByRole ?? "admin");
-          const label = by === "super_admin" ? "super_admin" : "admin";
-          res.status(401).json({ ok: false, error: `Signed out by ${label}` });
+      const revoked = await AuthSessionModel.findOne({ jti: jtiStr }).select({ revokedAt: 1, revokedByRole: 1 }).exec();
+      if (revoked?.revokedAt) {
+        const by = String((revoked as any).revokedByRole ?? "admin");
+        if (by === "security_alert" || by === "account_recovery") {
+          res.status(401).json({ ok: false, error: "Signed out to protect your account. Please complete account recovery." });
           return;
         }
+        if (by === "password_reset") {
+          res.status(401).json({ ok: false, error: "Signed out because your password was reset." });
+          return;
+        }
+        const label = by === "super_admin" ? "super_admin" : "admin";
+        res.status(401).json({ ok: false, error: `Signed out by ${label}` });
+        return;
+      }
         res.status(401).json({ ok: false, error: "Unauthorized" });
         return;
       }

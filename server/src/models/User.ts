@@ -10,6 +10,7 @@ const userSchema = new mongoose.Schema(
     passwordHash: { type: String, required: true },
     mustChangePassword: { type: Boolean, required: true, default: false },
     emailVerified: { type: Boolean, required: true, default: false },
+    accountRecoveryRequiredAt: { type: Date, default: null },
     role: {
       type: String,
       required: true,

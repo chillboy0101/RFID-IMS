@@ -81,11 +81,17 @@ export function RegisterScreen({ navigation }: Props) {
                 <MutedText style={{ textAlign: "center", marginBottom: 16 }}>
                   {success}
                 </MutedText>
+                <MutedText style={{ textAlign: "center", marginBottom: 16 }}>
+                  Need another link later? You can resend a fresh verification email from sign in.
+                </MutedText>
                 <View style={{ height: 12 }} />
                 <AppButton title="Go to login" onPress={() => navigation.navigate("Login")} variant="primary" />
               </>
             ) : (
               <>
+                <MutedText style={{ textAlign: "center", marginBottom: 16 }}>
+                  We&apos;ll send a verification email after your account is created.
+                </MutedText>
                 <TextField label="Name" value={name} onChangeText={setName} placeholder="Full name" />
 
                 <View style={{ height: 12 }} />

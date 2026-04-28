@@ -9,7 +9,7 @@ const authSessionSchema = new mongoose.Schema(
     lastSeenTenantId: { type: mongoose.Schema.Types.ObjectId, ref: "Tenant", index: true },
     revokedAt: { type: Date },
     revokedByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: false, index: true },
-    revokedByRole: { type: String, required: false, enum: ["admin", "super_admin"], index: true },
+    revokedByRole: { type: String, required: false, enum: ["admin", "super_admin", "password_reset", "security_alert", "account_recovery"], index: true },
     userAgent: { type: String },
     ip: { type: String },
   },

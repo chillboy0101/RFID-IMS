@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 
 import { apiRequest } from "../api/client";
 import { setApiTenantId } from "../api/tenant";
+import { hasWebAuthBypassToken } from "./authBypass";
 import { clearToken, getToken, setToken } from "./token";
 import { clearActiveTenantId, getActiveTenantId, setActiveTenantId as persistActiveTenantId } from "./tenant";
 
@@ -186,27 +187,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
-  // Check if URL has auth bypass tokens (reset-password or verify-email)
-  const hasAuthBypassToken = (() => {
-    if (Platform.OS === "web" && typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const path = window.location.pathname;
-      // Skip auth restore if URL has a reset or verify token
-      if (path.includes("/reset-password") || path.includes("/verify-email")) {
-        return true;
-      }
-      // Also check for token param (for reset-password?token=xxx or verify-email?token=xxx)
-      if (params.has("token")) {
-        return true;
-      }
-    }
-    return false;
-  })();
+  const hasAuthBypassToken = Platform.OS === "web" ? hasWebAuthBypassToken() : false;
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // Skip auth restore if URL contains a reset-password or verify-email token
+      // Skip auth restore if URL contains an auth tokenized flow
       // This allows users with expired sessions to still access these pages
       if (!token || hasAuthBypassToken) {
         setUser(null);

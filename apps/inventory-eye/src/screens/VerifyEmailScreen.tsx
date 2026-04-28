@@ -96,6 +96,9 @@ export function VerifyEmailScreen({ route, navigation }: Props) {
                 <ErrorText style={{ textAlign: "center", marginBottom: 16 }}>
                   {message}
                 </ErrorText>
+                <MutedText style={{ textAlign: "center", marginBottom: 16 }}>
+                  Go back to sign in and request a fresh verification email.
+                </MutedText>
                 <View style={{ height: 12 }} />
                 <AppButton
                   title="Back to login"
