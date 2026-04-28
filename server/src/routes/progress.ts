@@ -124,7 +124,7 @@ router.get("/summary", async (req: TenantRequest, res) => {
     InventoryLogModel.find({ tenantId, actorUserId: auth.id, createdAt: { $gte: since } }).exec(),
     InventoryLogModel.find({ tenantId, actorUserId: auth.id, reason: "Order fulfillment", createdAt: { $gte: since } }).exec(),
     Promise.all([
-      OrderModel.countDocuments({ tenantId, status: { $in: ["created", "picking"] } }).exec(),
+      OrderModel.countDocuments({ tenantId, status: { $in: ["created", "picking", "authorized"] } }).exec(),
       OrderModel.countDocuments({ tenantId, status: "fulfilled", fulfilledAt: { $gte: since } }).exec(),
     ]),
   ]);

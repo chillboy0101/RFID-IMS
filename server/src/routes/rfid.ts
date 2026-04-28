@@ -1,101 +1,203 @@
+import crypto from "crypto";
 import express from "express";
 import mongoose from "mongoose";
 
-import { requireAuth, requireRole, type AuthRequest } from "../middleware/auth.js";
-import { requireGateApiKey, requireGateTenant, generateKey, hashKey, type GateRequest } from "../middleware/gate.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
+import { generateKey, hashKey, requireGateApiKey, requireGateTenant, type GateRequest } from "../middleware/gate.js";
 import { requireTenant, type TenantRequest } from "../middleware/tenant.js";
-import { GateApiKeyModel } from "../models/GateApiKey.js";
 import { ExitAuthorizationModel } from "../models/ExitAuthorization.js";
+import { ExitSessionModel } from "../models/ExitSession.js";
+import { GateApiKeyModel } from "../models/GateApiKey.js";
 import { InventoryItemModel, type InventoryItemDocument } from "../models/InventoryItem.js";
-import { InventoryUnitModel } from "../models/InventoryUnit.js";
 import { InventoryLogModel } from "../models/InventoryLog.js";
+import { InventoryUnitModel } from "../models/InventoryUnit.js";
+import { OrderModel } from "../models/Order.js";
 import { RfidEventModel, rfidEventTypes, type RfidEventType } from "../models/RfidEvent.js";
 import { RfidTagModel, upsertRfidTag } from "../models/RfidTag.js";
 import { SecurityAlertModel } from "../models/SecurityAlert.js";
+import { consumeExitAuthorization } from "../utils/orderFulfillment.js";
 
 const router = express.Router();
 
+function normalizeLocation(value: unknown, fallback = "EXIT_MAIN") {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function normalizeScan(body: Record<string, unknown>) {
+  const tagId = typeof body.tagId === "string" ? body.tagId.trim() : "";
+  const barcode = typeof body.barcode === "string" ? body.barcode.trim() : "";
+  const source = typeof body.source === "string" && body.source.trim() ? body.source.trim() : "rfid";
+  const observedAt = typeof body.observedAt === "string" && body.observedAt.trim() ? new Date(body.observedAt) : new Date();
+  return { tagId, barcode, source, observedAt };
+}
+
+async function resolveItem(tenantId: string, identifiers: { itemId?: unknown; tagId?: string; barcode?: string }) {
+  const itemId = typeof identifiers.itemId === "string" ? identifiers.itemId.trim() : "";
+  if (itemId) {
+    if (!mongoose.isValidObjectId(itemId)) {
+      throw new Error("Invalid itemId");
+    }
+    return (await InventoryItemModel.findOne({ _id: itemId, tenantId }).exec()) as InventoryItemDocument | null;
+  }
+
+  if (identifiers.tagId) {
+    return (await InventoryItemModel.findOne({ tenantId, rfidTagId: identifiers.tagId }).exec()) as InventoryItemDocument | null;
+  }
+
+  if (identifiers.barcode) {
+    return (await InventoryItemModel.findOne({ tenantId, barcode: identifiers.barcode }).exec()) as InventoryItemDocument | null;
+  }
+
+  return null;
+}
+
+async function createSecurityAlert(opts: {
+  tenantId: string;
+  tagId?: string;
+  barcode?: string;
+  item?: InventoryItemDocument | null;
+  location: string;
+  source: string;
+  observedAt: Date;
+  eventId?: string;
+}) {
+  return SecurityAlertModel.create({
+    tenantId: opts.tenantId,
+    tagId: opts.tagId || undefined,
+    barcode: opts.barcode || undefined,
+    itemId: opts.item?._id,
+    location: opts.location,
+    source: opts.source,
+    observedAt: opts.observedAt,
+    status: "open",
+    severity: "critical",
+    message: "Unauthorized exit detection",
+    meta: opts.eventId ? { rfidEventId: opts.eventId } : undefined,
+  });
+}
+
+async function verifyExitScan(opts: {
+  tenantId: string;
+  tagId?: string;
+  barcode?: string;
+  location: string;
+  source: string;
+  observedAt: Date;
+  actorUserId?: string;
+  fallbackItem?: InventoryItemDocument | null;
+}) {
+  const identityFilter =
+    opts.tagId
+      ? { tagId: opts.tagId }
+      : { barcode: opts.barcode };
+
+  const authorization = await ExitAuthorizationModel.findOne({
+    tenantId: opts.tenantId,
+    ...identityFilter,
+    location: opts.location,
+    status: "active",
+    expiresAt: { $gt: opts.observedAt },
+  })
+    .sort({ expiresAt: 1, createdAt: 1 })
+    .exec();
+
+  if (!authorization) {
+    const alert = await createSecurityAlert({
+      tenantId: opts.tenantId,
+      tagId: opts.tagId,
+      barcode: opts.barcode,
+      item: opts.fallbackItem,
+      location: opts.location,
+      source: opts.source,
+      observedAt: opts.observedAt,
+    });
+
+    return {
+      authorized: false,
+      decision: "DENY",
+      item: opts.fallbackItem ?? null,
+      order: null,
+      remainingAuthorizations: 0,
+      alert,
+    };
+  }
+
+  const result = await consumeExitAuthorization({
+    tenantId: opts.tenantId,
+    authorization,
+    fallbackItem: opts.fallbackItem ?? null,
+    actorUserId: opts.actorUserId,
+    source: opts.source,
+    when: opts.observedAt,
+  });
+
+  return {
+    authorized: true,
+    decision: "ALLOW",
+    item: result.item,
+    order: result.order,
+    remainingAuthorizations: result.remainingAuthorizations,
+    alert: null,
+    authorizationId: authorization._id.toString(),
+  };
+}
+
 router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: GateRequest, res) => {
   const tenantId = req.tenantId as string;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const { tagId, barcode, source, observedAt } = normalizeScan(body);
 
-  const { tagId, barcode, location, observedAt, source, itemId } = req.body as {
-    tagId?: string;
-    barcode?: string;
-    location?: string;
-    observedAt?: string;
-    source?: string;
-    itemId?: string;
-  };
-
-  const cleanTagId = typeof tagId === "string" ? tagId.trim() : "";
-  const cleanBarcode = typeof barcode === "string" ? barcode.trim() : "";
-  if (!cleanTagId && !cleanBarcode) {
+  if (!tagId && !barcode) {
     res.status(400).json({ ok: false, error: "tagId or barcode is required" });
     return;
   }
 
-  const loc = (location ?? "").trim() || "EXIT_MAIN";
-
-  let resolvedItem: InventoryItemDocument | null = null;
-  if (itemId) {
-    if (!mongoose.isValidObjectId(itemId)) {
-      res.status(400).json({ ok: false, error: "Invalid itemId" });
-      return;
-    }
-    resolvedItem = (await InventoryItemModel.findOne({ _id: itemId, tenantId }).exec()) as InventoryItemDocument | null;
-  } else {
-    if (cleanTagId) {
-      resolvedItem = (await InventoryItemModel.findOne({ tenantId, rfidTagId: cleanTagId }).exec()) as InventoryItemDocument | null;
-    } else {
-      resolvedItem = (await InventoryItemModel.findOne({ tenantId, barcode: cleanBarcode }).exec()) as InventoryItemDocument | null;
-    }
-  }
-
-  const eventDoc = await RfidEventModel.create({
-    tenantId,
-    tagId: cleanTagId || cleanBarcode,
-    eventType: "scan",
-    itemId: resolvedItem?._id,
-    location: loc,
-    observedAt: observedAt ? new Date(observedAt) : new Date(),
-    source: source?.trim() || "gate",
-    raw: req.body,
-  });
-
-  const now = new Date();
-  const authDoc = await ExitAuthorizationModel.findOne({
-    tenantId,
-    ...(cleanTagId ? { tagId: cleanTagId } : { barcode: cleanBarcode }),
-    location: loc,
-    status: "active",
-    expiresAt: { $gt: now },
-  })
-    .sort({ expiresAt: -1 })
-    .exec();
-
-  if (authDoc) {
-    authDoc.lastSeenAt = now;
-    authDoc.lastSeenSource = source?.trim() || "gate";
-    await authDoc.save();
-    res.json({ ok: true, decision: "ALLOW", authorized: true, authorizationId: authDoc._id, event: eventDoc, item: resolvedItem });
+  let item: InventoryItemDocument | null = null;
+  try {
+    item = await resolveItem(tenantId, { itemId: body.itemId, tagId, barcode });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Invalid itemId" });
     return;
   }
 
-  const alertDoc = await SecurityAlertModel.create({
+  const location = normalizeLocation(body.location);
+  const event = await RfidEventModel.create({
     tenantId,
-    tagId: cleanTagId || undefined,
-    barcode: cleanBarcode || undefined,
-    itemId: resolvedItem?._id,
-    location: loc,
-    source: source?.trim() || "gate",
-    observedAt: eventDoc.observedAt,
-    status: "open",
-    severity: "critical",
-    message: "Unauthorized exit detection",
-    meta: { rfidEventId: eventDoc._id.toString() },
+    tagId: tagId || barcode,
+    eventType: "scan",
+    itemId: item?._id,
+    location,
+    observedAt,
+    source,
+    raw: req.body,
   });
 
-  res.json({ ok: true, decision: "DENY", authorized: false, event: eventDoc, item: resolvedItem, alert: alertDoc });
+  const result = await verifyExitScan({
+    tenantId,
+    tagId: tagId || undefined,
+    barcode: barcode || undefined,
+    location,
+    source,
+    observedAt,
+    fallbackItem: item,
+  });
+
+  if (!result.authorized && result.alert) {
+    result.alert.meta = { ...(result.alert.meta ?? {}), rfidEventId: event._id.toString() };
+    await result.alert.save();
+  }
+
+  res.json({
+    ok: true,
+    decision: result.decision,
+    authorized: result.authorized,
+    authorizationId: result.authorizationId,
+    remainingAuthorizations: result.remainingAuthorizations,
+    event,
+    item: result.item,
+    order: result.order,
+    alert: result.alert,
+  });
 });
 
 router.use(requireAuth);
@@ -107,16 +209,11 @@ router.get("/events/latest", async (req: TenantRequest, res) => {
   const filter: Record<string, unknown> = { tenantId };
   if (location) filter.location = location;
 
-  const event = await RfidEventModel.findOne(filter)
-    .sort({ observedAt: -1 })
-    .limit(1)
-    .exec();
-
-  if (!event) { res.json({ ok: true, event: null }); return; }
-  res.json({ ok: true, event });
+  const event = await RfidEventModel.findOne(filter).sort({ observedAt: -1 }).limit(1).exec();
+  res.json({ ok: true, event: event ?? null });
 });
 
-router.get("/events", async (req: TenantRequest, res) => {
+router.post("/events", async (req: TenantRequest, res) => {
   const tenantId = req.tenantId as string;
   const auth = req.auth;
   if (!auth) {
@@ -124,104 +221,245 @@ router.get("/events", async (req: TenantRequest, res) => {
     return;
   }
 
-  const { tagId, eventType, location, delta, observedAt, source, itemId } = req.body as {
-    tagId?: string;
-    eventType?: RfidEventType;
-    location?: string;
-    delta?: number;
-    observedAt?: string;
-    source?: string;
-    itemId?: string;
-  };
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const { tagId, barcode, source, observedAt } = normalizeScan(body);
+  const location = typeof body.location === "string" && body.location.trim() ? body.location.trim() : undefined;
+  const delta = typeof body.delta === "number" && Number.isFinite(body.delta) ? body.delta : undefined;
+  const eventType = (typeof body.eventType === "string" ? body.eventType : "scan") as RfidEventType;
 
-  if (!tagId || !tagId.trim()) {
-    res.status(400).json({ ok: false, error: "tagId is required" });
+  if (!tagId && !barcode) {
+    res.status(400).json({ ok: false, error: "tagId or barcode is required" });
     return;
   }
-
-  const type = eventType ?? "scan";
-  if (!rfidEventTypes.includes(type)) {
+  if (!rfidEventTypes.includes(eventType)) {
     res.status(400).json({ ok: false, error: "Invalid eventType" });
     return;
   }
 
-  let resolvedItem: InventoryItemDocument | null = null;
-
-  if (itemId) {
-    if (!mongoose.isValidObjectId(itemId)) {
-      res.status(400).json({ ok: false, error: "Invalid itemId" });
-      return;
-    }
-    resolvedItem = (await InventoryItemModel.findOne({ _id: itemId, tenantId }).exec()) as InventoryItemDocument | null;
-  } else {
-    resolvedItem = (await InventoryItemModel.findOne({ tenantId, rfidTagId: tagId.trim() }).exec()) as InventoryItemDocument | null;
+  let item: InventoryItemDocument | null = null;
+  try {
+    item = await resolveItem(tenantId, { itemId: body.itemId, tagId, barcode });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Invalid itemId" });
+    return;
   }
 
-  const eventDoc = await RfidEventModel.create({
+  const event = await RfidEventModel.create({
     tenantId,
-    tagId: tagId.trim(),
-    eventType: type,
-    itemId: resolvedItem?._id,
-    location: location?.trim(),
+    tagId: tagId || barcode,
+    eventType,
+    itemId: item?._id,
+    location,
     delta,
-    observedAt: observedAt ? new Date(observedAt) : new Date(),
+    observedAt,
     source,
     raw: req.body,
   });
 
-  if (!resolvedItem) {
-    res.status(202).json({ ok: true, processed: false, event: eventDoc });
+  if (!item) {
+    res.status(202).json({ ok: true, processed: false, event });
     return;
   }
 
   let wroteLog = false;
-
-  if (typeof location === "string" && location.trim() && location.trim() !== (resolvedItem.location ?? "")) {
-    const prevLocation = resolvedItem.location;
-    resolvedItem.location = location.trim();
-    await resolvedItem.save();
+  if (location && location !== (item.location ?? "")) {
+    const previousLocation = item.location;
+    item.location = location;
+    await item.save();
 
     await InventoryLogModel.create({
       tenantId,
-      itemId: resolvedItem._id,
+      itemId: item._id,
       action: "update",
       actorUserId: auth.id,
-      newQuantity: resolvedItem.quantity,
+      newQuantity: item.quantity,
       reason: "RFID location update",
-      meta: { prevLocation, newLocation: resolvedItem.location, rfidEventId: eventDoc._id.toString() },
+      meta: { previousLocation, newLocation: location, rfidEventId: event._id.toString() },
     });
-
     wroteLog = true;
   }
 
-  if (typeof delta === "number" && Number.isFinite(delta) && delta !== 0) {
-    const previousQuantity = resolvedItem.quantity;
-    const newQuantity = previousQuantity + delta;
-
-    if (newQuantity < 0) {
+  if (typeof delta === "number" && delta !== 0) {
+    const previousQuantity = item.quantity;
+    const nextQuantity = previousQuantity + delta;
+    if (nextQuantity < 0) {
       res.status(409).json({ ok: false, error: "Insufficient stock for RFID delta" });
       return;
     }
 
-    resolvedItem.quantity = newQuantity;
-    await resolvedItem.save();
+    item.quantity = nextQuantity;
+    await item.save();
 
     await InventoryLogModel.create({
       tenantId,
-      itemId: resolvedItem._id,
+      itemId: item._id,
       action: "adjust",
       delta,
       previousQuantity,
-      newQuantity,
+      newQuantity: nextQuantity,
       actorUserId: auth.id,
       reason: "RFID quantity adjustment",
-      meta: { rfidEventId: eventDoc._id.toString(), eventType: type },
+      meta: { rfidEventId: event._id.toString(), eventType },
     });
-
     wroteLog = true;
   }
 
-  res.json({ ok: true, processed: true, wroteLog, event: eventDoc, item: resolvedItem });
+  res.json({ ok: true, processed: true, wroteLog, event, item });
+});
+
+router.post("/exit-sessions", requireRole("manager", "admin"), async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const location = normalizeLocation(body.location);
+  const minutes = Math.min(15, Math.max(1, typeof body.minutes === "number" ? Math.floor(body.minutes) : 5));
+  const orderId = typeof body.orderId === "string" && body.orderId.trim() ? body.orderId.trim() : "";
+
+  if (orderId && !mongoose.isValidObjectId(orderId)) {
+    res.status(400).json({ ok: false, error: "Invalid orderId" });
+    return;
+  }
+
+  if (orderId) {
+    const order = await OrderModel.findOne({ _id: orderId, tenantId }).exec();
+    if (!order) {
+      res.status(404).json({ ok: false, error: "Order not found" });
+      return;
+    }
+
+    const activeCount = await ExitAuthorizationModel.countDocuments({
+      tenantId,
+      orderId,
+      location,
+      status: "active",
+      expiresAt: { $gt: new Date() },
+    }).exec();
+
+    if (activeCount === 0) {
+      res.status(409).json({ ok: false, error: "This order has no active exit authorization for the selected gate" });
+      return;
+    }
+  }
+
+  const raw = `exit_${crypto.randomBytes(12).toString("hex")}`;
+  const tokenPrefix = raw.slice(0, 12);
+  const expiresAt = new Date(Date.now() + minutes * 60 * 1000);
+
+  const session = await ExitSessionModel.create({
+    tenantId,
+    userId: auth.id,
+    orderId: orderId || undefined,
+    location,
+    tokenPrefix,
+    tokenHash: hashKey(raw),
+    startedAt: new Date(),
+    expiresAt,
+  });
+
+  res.status(201).json({
+    ok: true,
+    session: {
+      id: session._id,
+      token: raw,
+      expiresAt,
+      location,
+      orderId: orderId || undefined,
+    },
+  });
+});
+
+router.post("/exit-sessions/verify", requireRole("manager", "admin"), async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const rawToken = typeof body.token === "string" ? body.token.trim() : "";
+  const { tagId, barcode, observedAt } = normalizeScan(body);
+
+  if (!rawToken) {
+    res.status(400).json({ ok: false, error: "token is required" });
+    return;
+  }
+  if (!tagId && !barcode) {
+    res.status(400).json({ ok: false, error: "tagId or barcode is required" });
+    return;
+  }
+
+  const session = await ExitSessionModel.findOne({
+    tenantId,
+    tokenPrefix: rawToken.slice(0, 12),
+    tokenHash: hashKey(rawToken),
+    endedAt: { $exists: false },
+    expiresAt: { $gt: new Date() },
+  }).exec();
+
+  if (!session) {
+    res.status(401).json({ ok: false, error: "Invalid or expired exit token" });
+    return;
+  }
+
+  const fallbackItem = await resolveItem(tenantId, { tagId, barcode });
+  const event = await RfidEventModel.create({
+    tenantId,
+    tagId: tagId || barcode,
+    eventType: "scan",
+    itemId: fallbackItem?._id,
+    location: session.location,
+    observedAt,
+    source: "exit-session",
+    raw: req.body,
+  });
+
+  const result = await verifyExitScan({
+    tenantId,
+    tagId: tagId || undefined,
+    barcode: barcode || undefined,
+    location: session.location,
+    source: "exit-session",
+    observedAt,
+    actorUserId: auth.id,
+    fallbackItem,
+  });
+
+  session.lastSeenAt = new Date();
+  if (result.remainingAuthorizations === 0) {
+    session.endedAt = new Date();
+  }
+  await session.save();
+
+  if (!result.authorized && result.alert) {
+    result.alert.meta = {
+      ...(result.alert.meta ?? {}),
+      rfidEventId: event._id.toString(),
+      exitSessionId: session._id.toString(),
+    };
+    await result.alert.save();
+  }
+
+  res.json({
+    ok: true,
+    authorized: result.authorized,
+    decision: result.decision,
+    item: result.item,
+    order: result.order,
+    remainingAuthorizations: result.remainingAuthorizations,
+    session: {
+      expiresAt: session.expiresAt,
+      location: session.location,
+      orderId: session.orderId?.toString(),
+    },
+    event,
+    alert: result.alert,
+  });
 });
 
 router.post("/exit-authorizations", requireRole("manager", "admin"), async (req: TenantRequest, res) => {
@@ -232,74 +470,56 @@ router.post("/exit-authorizations", requireRole("manager", "admin"), async (req:
     return;
   }
 
-  const { tagId, tagIds, barcode, barcodes, location, minutes, orderId } = req.body as {
-    tagId?: string;
-    tagIds?: string[];
-    barcode?: string;
-    barcodes?: string[];
-    location?: string;
-    minutes?: number;
-    orderId?: string;
-  };
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const tagIds = Array.isArray(body.tagIds) ? body.tagIds.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
+  const barcodes = Array.isArray(body.barcodes) ? body.barcodes.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
+  const singleTag = typeof body.tagId === "string" ? body.tagId.trim() : "";
+  const singleBarcode = typeof body.barcode === "string" ? body.barcode.trim() : "";
 
-  const tagsRaw = Array.isArray(tagIds) ? tagIds : tagId ? [tagId] : [];
-  const tags = tagsRaw.map((t) => String(t ?? "").trim()).filter(Boolean);
-  const barcodesRaw = Array.isArray(barcodes) ? barcodes : barcode ? [barcode] : [];
-  const barcodeList = barcodesRaw.map((b) => String(b ?? "").trim()).filter(Boolean);
-
+  const tags = singleTag ? [singleTag, ...tagIds] : tagIds;
+  const barcodeList = singleBarcode ? [singleBarcode, ...barcodes] : barcodes;
   if (tags.length === 0 && barcodeList.length === 0) {
     res.status(400).json({ ok: false, error: "tagId/tagIds or barcode/barcodes is required" });
     return;
   }
 
-  const loc = (location ?? "").trim() || "EXIT_MAIN";
-  const mins = Math.min(240, Math.max(1, Number(minutes) || 10));
-  const expiresAt = new Date(Date.now() + mins * 60 * 1000);
+  const location = normalizeLocation(body.location);
+  const minutes = Math.min(60, Math.max(1, typeof body.minutes === "number" ? Math.floor(body.minutes) : 15));
+  const expiresAt = new Date(Date.now() + minutes * 60 * 1000);
+  const orderId = typeof body.orderId === "string" && body.orderId.trim() ? body.orderId.trim() : "";
 
-  let orderObjectId: string | undefined;
-  if (orderId !== undefined && orderId !== null && String(orderId).trim()) {
-    if (!mongoose.isValidObjectId(orderId)) {
-      res.status(400).json({ ok: false, error: "Invalid orderId" });
-      return;
-    }
-    orderObjectId = String(orderId).trim();
+  if (orderId && !mongoose.isValidObjectId(orderId)) {
+    res.status(400).json({ ok: false, error: "Invalid orderId" });
+    return;
   }
 
-  if (tags.length) {
-    await ExitAuthorizationModel.updateMany(
-      { tenantId, tagId: { $in: tags }, location: loc, status: "active" },
-      { $set: { status: "revoked" } }
-    ).exec();
-  }
-  if (barcodeList.length) {
-    await ExitAuthorizationModel.updateMany(
-      { tenantId, barcode: { $in: barcodeList }, location: loc, status: "active" },
-      { $set: { status: "revoked" } }
-    ).exec();
-  }
+  await ExitAuthorizationModel.updateMany(
+    { tenantId, location, status: "active", $or: [{ tagId: { $in: tags } }, { barcode: { $in: barcodeList } }] },
+    { $set: { status: "revoked" } }
+  ).exec();
 
-  const created = await ExitAuthorizationModel.insertMany([
-    ...tags.map((t) => ({
+  const authorizations = await ExitAuthorizationModel.insertMany([
+    ...tags.map((tag) => ({
       tenantId,
-      tagId: t,
-      location: loc,
-      status: "active",
-      orderId: orderObjectId,
+      tagId: tag,
+      location,
+      status: "active" as const,
+      orderId: orderId || undefined,
       createdByUserId: auth.id,
       expiresAt,
     })),
-    ...barcodeList.map((b) => ({
+    ...barcodeList.map((barcode) => ({
       tenantId,
-      barcode: b,
-      location: loc,
-      status: "active",
-      orderId: orderObjectId,
+      barcode,
+      location,
+      status: "active" as const,
+      orderId: orderId || undefined,
       createdByUserId: auth.id,
       expiresAt,
     })),
   ]);
 
-  res.status(201).json({ ok: true, authorizations: created, expiresAt, location: loc });
+  res.status(201).json({ ok: true, authorizations, expiresAt, location });
 });
 
 router.get("/exit-authorizations", requireRole("manager", "admin"), async (req: TenantRequest, res) => {
@@ -319,10 +539,7 @@ router.get("/exit-authorizations", requireRole("manager", "admin"), async (req: 
   res.json({ ok: true, authorizations: docs });
 });
 
-// ─── RFID Tag Management (admin only) ─────────────────────────────────────────
-
-/** List all RFID tags for the tenant */
-router.get("/tags", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+router.get("/tags", requireRole("admin"), async (req: TenantRequest, res) => {
   const tenantId = req.tenantId as string;
   const { status, search, page, limit } = req.query as { status?: string; search?: string; page?: string; limit?: string };
 
@@ -346,29 +563,70 @@ router.get("/tags", requireAuth, requireRole("admin"), async (req: TenantRequest
     RfidTagModel.countDocuments(filter).exec(),
   ]);
 
-  res.json({ ok: true, tags: docs, page: pageNum, limit: limitNum, total, hasMore: skip + docs.length < total });
+  const tagIds = docs.map((doc) => doc.tagId);
+  const activeAuthCounts = await ExitAuthorizationModel.aggregate([
+    {
+      $match: {
+        tenantId: new mongoose.Types.ObjectId(tenantId),
+        tagId: { $in: tagIds },
+        status: "active",
+        expiresAt: { $gt: new Date() },
+      },
+    },
+    { $group: { _id: "$tagId", count: { $sum: 1 } } },
+  ]).exec();
+  const activeByTag = new Map(activeAuthCounts.map((row) => [String(row._id), Number(row.count) || 0]));
+
+  res.json({
+    ok: true,
+    tags: docs.map((doc) => ({
+      ...doc.toObject(),
+      activeExitAuthorizations: activeByTag.get(doc.tagId) ?? 0,
+    })),
+    page: pageNum,
+    limit: limitNum,
+    total,
+    hasMore: skip + docs.length < total,
+  });
 });
 
-/** Get single tag details */
-router.get("/tags/:tagId", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+router.get("/tags/:tagId", requireRole("admin"), async (req: TenantRequest, res) => {
   const tenantId = req.tenantId as string;
   const { tagId } = req.params;
 
   const doc = await RfidTagModel.findOne({ tenantId, tagId }).exec();
-  if (!doc) { res.status(404).json({ ok: false, error: "Tag not found" }); return; }
-  res.json({ ok: true, tag: doc });
+  if (!doc) {
+    res.status(404).json({ ok: false, error: "Tag not found" });
+    return;
+  }
+
+  const activeExitAuthorizations = await ExitAuthorizationModel.countDocuments({
+    tenantId,
+    tagId,
+    status: "active",
+    expiresAt: { $gt: new Date() },
+  }).exec();
+
+  res.json({ ok: true, tag: { ...doc.toObject(), activeExitAuthorizations } });
 });
 
-/** Reassign tag to a different item */
-router.patch("/tags/:tagId", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+router.patch("/tags/:tagId", requireRole("admin"), async (req: TenantRequest, res) => {
   const tenantId = req.tenantId as string;
   const { tagId } = req.params;
   const { itemId } = req.body as { itemId?: string | null };
 
   if (itemId !== undefined && itemId !== null && itemId !== "") {
-    if (!mongoose.isValidObjectId(itemId)) { res.status(400).json({ ok: false, error: "Invalid itemId" }); return; }
+    if (!mongoose.isValidObjectId(itemId)) {
+      res.status(400).json({ ok: false, error: "Invalid itemId" });
+      return;
+    }
+
     const item = await InventoryItemModel.findOne({ _id: itemId, tenantId }).exec();
-    if (!item) { res.status(404).json({ ok: false, error: "Item not found" }); return; }
+    if (!item) {
+      res.status(404).json({ ok: false, error: "Item not found" });
+      return;
+    }
+
     const doc = await RfidTagModel.findOneAndUpdate(
       { tenantId, tagId },
       {
@@ -384,10 +642,11 @@ router.patch("/tags/:tagId", requireAuth, requireRole("admin"), async (req: Tena
       },
       { upsert: true, new: true }
     ).exec();
-    res.json({ ok: true, tag: doc }); return;
+
+    res.json({ ok: true, tag: doc });
+    return;
   }
 
-  // Clear assignment
   const doc = await RfidTagModel.findOneAndUpdate(
     { tenantId, tagId },
     {
@@ -396,12 +655,16 @@ router.patch("/tags/:tagId", requireAuth, requireRole("admin"), async (req: Tena
     },
     { new: true }
   ).exec();
-  if (!doc) { res.status(404).json({ ok: false, error: "Tag not found" }); return; }
+
+  if (!doc) {
+    res.status(404).json({ ok: false, error: "Tag not found" });
+    return;
+  }
+
   res.json({ ok: true, tag: doc });
 });
 
-/** Activate a tag */
-router.post("/tags/:tagId/activate", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+router.post("/tags/:tagId/activate", requireRole("admin"), async (req: TenantRequest, res) => {
   const tenantId = req.tenantId as string;
   const { tagId } = req.params;
 
@@ -410,26 +673,16 @@ router.post("/tags/:tagId/activate", requireAuth, requireRole("admin"), async (r
     { $set: { status: "active", deactivatedAt: null } },
     { new: true }
   ).exec();
-  if (!doc) { res.status(404).json({ ok: false, error: "Tag not found" }); return; }
+
+  if (!doc) {
+    res.status(404).json({ ok: false, error: "Tag not found" });
+    return;
+  }
+
   res.json({ ok: true, tag: doc });
 });
 
-/** Deactivate a tag */
-router.post("/tags/:tagId/deactivate", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
-  const tenantId = req.tenantId as string;
-  const { tagId } = req.params;
-
-  const doc = await RfidTagModel.findOneAndUpdate(
-    { tenantId, tagId },
-    { $set: { status: "inactive", deactivatedAt: new Date() }, $unset: { itemId: "", itemBarcode: "", itemName: "", itemSku: "", assignedAt: "" } },
-    { new: true }
-  ).exec();
-  if (!doc) { res.status(404).json({ ok: false, error: "Tag not found" }); return; }
-  res.json({ ok: true, tag: doc });
-});
-
-/** Remove tag assignment */
-router.delete("/tags/:tagId", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+router.post("/tags/:tagId/deactivate", requireRole("admin"), async (req: TenantRequest, res) => {
   const tenantId = req.tenantId as string;
   const { tagId } = req.params;
 
@@ -441,21 +694,44 @@ router.delete("/tags/:tagId", requireAuth, requireRole("admin"), async (req: Ten
     },
     { new: true }
   ).exec();
-  if (!doc) { res.status(404).json({ ok: false, error: "Tag not found" }); return; }
+
+  if (!doc) {
+    res.status(404).json({ ok: false, error: "Tag not found" });
+    return;
+  }
+
+  res.json({ ok: true, tag: doc });
+});
+
+router.delete("/tags/:tagId", requireRole("admin"), async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const { tagId } = req.params;
+
+  const doc = await RfidTagModel.findOneAndUpdate(
+    { tenantId, tagId },
+    {
+      $set: { status: "inactive", deactivatedAt: new Date() },
+      $unset: { itemId: "", itemBarcode: "", itemName: "", itemSku: "", assignedAt: "" },
+    },
+    { new: true }
+  ).exec();
+
+  if (!doc) {
+    res.status(404).json({ ok: false, error: "Tag not found" });
+    return;
+  }
+
   res.json({ ok: true });
 });
 
-/** Migrate pre-existing tags from InventoryItem/InventoryUnit into RfidTag (one-time sync) */
-router.post("/tags/migrate", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+router.post("/tags/migrate", requireRole("admin"), async (req: TenantRequest, res) => {
   const tenantId = req.tenantId as string;
 
-  // Sync InventoryItem-level tags
   const items = await InventoryItemModel.find({ tenantId, rfidTagId: { $exists: true, $ne: "" } }).exec();
   for (const item of items) {
     await upsertRfidTag(tenantId, item.rfidTagId as string, item);
   }
 
-  // Sync InventoryUnit-level tags
   const units = await InventoryUnitModel.find({ tenantId, tagId: { $exists: true, $ne: "" } }).exec();
   for (const unit of units) {
     const alreadySynced = await RfidTagModel.findOne({ tenantId, tagId: unit.tagId }).exec();
@@ -469,24 +745,23 @@ router.post("/tags/migrate", requireAuth, requireRole("admin"), async (req: Tena
   res.json({ ok: true, message: "Migration complete", totalTags: count });
 });
 
-// ─── Gate API Key Management (admin only) ─────────────────────────────────────
-
-/** List all gate API keys for the tenant (never returns the raw key) */
-router.get("/gate-keys", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+router.get("/gate-keys", requireRole("admin"), async (req: TenantRequest, res) => {
   const tenantId = req.tenantId as string;
-  const docs = await GateApiKeyModel
-    .find({ tenantId })
+  const docs = await GateApiKeyModel.find({ tenantId })
     .sort({ createdAt: -1 })
     .select("name keyPrefix locationHint lastSeenAt lastSeenSource expiresAt revokedAt createdAt")
     .exec();
+
   res.json({ ok: true, keys: docs });
 });
 
-/** Create a new gate API key. Returns the raw key ONCE — store it securely. */
-router.post("/gate-keys", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+router.post("/gate-keys", requireRole("admin"), async (req: TenantRequest, res) => {
   const tenantId = req.tenantId as string;
   const auth = req.auth;
-  if (!auth) { res.status(401).json({ ok: false, error: "Unauthorized" }); return; }
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
 
   const { name, locationHint, minutes } = req.body as {
     name?: string;
@@ -516,7 +791,6 @@ router.post("/gate-keys", requireAuth, requireRole("admin"), async (req: TenantR
 
   res.status(201).json({
     ok: true,
-    // The raw key is only returned here — it cannot be recovered
     key: raw,
     keyPrefix: prefix,
     keyDoc: {
@@ -530,8 +804,7 @@ router.post("/gate-keys", requireAuth, requireRole("admin"), async (req: TenantR
   });
 });
 
-/** Revoke a gate API key immediately */
-router.delete("/gate-keys/:id", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+router.delete("/gate-keys/:id", requireRole("admin"), async (req: TenantRequest, res) => {
   const tenantId = req.tenantId as string;
   const { id } = req.params;
 

@@ -1,6 +1,6 @@
 import mongoose, { type InferSchemaType } from "mongoose";
 
-export const orderStatuses = ["created", "picking", "fulfilled", "cancelled"] as const;
+export const orderStatuses = ["created", "picking", "authorized", "fulfilled", "cancelled"] as const;
 export type OrderStatus = (typeof orderStatuses)[number];
 
 const orderItemSchema = new mongoose.Schema(
@@ -20,6 +20,12 @@ const orderSchema = new mongoose.Schema(
     items: { type: [orderItemSchema], required: true },
     notes: { type: String, trim: true },
     createdByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    pickedAt: { type: Date },
+    authorizedAt: { type: Date },
+    authorizedByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    authorizationLocation: { type: String, trim: true },
+    authorizationExpiresAt: { type: Date },
+    lastExitScanAt: { type: Date },
     fulfilledAt: { type: Date },
     stockAdjusted: { type: Boolean, default: false },
     stockAdjustedAt: { type: Date },

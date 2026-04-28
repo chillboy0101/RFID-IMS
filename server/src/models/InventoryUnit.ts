@@ -10,6 +10,10 @@ const inventoryUnitSchema = new mongoose.Schema(
     tagId: { type: String, trim: true },
     location: { type: String, trim: true },
     status: { type: String, trim: true, enum: inventoryUnitStatuses, default: "received" },
+    orderId: { type: mongoose.Schema.Types.ObjectId, ref: "Order" },
+    reservedAt: { type: Date },
+    authorizedAt: { type: Date },
+    dispatchedAt: { type: Date },
   },
   { timestamps: true }
 );
@@ -23,6 +27,7 @@ inventoryUnitSchema.index(
 );
 
 inventoryUnitSchema.index({ tenantId: 1, itemId: 1, createdAt: -1 });
+inventoryUnitSchema.index({ tenantId: 1, orderId: 1, status: 1, createdAt: -1 });
 
 export type InventoryUnit = InferSchemaType<typeof inventoryUnitSchema>;
 export type InventoryUnitDocument = mongoose.HydratedDocument<InventoryUnit>;

@@ -1,6 +1,6 @@
 import mongoose, { type InferSchemaType } from "mongoose";
 
-export const exitAuthorizationStatuses = ["active", "revoked"] as const;
+export const exitAuthorizationStatuses = ["active", "used", "revoked"] as const;
 export type ExitAuthorizationStatus = (typeof exitAuthorizationStatuses)[number];
 
 const exitAuthorizationSchema = new mongoose.Schema(
@@ -11,10 +11,13 @@ const exitAuthorizationSchema = new mongoose.Schema(
     location: { type: String, trim: true, default: "EXIT_MAIN" },
     status: { type: String, required: true, enum: exitAuthorizationStatuses, default: "active" },
     orderId: { type: mongoose.Schema.Types.ObjectId, ref: "Order" },
+    unitId: { type: mongoose.Schema.Types.ObjectId, ref: "InventoryUnit" },
     createdByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     expiresAt: { type: Date, required: true, index: true },
     lastSeenAt: { type: Date },
     lastSeenSource: { type: String, trim: true },
+    usedAt: { type: Date },
+    usedSource: { type: String, trim: true },
   },
   { timestamps: true }
 );

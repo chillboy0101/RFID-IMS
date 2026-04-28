@@ -47,7 +47,7 @@ router.get("/order-fulfillment", requireRole("manager", "admin"), async (req, re
   const [totalOrders, fulfilledOrders, openOrders, fulfilledDocs] = await Promise.all([
     OrderModel.countDocuments({ tenantId }).exec(),
     OrderModel.countDocuments({ tenantId, status: "fulfilled" }).exec(),
-    OrderModel.countDocuments({ tenantId, status: { $in: ["created", "picking"] } }).exec(),
+    OrderModel.countDocuments({ tenantId, status: { $in: ["created", "picking", "authorized"] } }).exec(),
     OrderModel.find({ tenantId, status: "fulfilled", fulfilledAt: { $ne: null } })
       .select({ createdAt: 1, fulfilledAt: 1 })
       .limit(500)

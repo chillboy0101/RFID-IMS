@@ -22,6 +22,14 @@ type OrdersResponse = {
 
 type Props = NativeStackScreenProps<OrdersStackParamList, "OrdersList">;
 
+function toneForStatus(status: string) {
+  if (status === "fulfilled") return "success" as const;
+  if (status === "cancelled") return "danger" as const;
+  if (status === "authorized") return "warning" as const;
+  if (status === "picking") return "primary" as const;
+  return "default" as const;
+}
+
 export function OrdersListScreen({ navigation }: Props) {
   const { token } = useContext(AuthContext);
   const { width } = useWindowDimensions();
@@ -233,7 +241,7 @@ export function OrdersListScreen({ navigation }: Props) {
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: theme.spacing.md, gap: 8 }} keyboardShouldPersistTaps="handled">
                 {filtered.length ? (
                   filtered.map((item) => {
-                    const tone = item.status === "fulfilled" ? "success" : item.status === "cancelled" ? "danger" : "primary";
+                    const tone = toneForStatus(item.status);
                     return (
                       <Pressable
                         key={item._id}
@@ -283,7 +291,7 @@ export function OrdersListScreen({ navigation }: Props) {
                 keyExtractor={(o) => o._id}
                 ListEmptyComponent={<MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>}
                 renderItem={({ item }) => {
-                  const tone = item.status === "fulfilled" ? "success" : item.status === "cancelled" ? "danger" : "primary";
+                  const tone = toneForStatus(item.status);
                   return (
                     <Pressable
                       onPress={() => navigation.navigate("OrderDetail", { id: item._id })}

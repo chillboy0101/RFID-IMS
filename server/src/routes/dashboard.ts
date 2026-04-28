@@ -28,7 +28,7 @@ router.get("/summary", async (req, res) => {
     InventoryItemModel.countDocuments({ tenantId }).exec(),
     InventoryItemModel.countDocuments({ tenantId, $expr: { $lte: ["$quantity", "$reorderLevel"] } }).exec(),
     InventoryItemModel.countDocuments({ tenantId, expiryDate: { $ne: null, $lte: expiryBefore } }).exec(),
-    OrderModel.countDocuments({ tenantId, status: { $in: ["created", "picking"] } }).exec(),
+    OrderModel.countDocuments({ tenantId, status: { $in: ["created", "picking", "authorized"] } }).exec(),
     OrderModel.find({ tenantId }).sort({ createdAt: -1 }).limit(10).exec(),
   ]);
 
