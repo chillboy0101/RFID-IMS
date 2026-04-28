@@ -7,8 +7,10 @@ import { requireTenant, type TenantRequest } from "../middleware/tenant.js";
 import { GateApiKeyModel } from "../models/GateApiKey.js";
 import { ExitAuthorizationModel } from "../models/ExitAuthorization.js";
 import { InventoryItemModel, type InventoryItemDocument } from "../models/InventoryItem.js";
+import { InventoryUnitModel } from "../models/InventoryUnit.js";
 import { InventoryLogModel } from "../models/InventoryLog.js";
 import { RfidEventModel, rfidEventTypes, type RfidEventType } from "../models/RfidEvent.js";
+import { RfidTagModel, upsertRfidTag } from "../models/RfidTag.js";
 import { SecurityAlertModel } from "../models/SecurityAlert.js";
 
 const router = express.Router();
@@ -315,6 +317,156 @@ router.get("/exit-authorizations", requireRole("manager", "admin"), async (req: 
 
   const docs = await ExitAuthorizationModel.find(filter).sort({ createdAt: -1 }).limit(500).exec();
   res.json({ ok: true, authorizations: docs });
+});
+
+// ─── RFID Tag Management (admin only) ─────────────────────────────────────────
+
+/** List all RFID tags for the tenant */
+router.get("/tags", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const { status, search, page, limit } = req.query as { status?: string; search?: string; page?: string; limit?: string };
+
+  const filter: Record<string, unknown> = { tenantId };
+  if (status === "active" || status === "inactive") filter.status = status;
+  if (search?.trim()) {
+    filter.$or = [
+      { tagId: { $regex: search.trim(), $options: "i" } },
+      { itemName: { $regex: search.trim(), $options: "i" } },
+      { itemBarcode: { $regex: search.trim(), $options: "i" } },
+      { itemSku: { $regex: search.trim(), $options: "i" } },
+    ];
+  }
+
+  const pageNum = Math.max(1, Number(page) || 1);
+  const limitNum = Math.min(200, Math.max(1, Number(limit) || 50));
+  const skip = (pageNum - 1) * limitNum;
+
+  const [docs, total] = await Promise.all([
+    RfidTagModel.find(filter).sort({ updatedAt: -1 }).skip(skip).limit(limitNum).exec(),
+    RfidTagModel.countDocuments(filter).exec(),
+  ]);
+
+  res.json({ ok: true, tags: docs, page: pageNum, limit: limitNum, total, hasMore: skip + docs.length < total });
+});
+
+/** Get single tag details */
+router.get("/tags/:tagId", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const { tagId } = req.params;
+
+  const doc = await RfidTagModel.findOne({ tenantId, tagId }).exec();
+  if (!doc) { res.status(404).json({ ok: false, error: "Tag not found" }); return; }
+  res.json({ ok: true, tag: doc });
+});
+
+/** Reassign tag to a different item */
+router.patch("/tags/:tagId", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const { tagId } = req.params;
+  const { itemId } = req.body as { itemId?: string | null };
+
+  if (itemId !== undefined && itemId !== null && itemId !== "") {
+    if (!mongoose.isValidObjectId(itemId)) { res.status(400).json({ ok: false, error: "Invalid itemId" }); return; }
+    const item = await InventoryItemModel.findOne({ _id: itemId, tenantId }).exec();
+    if (!item) { res.status(404).json({ ok: false, error: "Item not found" }); return; }
+    const doc = await RfidTagModel.findOneAndUpdate(
+      { tenantId, tagId },
+      {
+        $set: {
+          itemId: item._id,
+          itemBarcode: item.barcode,
+          itemName: item.name,
+          itemSku: item.sku,
+          status: "active",
+          assignedAt: new Date(),
+          deactivatedAt: null,
+        },
+      },
+      { upsert: true, new: true }
+    ).exec();
+    res.json({ ok: true, tag: doc }); return;
+  }
+
+  // Clear assignment
+  const doc = await RfidTagModel.findOneAndUpdate(
+    { tenantId, tagId },
+    {
+      $set: { status: "inactive", deactivatedAt: new Date() },
+      $unset: { itemId: "", itemBarcode: "", itemName: "", itemSku: "", assignedAt: "" },
+    },
+    { new: true }
+  ).exec();
+  if (!doc) { res.status(404).json({ ok: false, error: "Tag not found" }); return; }
+  res.json({ ok: true, tag: doc });
+});
+
+/** Activate a tag */
+router.post("/tags/:tagId/activate", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const { tagId } = req.params;
+
+  const doc = await RfidTagModel.findOneAndUpdate(
+    { tenantId, tagId },
+    { $set: { status: "active", deactivatedAt: null } },
+    { new: true }
+  ).exec();
+  if (!doc) { res.status(404).json({ ok: false, error: "Tag not found" }); return; }
+  res.json({ ok: true, tag: doc });
+});
+
+/** Deactivate a tag */
+router.post("/tags/:tagId/deactivate", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const { tagId } = req.params;
+
+  const doc = await RfidTagModel.findOneAndUpdate(
+    { tenantId, tagId },
+    { $set: { status: "inactive", deactivatedAt: new Date() }, $unset: { itemId: "", itemBarcode: "", itemName: "", itemSku: "", assignedAt: "" } },
+    { new: true }
+  ).exec();
+  if (!doc) { res.status(404).json({ ok: false, error: "Tag not found" }); return; }
+  res.json({ ok: true, tag: doc });
+});
+
+/** Remove tag assignment */
+router.delete("/tags/:tagId", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const { tagId } = req.params;
+
+  const doc = await RfidTagModel.findOneAndUpdate(
+    { tenantId, tagId },
+    {
+      $set: { status: "inactive", deactivatedAt: new Date() },
+      $unset: { itemId: "", itemBarcode: "", itemName: "", itemSku: "", assignedAt: "" },
+    },
+    { new: true }
+  ).exec();
+  if (!doc) { res.status(404).json({ ok: false, error: "Tag not found" }); return; }
+  res.json({ ok: true });
+});
+
+/** Migrate pre-existing tags from InventoryItem/InventoryUnit into RfidTag (one-time sync) */
+router.post("/tags/migrate", requireAuth, requireRole("admin"), async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+
+  // Sync InventoryItem-level tags
+  const items = await InventoryItemModel.find({ tenantId, rfidTagId: { $exists: true, $ne: "" } }).exec();
+  for (const item of items) {
+    await upsertRfidTag(tenantId, item.rfidTagId as string, item);
+  }
+
+  // Sync InventoryUnit-level tags
+  const units = await InventoryUnitModel.find({ tenantId, tagId: { $exists: true, $ne: "" } }).exec();
+  for (const unit of units) {
+    const alreadySynced = await RfidTagModel.findOne({ tenantId, tagId: unit.tagId }).exec();
+    if (!alreadySynced) {
+      const parentItem = await InventoryItemModel.findOne({ _id: unit.itemId, tenantId }).exec();
+      if (parentItem) await upsertRfidTag(tenantId, unit.tagId as string, parentItem);
+    }
+  }
+
+  const count = await RfidTagModel.countDocuments({ tenantId }).exec();
+  res.json({ ok: true, message: "Migration complete", totalTags: count });
 });
 
 // ─── Gate API Key Management (admin only) ─────────────────────────────────────

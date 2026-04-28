@@ -7,6 +7,7 @@ import { InventoryItemModel } from "../models/InventoryItem.js";
 import { InventoryLogModel } from "../models/InventoryLog.js";
 import { InventoryUnitModel } from "../models/InventoryUnit.js";
 import { VendorModel } from "../models/Vendor.js";
+import { upsertRfidTag } from "../models/RfidTag.js";
 import { getPagination } from "../utils/pagination.js";
 import { asEnum, asNumber, asObjectId, asString, asDateFromString } from "../utils/validate.js";
 
@@ -248,6 +249,7 @@ router.post("/receiving/units", async (req: TenantRequest, res) => {
   item.location = item.location || location;
   if (tagId) item.rfidTagId = tagId;
   await item.save();
+  if (tagId) await upsertRfidTag(tenantId, tagId, item);
 
   await InventoryLogModel.create({
     tenantId,
@@ -343,6 +345,7 @@ router.post("/putaway/assign-tag", async (req: TenantRequest, res) => {
   unit.location = location;
   unit.status = "in_stock";
   await unit.save();
+  await upsertRfidTag(tenantId, tagId, item);
 
   if (!item.location) {
     item.location = location;
@@ -516,6 +519,11 @@ router.patch("/items/:id", async (req: TenantRequest, res) => {
   if (!item) {
     res.status(404).json({ ok: false, error: "Not found" });
     return;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(updates, "rfidTagId")) {
+    const tagId = updates.rfidTagId as string | undefined;
+    await upsertRfidTag(tenantId, tagId ?? "", tagId ? item : null);
   }
 
   await InventoryLogModel.create({

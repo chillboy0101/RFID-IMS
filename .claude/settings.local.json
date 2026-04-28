@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npx --yes typescript tsc --noEmit)",
+      "Bash(npx expo *)"
+    ]
+  }
+}
