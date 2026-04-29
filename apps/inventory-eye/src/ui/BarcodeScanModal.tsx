@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
+import { Modal, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 
@@ -26,6 +26,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const [webStatus, setWebStatus] = useState<string>("");
   const [webDiag, setWebDiag] = useState<string>("");
   const [webMirror, setWebMirror] = useState(false);
+  const [manualValue, setManualValue] = useState("");
 
   const lastScanRef = useRef<{ value: string; at: number }>({ value: "", at: 0 });
   const busyRef = useRef(false);
@@ -39,12 +40,43 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const webVideoRef = useRef<HTMLVideoElement | null>(null);
   const webReaderRef = useRef<any>(null);
   const webStreamRef = useRef<MediaStream | null>(null);
+  const manualInputRef = useRef<TextInput | null>(null);
 
-  const webScanDisabled = Platform.OS === "web";
+  const isWeb = Platform.OS === "web";
+  const webScanDisabled = false;
 
   useEffect(() => {
     busyRef.current = busy;
   }, [busy]);
+
+  const processScannedValue = useCallback(
+    (rawValue: string) => {
+      if (busyRef.current) return false;
+      const value = String(rawValue ?? "")
+        .replace(/[\r\n]+/g, "")
+        .trim();
+      if (!value) return false;
+
+      const now = Date.now();
+      if (lastScanRef.current.value === value && now - lastScanRef.current.at < 1200) return false;
+      lastScanRef.current = { value, at: now };
+
+      setBusy(true);
+      setLast(value);
+      setError(null);
+      setManualValue("");
+      onScanned(value);
+
+      try {
+        if (busyTimeoutRef.current) clearTimeout(busyTimeoutRef.current);
+      } catch {
+        // ignore
+      }
+      busyTimeoutRef.current = setTimeout(() => setBusy(false), 800);
+      return true;
+    },
+    [onScanned]
+  );
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -166,6 +198,8 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     if (webScanDisabled) return;
     setWebStatus("");
     setWebDiag("");
+    setWebVideoReady(0);
+    setWebNeedsTap(true);
     try {
       if (webScanIntervalRef.current) clearInterval(webScanIntervalRef.current);
     } catch {
@@ -397,6 +431,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
       setBusy(false);
       setLast("");
       setError(null);
+      setManualValue("");
     }
     if (Platform.OS !== "web") return;
     if (webScanDisabled) return;
@@ -500,23 +535,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
               .then((barcodes: any) => {
                 if (cancelled) return;
                 const raw = barcodes?.[0]?.rawValue;
-                const value = String(raw ?? "").trim();
-                if (!value) return;
-
-                const now = Date.now();
-                if (lastScanRef.current.value === value && now - lastScanRef.current.at < 1200) return;
-
-                lastScanRef.current = { value, at: now };
-
-                setBusy(true);
-                setLast(value);
-                onScanned(value);
-                try {
-                  if (busyTimeoutRef.current) clearTimeout(busyTimeoutRef.current);
-                } catch {
-                  // ignore
-                }
-                busyTimeoutRef.current = setTimeout(() => setBusy(false), 800);
+                processScannedValue(String(raw ?? ""));
               })
               .finally(() => {
                 inFlight = false;
@@ -535,23 +554,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
           if (cancelled) return;
           if (!result) return;
           if (webHiddenRef.current) return;
-          const value = String(result?.getText?.() ?? "").trim();
-          if (!value) return;
-          if (busyRef.current) return;
-
-          const now = Date.now();
-          if (lastScanRef.current.value === value && now - lastScanRef.current.at < 1200) return;
-          lastScanRef.current = { value, at: now };
-
-          setBusy(true);
-          setLast(value);
-          onScanned(value);
-          try {
-            if (busyTimeoutRef.current) clearTimeout(busyTimeoutRef.current);
-          } catch {
-            // ignore
-          }
-          busyTimeoutRef.current = setTimeout(() => setBusy(false), 800);
+          processScannedValue(String(result?.getText?.() ?? ""));
         });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed to scan barcode");
@@ -574,7 +577,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         // ignore
       }
     };
-  }, [onScanned, visible, webHints, webVideoReady, webScanDisabled]);
+  }, [processScannedValue, visible, webHints, webVideoReady, webScanDisabled]);
 
   const handleClose = useCallback(() => {
     if (Platform.OS === "web" && !webScanDisabled) stopWebCamera();
@@ -584,37 +587,68 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
   const handleScan = useCallback(
     (result: BarcodeScanningResult) => {
       if (busy) return;
-      const value = String((result as any)?.data ?? "").trim();
-      if (!value) return;
-
-      const now = Date.now();
-      if (lastScanRef.current.value === value && now - lastScanRef.current.at < 1200) return;
-      lastScanRef.current = { value, at: now };
-
-      setBusy(true);
-      setLast(value);
-      setError(null);
-
-      onScanned(value);
-      try {
-        if (busyTimeoutRef.current) clearTimeout(busyTimeoutRef.current);
-      } catch {
-        // ignore
-      }
-      busyTimeoutRef.current = setTimeout(() => setBusy(false), 800);
+      processScannedValue(String((result as any)?.data ?? ""));
     },
-    [busy, onScanned]
+    [busy, processScannedValue]
   );
+
+  const submitManualValue = useCallback(() => {
+    if (!processScannedValue(manualValue)) {
+      setError("Enter or scan a barcode value first.");
+    }
+  }, [manualValue, processScannedValue]);
 
   const cameraCard = (
     <Card style={{ padding: 0, overflow: "hidden" as any }}>
       <View style={{ width: "100%", aspectRatio: 1, backgroundColor: "#000" }}>
-        {Platform.OS === "web" ? (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 16 }}>
-            <MutedText style={{ color: "#fff", textAlign: "center" }}>Scanning is disabled on web to keep the app fast.</MutedText>
-            <View style={{ height: 10 }} />
-            <MutedText style={{ color: "#fff", textAlign: "center", opacity: 0.8 }}>Use the mobile app to scan barcodes/QR codes.</MutedText>
-          </View>
+        {isWeb ? (
+          <Pressable
+            onPress={() => {
+              if (!webVideoReady || webNeedsTap) void startWebCamera();
+            }}
+            style={{ flex: 1, position: "relative" }}
+          >
+            {React.createElement("video", {
+              ref: (node: HTMLVideoElement | null) => {
+                webVideoRef.current = node;
+              },
+              playsInline: true,
+              muted: true,
+              autoPlay: true,
+              style: {
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                transform: webMirror ? "scaleX(-1)" : "none",
+                display: "block",
+                opacity: webVideoReady ? 1 : 0.35,
+              },
+            })}
+            {!webVideoReady || webNeedsTap ? (
+              <View
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  left: 0,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 20,
+                  gap: 10,
+                }}
+              >
+                <Badge label={webNeedsTap ? "Tap to start" : "Preparing camera"} tone="default" />
+                <Text style={{ color: "#fff", textAlign: "center", fontSize: 15, fontWeight: "700" }}>
+                  {webNeedsTap ? "Tap to start the camera, then point it at the barcode." : "Preparing camera preview..."}
+                </Text>
+                <MutedText style={{ color: "rgba(255,255,255,0.82)", textAlign: "center" }}>
+                  Camera and keyboard scanner input both work here.
+                </MutedText>
+              </View>
+            ) : null}
+          </Pressable>
         ) : (
           <CameraView
             style={{ width: "100%", height: "100%" }}
@@ -624,7 +658,13 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         )}
       </View>
       <View style={{ padding: theme.spacing.md, gap: 10 }}>
-        {Platform.OS === "web" ? (
+        {isWeb ? (
+          <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+            <AppButton title={webVideoReady ? "Restart camera" : "Start camera"} onPress={() => void startWebCamera()} variant="secondary" />
+            {webVideoReady ? <AppButton title="Stop camera" onPress={stopWebCamera} variant="secondary" /> : null}
+          </View>
+        ) : null}
+        {isWeb ? (
           <View style={{ gap: 6 }}>
             {webStatus ? <MutedText>{webStatus}</MutedText> : null}
             {webDiag ? <MutedText>{webDiag}</MutedText> : null}
@@ -638,6 +678,47 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         ) : (
           <MutedText>Point the camera at the barcode/QR code.</MutedText>
         )}
+        <View style={{ gap: 8 }}>
+          <Text style={[theme.typography.label, { color: theme.colors.text }]}>Scanner input</Text>
+          <View
+            style={{
+              minHeight: 48,
+              borderRadius: theme.radius.sm,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surface2,
+              flexDirection: "row",
+              alignItems: "center",
+              overflow: "hidden",
+            }}
+          >
+            <TextInput
+              ref={manualInputRef}
+              value={manualValue}
+              onChangeText={(next) => {
+                setManualValue(next);
+                if (error) setError(null);
+              }}
+              onSubmitEditing={submitManualValue}
+              autoFocus={isWeb && visible}
+              autoCapitalize="none"
+              autoCorrect={false}
+              blurOnSubmit={false}
+              placeholder="Scan with HID scanner or paste barcode"
+              placeholderTextColor={theme.colors.textMuted}
+              style={{
+                flex: 1,
+                minHeight: 48,
+                paddingHorizontal: 14,
+                color: theme.colors.text,
+                ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null),
+              }}
+            />
+            <View style={{ width: 1, alignSelf: "stretch", backgroundColor: theme.colors.border }} />
+            <AppButton title="Use value" onPress={submitManualValue} variant="secondary" disabled={!manualValue.trim() || busy} style={{ borderRadius: 0, borderWidth: 0 }} />
+          </View>
+          <MutedText>Handheld scanners that type like keyboards will land here automatically.</MutedText>
+        </View>
       </View>
     </Card>
   );
@@ -651,8 +732,8 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     </View>
   );
 
-  const helper = Platform.OS === "web" ? (
-    <MutedText>If the camera does not open, your browser may require HTTPS (or localhost) and explicit permission.</MutedText>
+  const helper = isWeb ? (
+    <MutedText>If the camera does not open, allow camera access or use the scanner input below.</MutedText>
   ) : null;
 
   const errorBox = error ? (

@@ -948,7 +948,7 @@ export function OrderDetailScreen({ navigation, route }: Props) {
 
   return (
     <Screen
-      title="Orders"
+      title="Order detail"
       scroll={false}
       busy={loading}
       tabBarPadding={isDesktopWeb}

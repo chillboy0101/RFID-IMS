@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -531,7 +531,21 @@ export function InventoryEditScreen({ navigation, route }: Props) {
   }, [expiryDate, name, parseDate, quantity, reorderLevel, sku]);
 
   const hasChanges = useMemo(() => {
-    if (!id) return true;
+    if (!id) {
+      const currentStatus = (status.trim() || "active").toLowerCase();
+      return (
+        Boolean(name.trim()) ||
+        Boolean(sku.trim()) ||
+        Boolean(barcode.trim()) ||
+        Boolean(description.trim()) ||
+        Boolean(location.trim()) ||
+        Number(quantity) !== 0 ||
+        (reorderLevel.trim() ? Number(reorderLevel) : 0) !== 0 ||
+        Boolean(expiryDate.trim()) ||
+        Boolean(vendorId.trim()) ||
+        currentStatus !== "active"
+      );
+    }
     const item = initialRef.current;
     if (!item) return false;
 
@@ -553,6 +567,28 @@ export function InventoryEditScreen({ navigation, route }: Props) {
       currentStatus !== itemStatus
     );
   }, [barcode, description, expiryDate, id, location, name, quantity, reorderLevel, sku, status, vendorId]);
+
+  const confirmDiscard = useCallback(async () => {
+    const message = id ? "Discard your changes and restore the saved item?" : "Discard this draft and clear the form?";
+
+    if (Platform.OS === "web" && typeof globalThis.confirm === "function") {
+      return globalThis.confirm(message);
+    }
+
+    return await new Promise<boolean>((resolve) => {
+      Alert.alert("Discard changes?", message, [
+        { text: "Keep editing", style: "cancel", onPress: () => resolve(false) },
+        { text: "Discard", style: "destructive", onPress: () => resolve(true) },
+      ]);
+    });
+  }, [id]);
+
+  const handleDiscard = useCallback(async () => {
+    if (loading || !hasChanges) return;
+    const confirmed = await confirmDiscard();
+    if (!confirmed) return;
+    resetDraft();
+  }, [confirmDiscard, hasChanges, loading, resetDraft]);
 
   const stockTone = toneForStock(quantity, reorderLevel);
 
@@ -604,7 +640,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
   const desktopRight = (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
       <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />
-      <AppButton title="Discard" onPress={id ? resetDraft : onBack} variant="secondary" disabled={loading || !hasChanges} />
+      {hasChanges ? <AppButton title="Discard" onPress={handleDiscard} variant="secondary" disabled={loading} /> : null}
       <AppButton title="Save item" onPress={save} disabled={!canSubmit || loading || !hasChanges} loading={loading} />
     </View>
   );
@@ -614,7 +650,6 @@ export function InventoryEditScreen({ navigation, route }: Props) {
   const desktopContent = (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: theme.spacing.md, paddingBottom: theme.spacing.xl }} keyboardShouldPersistTaps="handled">
       {error ? <ErrorText>{error}</ErrorText> : null}
-      <MutedText>{`Inventory / ${title}`}</MutedText>
 
       <View style={{ flexDirection: "row", gap: theme.spacing.lg, alignItems: "flex-start" }}>
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -1070,10 +1105,12 @@ export function InventoryEditScreen({ navigation, route }: Props) {
           ]}
         >
           <View style={{ flexDirection: "row", gap: 10 }}>
-            <View style={{ flex: 1 }}>
-              <AppButton title="Discard" onPress={id ? resetDraft : onBack} variant="secondary" disabled={loading || !hasChanges} />
-            </View>
-            <View style={{ flex: 1.2 }}>
+            {hasChanges ? (
+              <View style={{ flex: 1 }}>
+                <AppButton title="Discard" onPress={handleDiscard} variant="secondary" disabled={loading} />
+              </View>
+            ) : null}
+            <View style={{ flex: hasChanges ? 1.2 : 1 }}>
               <AppButton title="Save item" onPress={save} disabled={!canSubmit || loading || !hasChanges} loading={loading} />
             </View>
           </View>

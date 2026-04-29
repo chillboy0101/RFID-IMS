@@ -852,7 +852,7 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
 
   return (
     <Screen
-      title="Inventory"
+      title="Item detail"
       busy={loading || updating}
       scroll={false}
       tabBarPadding={isDesktopWeb}
