@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { Platform, Text, View, useWindowDimensions } from "react-native";
 
 import { apiRequest } from "../api/client";
@@ -17,6 +17,12 @@ export function ForcePasswordChangeScreen() {
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
 
   const title = useMemo(() => "Set new password", []);
+
+  useEffect(() => {
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      document.title = "Set new password | VDL Fulfilment Ops";
+    }
+  }, []);
 
   async function onSubmit() {
     if (!token || busy) return;

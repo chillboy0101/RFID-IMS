@@ -1,6 +1,8 @@
 import nodemailer from "nodemailer";
 import { formatMinutesLabel } from "./authTiming.js";
 
+const VDL_LOGO_URL = "https://vdlfulfilment.com/wp-content/uploads/2023/05/cropped-VDL-Logo-compositions-15-300x141.png";
+
 type MailTransportConfig = {
   host: string;
   port: number;
@@ -197,9 +199,8 @@ export function buildResetPasswordEmail(token: string, baseUrl: string, expiresM
     .content p { color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 16px; }
     .button { display: inline-block; background: #0B0F17; color: #ffffff !important; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 15px; margin: 16px 0; }
     .button:hover { background: #1a2332; }
-    .footer { padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; }
-    .footer p { color: #9ca3af; font-size: 13px; margin: 0; }
-    .token-box { background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; margin: 16px 0; word-break: break-all; font-family: monospace; font-size: 13px; color: #374151; }
+    .footer { padding: 18px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center; }
+    .footer-logo { width: 92px; height: auto; opacity: 0.82; }
   </style>
 </head>
 <body>
@@ -212,11 +213,9 @@ export function buildResetPasswordEmail(token: string, baseUrl: string, expiresM
       <p>You requested to reset your password. Click the button below to set a new password. This link expires in <strong>${expiresLabel}</strong>.</p>
       <p style="text-align: center;"><a href="${resetUrl}" class="button">Reset Password</a></p>
       <p>If you didn't request a password reset, you can safely ignore this email.</p>
-      <p>Or copy and paste this link into your browser:</p>
-      <div class="token-box">${resetUrl}</div>
     </div>
     <div class="footer">
-      <p>This is an automated message from RFID Inventory Management System.</p>
+      <img class="footer-logo" src="${VDL_LOGO_URL}" alt="VDL Fulfilment" />
     </div>
   </div>
 </body>
@@ -233,7 +232,7 @@ ${resetUrl}
 
 If you didn't request a password reset, you can safely ignore this email.
 
-This is an automated message from RFID Inventory Management System.
+VDL Fulfilment Ops
 `;
 
   return { subject, html, text };
@@ -248,7 +247,6 @@ export function buildLoginAlertEmail(input: LoginAlertEmailInput): { subject: st
   const escapedIp = escapeHtml(ip);
   const escapedUserAgent = escapeHtml(userAgent);
   const escapedTime = escapeHtml(loginTime);
-  const escapedProtectUrl = escapeHtml(input.protectUrl);
   const html = `
 <!DOCTYPE html>
 <html>
@@ -267,9 +265,8 @@ export function buildLoginAlertEmail(input: LoginAlertEmailInput): { subject: st
     .detail-row:last-child { margin-bottom: 0; }
     .detail-label { font-weight: 700; color: #475569; }
     .button { display: inline-block; background: #b91c1c; color: #ffffff !important; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 700; font-size: 15px; margin: 16px 0; }
-    .footer { padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; }
-    .footer p { color: #9ca3af; font-size: 13px; margin: 0; }
-    .token-box { background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; margin: 16px 0; word-break: break-all; font-family: monospace; font-size: 13px; color: #374151; }
+    .footer { padding: 18px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center; }
+    .footer-logo { width: 92px; height: auto; opacity: 0.82; }
   </style>
 </head>
 <body>
@@ -287,11 +284,9 @@ export function buildLoginAlertEmail(input: LoginAlertEmailInput): { subject: st
         <div class="detail-row"><span class="detail-label">Device:</span> ${escapedUserAgent}</div>
       </div>
       <p style="text-align: center;"><a href="${input.protectUrl}" class="button">Protect My Account</a></p>
-      <p>Or copy and paste this link into your browser:</p>
-      <div class="token-box">${escapedProtectUrl}</div>
     </div>
     <div class="footer">
-      <p>This is an automated security message from RFID Inventory Management System.</p>
+      <img class="footer-logo" src="${VDL_LOGO_URL}" alt="VDL Fulfilment" />
     </div>
   </div>
 </body>
@@ -305,7 +300,6 @@ export function buildLoginAlertEmail(input: LoginAlertEmailInput): { subject: st
 export function buildRecoveryOtpEmail(input: RecoveryOtpEmailInput): { subject: string; html: string; text: string } {
   const subject = "Your VDL Fulfilment Ops account recovery code";
   const escapedOtp = escapeHtml(input.otp);
-  const escapedRecoveryUrl = escapeHtml(input.recoveryUrl);
   const expiresLabel = formatMinutesLabel(input.expiresMinutes);
   const html = `
 <!DOCTYPE html>
@@ -322,9 +316,8 @@ export function buildRecoveryOtpEmail(input: RecoveryOtpEmailInput): { subject: 
     .content p { color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 16px; }
     .otp-box { background: #0B0F17; color: #ffffff; border-radius: 10px; padding: 18px; margin: 20px 0; text-align: center; font-size: 28px; font-weight: 800; letter-spacing: 4px; }
     .button { display: inline-block; background: #0B0F17; color: #ffffff !important; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 15px; margin: 16px 0; }
-    .footer { padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; }
-    .footer p { color: #9ca3af; font-size: 13px; margin: 0; }
-    .token-box { background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; margin: 16px 0; word-break: break-all; font-family: monospace; font-size: 13px; color: #374151; }
+    .footer { padding: 18px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center; }
+    .footer-logo { width: 92px; height: auto; opacity: 0.82; }
   </style>
 </head>
 <body>
@@ -337,11 +330,9 @@ export function buildRecoveryOtpEmail(input: RecoveryOtpEmailInput): { subject: 
       <p>Use the one-time code below to confirm it is really you and set a new password. This code expires in <strong>${expiresLabel}</strong>.</p>
       <div class="otp-box">${escapedOtp}</div>
       <p style="text-align: center;"><a href="${input.recoveryUrl}" class="button">Open Recovery Page</a></p>
-      <p>Or copy and paste this link into your browser:</p>
-      <div class="token-box">${escapedRecoveryUrl}</div>
     </div>
     <div class="footer">
-      <p>This is an automated security message from RFID Inventory Management System.</p>
+      <img class="footer-logo" src="${VDL_LOGO_URL}" alt="VDL Fulfilment" />
     </div>
   </div>
 </body>
@@ -371,9 +362,8 @@ export function buildVerificationEmail(token: string, baseUrl: string, expiresMi
     .content p { color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 16px; }
     .button { display: inline-block; background: #0B0F17; color: #ffffff !important; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 15px; margin: 16px 0; }
     .button:hover { background: #1a2332; }
-    .footer { padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; }
-    .footer p { color: #9ca3af; font-size: 13px; margin: 0; }
-    .token-box { background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; margin: 16px 0; word-break: break-all; font-family: monospace; font-size: 13px; color: #374151; }
+    .footer { padding: 18px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center; }
+    .footer-logo { width: 92px; height: auto; opacity: 0.82; }
   </style>
 </head>
 <body>
@@ -386,11 +376,9 @@ export function buildVerificationEmail(token: string, baseUrl: string, expiresMi
       <p>Thank you for creating an account. Please verify your email address by clicking the button below. This link expires in <strong>${expiresLabel}</strong>.</p>
       <p style="text-align: center;"><a href="${verifyUrl}" class="button">Verify Email</a></p>
       <p>If you didn't create an account, you can safely ignore this email.</p>
-      <p>Or copy and paste this link into your browser:</p>
-      <div class="token-box">${verifyUrl}</div>
     </div>
     <div class="footer">
-      <p>This is an automated message from RFID Inventory Management System.</p>
+      <img class="footer-logo" src="${VDL_LOGO_URL}" alt="VDL Fulfilment" />
     </div>
   </div>
 </body>
@@ -407,7 +395,7 @@ ${verifyUrl}
 
 If you didn't create an account, you can safely ignore this email.
 
-This is an automated message from RFID Inventory Management System.
+VDL Fulfilment Ops
 `;
 
   return { subject, html, text };
@@ -442,9 +430,8 @@ export function buildProvisionedAccountEmail(input: ProvisionedAccountEmailInput
     .detail-label { font-weight: 700; color: #475569; }
     .password-box { background: #0B0F17; color: #ffffff; border-radius: 10px; padding: 16px; margin: 20px 0; text-align: center; font-size: 22px; font-weight: 800; letter-spacing: 2px; }
     .button { display: inline-block; background: #0B0F17; color: #ffffff !important; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 15px; margin: 16px 0; }
-    .footer { padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; }
-    .footer p { color: #9ca3af; font-size: 13px; margin: 0; }
-    .token-box { background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; margin: 16px 0; word-break: break-all; font-family: monospace; font-size: 13px; color: #374151; }
+    .footer { padding: 18px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center; }
+    .footer-logo { width: 92px; height: auto; opacity: 0.82; }
   </style>
 </head>
 <body>
@@ -462,11 +449,9 @@ export function buildProvisionedAccountEmail(input: ProvisionedAccountEmailInput
       </div>
       <div class="password-box">${escapedPassword}</div>
       <p style="text-align: center;"><a href="${escapedLoginUrl}" class="button">Open Sign In</a></p>
-      <p>Or copy and paste this link into your browser:</p>
-      <div class="token-box">${escapedLoginUrl}</div>
     </div>
     <div class="footer">
-      <p>This is an automated message from RFID Inventory Management System.</p>
+      <img class="footer-logo" src="${VDL_LOGO_URL}" alt="VDL Fulfilment" />
     </div>
   </div>
 </body>

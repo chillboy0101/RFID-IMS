@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { Platform, Text, View, useWindowDimensions } from "react-native";
 
 import { AuthContext } from "../auth/AuthContext";
@@ -15,6 +15,12 @@ export function BranchSelectGateScreen() {
   const hasTenants = tenants.length > 0;
 
   const title = useMemo(() => "Select branch", []);
+
+  useEffect(() => {
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      document.title = "Select branch | VDL Fulfilment Ops";
+    }
+  }, []);
 
   async function handleSelect(id: string) {
     if (busy) return;

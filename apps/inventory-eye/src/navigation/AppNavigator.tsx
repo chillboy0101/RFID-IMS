@@ -595,6 +595,58 @@ function AppTabs() {
   );
 }
 
+const DOCUMENT_TITLES: Record<string, string> = {
+  Login: "Sign in",
+  VerifyEmail: "Verify email",
+  ForgotPassword: "Forgot password",
+  ResetPassword: "Reset password",
+  RecoverAccount: "Recover account",
+  Dashboard: "Dashboard",
+  Inventory: "Inventory",
+  InventoryList: "Inventory",
+  InventoryDetail: "Item detail",
+  InventoryCreate: "New item",
+  InventoryEdit: "Edit item",
+  InventoryAdjust: "Adjust quantity",
+  InventoryLogs: "Inventory logs",
+  Orders: "Orders",
+  OrdersList: "Orders",
+  OrderDetail: "Order detail",
+  OrderCreate: "New order",
+  More: "More",
+  MoreMenu: "More",
+  Receiving: "Receiving",
+  Putaway: "Putaway",
+  CycleCount: "Cycle count",
+  Branches: "Branches and Users",
+  Alerts: "Alerts",
+  Reports: "Reports",
+  Feedback: "Feedback",
+  AdminFeedback: "Feedback management",
+  Progress: "Progress",
+  Vendors: "Vendors",
+  VendorsCreate: "New vendor",
+  VendorsEdit: "Edit vendor",
+  Reorders: "Reorders",
+  ReordersCreate: "New reorder",
+  RfidHub: "RFID Hub",
+  RfidScanner: "RFID scanner",
+  SupplyChain: "Supply Chain",
+  PeopleData: "People & Data",
+  AdminHub: "Admin",
+  Audit: "Audit Trail",
+  GateKeys: "Gate Keys",
+  Integrations: "Integrations",
+  Settings: "Settings",
+};
+
+function formatDocumentTitle(options: Record<string, any> | undefined, route: { name?: string } | undefined) {
+  const explicit = typeof options?.title === "string" && options.title.trim() ? options.title.trim() : "";
+  const routeTitle = route?.name ? DOCUMENT_TITLES[route.name] ?? route.name : "";
+  const title = explicit || routeTitle || "VDL Fulfilment Ops";
+  return title === "VDL Fulfilment Ops" ? title : `${title} | VDL Fulfilment Ops`;
+}
+
 export function AppNavigator() {
   const { loading, token, user, tenants, tenantsLoaded, tenantChosenThisSession, activeTenantId } = useContext(AuthContext);
   const isAuthBypassRoute = Platform.OS === "web" && typeof window !== "undefined" ? hasWebAuthBypassToken() : false;
@@ -683,6 +735,7 @@ export function AppNavigator() {
         onReady={captureCurrentRoute}
         onStateChange={captureCurrentRoute}
         linking={Platform.OS === "web" ? (linking as any) : undefined}
+        documentTitle={{ formatter: formatDocumentTitle }}
       >
         {token && !isAuthBypassRoute ? (
           mustChangePassword ? (
