@@ -13,7 +13,7 @@ const exitAuthorizationSchema = new mongoose.Schema(
     orderId: { type: mongoose.Schema.Types.ObjectId, ref: "Order" },
     unitId: { type: mongoose.Schema.Types.ObjectId, ref: "InventoryUnit" },
     createdByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-    expiresAt: { type: Date, required: true, index: true },
+    expiresAt: { type: Date, required: true },
     lastSeenAt: { type: Date },
     lastSeenSource: { type: String, trim: true },
     usedAt: { type: Date },

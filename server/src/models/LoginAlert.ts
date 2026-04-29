@@ -13,7 +13,7 @@ const loginAlertSchema = new mongoose.Schema(
     recoveryOtpExpiresAt: { type: Date, default: null },
     recoveryOtpSentAt: { type: Date, default: null },
     recoveryCompletedAt: { type: Date, default: null },
-    expiresAt: { type: Date, required: true, index: true },
+    expiresAt: { type: Date, required: true },
   },
   { timestamps: true }
 );

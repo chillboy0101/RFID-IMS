@@ -9,7 +9,7 @@ const exitSessionSchema = new mongoose.Schema(
     tokenPrefix: { type: String, required: true, trim: true },
     tokenHash: { type: String, required: true, trim: true },
     startedAt: { type: Date, required: true, default: Date.now },
-    expiresAt: { type: Date, required: true, index: true },
+    expiresAt: { type: Date, required: true },
     lastSeenAt: { type: Date },
     endedAt: { type: Date },
   },
