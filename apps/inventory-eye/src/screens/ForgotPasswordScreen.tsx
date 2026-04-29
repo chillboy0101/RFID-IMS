@@ -37,6 +37,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
     try {
       const res = await apiRequest<{ ok: true; message: string }>("/auth/forgot-password", {
         method: "POST",
+        timeoutMs: 30000,
         body: JSON.stringify({ email: email.trim() }),
       });
       if (mountedRef.current) {

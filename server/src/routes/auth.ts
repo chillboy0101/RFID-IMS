@@ -14,6 +14,16 @@ import { buildLoginAlertEmail, buildRecoveryOtpEmail, buildResetPasswordEmail, b
 
 const router = express.Router();
 
+function isProduction(): boolean {
+  return String(process.env.NODE_ENV ?? "").toLowerCase() === "production";
+}
+
+function isDevAuthBypassEnabled(): boolean {
+  const enabled = String(process.env.ENABLE_DEV_AUTH_BYPASS ?? "").toLowerCase() === "true";
+  const secret = String(process.env.DEV_BYPASS_SECRET ?? "").trim();
+  return enabled && !isProduction() && secret.length >= 16;
+}
+
 function getApiBaseUrl(req: express.Request): string {
   const protocol = req.protocol || "http";
   const host = req.get("host")?.trim();
@@ -72,11 +82,14 @@ async function issueRecoveryOtp(alert: mongoose.HydratedDocument<any>, userEmail
   return sendEmail({ to: userEmail, subject, html, text });
 }
 
-// Dev-only: register a pre-verified user (bypasses email verification)
-// Use X-Dev-Secret: dev-secret header or ?secret=dev-secret query param
 router.post("/register-dev", async (req, res) => {
+  if (!isDevAuthBypassEnabled()) {
+    res.status(404).json({ ok: false, error: "Not found" });
+    return;
+  }
+
   const secret = req.header("X-Dev-Secret") ?? req.query.secret ?? "";
-  const devSecret = process.env.DEV_BYPASS_SECRET ?? "dev-bypass-123";
+  const devSecret = String(process.env.DEV_BYPASS_SECRET ?? "").trim();
   if (secret !== devSecret) {
     res.status(404).json({ ok: false, error: "Not found" });
     return;

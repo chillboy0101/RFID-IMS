@@ -8,7 +8,9 @@ import { FeedbackModel } from "../models/Feedback.js";
 import { InventoryItemModel } from "../models/InventoryItem.js";
 import { InventoryLogModel } from "../models/InventoryLog.js";
 import { InviteModel } from "../models/Invite.js";
+import { LoginAlertModel } from "../models/LoginAlert.js";
 import { OrderModel } from "../models/Order.js";
+import { PasswordResetTokenModel } from "../models/PasswordResetToken.js";
 import { ReorderRequestModel } from "../models/ReorderRequest.js";
 import { RfidEventModel } from "../models/RfidEvent.js";
 import { TaskSessionModel } from "../models/TaskSession.js";
@@ -16,6 +18,7 @@ import { TenantModel } from "../models/Tenant.js";
 import { TenantMembershipModel } from "../models/TenantMembership.js";
 import { UserModel, userRoles, type UserRole, type UserDocument } from "../models/User.js";
 import { VendorModel } from "../models/Vendor.js";
+import { VerificationTokenModel } from "../models/VerificationToken.js";
 import { getPagination } from "../utils/pagination.js";
 import { asObjectId, asString } from "../utils/validate.js";
 
@@ -489,7 +492,20 @@ router.delete("/users/:id", requireRole("admin"), async (req: AuthRequest, res) 
 
   const userId = user._id;
 
-  const [memberships, invitesCreated, invitesUsed, orders, reorders, feedback, sessions, logs] =
+  const [
+    memberships,
+    invitesCreated,
+    invitesUsed,
+    orders,
+    reorders,
+    feedback,
+    authSessions,
+    taskSessions,
+    loginAlerts,
+    passwordResetTokens,
+    verificationTokens,
+    logs,
+  ] =
     await Promise.all([
       TenantMembershipModel.deleteMany({ userId }).exec(),
       InviteModel.deleteMany({ createdByUserId: userId }).exec(),
@@ -497,7 +513,11 @@ router.delete("/users/:id", requireRole("admin"), async (req: AuthRequest, res) 
       OrderModel.deleteMany({ createdByUserId: userId }).exec(),
       ReorderRequestModel.deleteMany({ requestedByUserId: userId }).exec(),
       FeedbackModel.deleteMany({ userId }).exec(),
+      AuthSessionModel.deleteMany({ userId }).exec(),
       TaskSessionModel.deleteMany({ userId }).exec(),
+      LoginAlertModel.deleteMany({ userId }).exec(),
+      PasswordResetTokenModel.deleteMany({ userId }).exec(),
+      VerificationTokenModel.deleteMany({ userId }).exec(),
       InventoryLogModel.deleteMany({ actorUserId: userId }).exec(),
     ]);
 
@@ -523,7 +543,11 @@ router.delete("/users/:id", requireRole("admin"), async (req: AuthRequest, res) 
       orders: (orders as any).deletedCount ?? 0,
       reorders: (reorders as any).deletedCount ?? 0,
       feedback: (feedback as any).deletedCount ?? 0,
-      sessions: (sessions as any).deletedCount ?? 0,
+      authSessions: (authSessions as any).deletedCount ?? 0,
+      taskSessions: (taskSessions as any).deletedCount ?? 0,
+      loginAlerts: (loginAlerts as any).deletedCount ?? 0,
+      passwordResetTokens: (passwordResetTokens as any).deletedCount ?? 0,
+      verificationTokens: (verificationTokens as any).deletedCount ?? 0,
       inventoryLogs: (logs as any).deletedCount ?? 0,
     },
   });

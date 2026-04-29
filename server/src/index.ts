@@ -4,6 +4,8 @@ import express from "express";
 import mongoose from "mongoose";
 import type { Request, Response } from "express";
 import crypto from "crypto";
+import fs from "node:fs";
+import path from "node:path";
 import authRouter from "./routes/auth.js";
 import adminRouter from "./routes/admin.js";
 import inventoryRouter from "./routes/inventory.js";
@@ -48,6 +50,16 @@ if (process.env.TRUST_PROXY) {
 }
 
 type ReqWithId = Request & { requestId?: string };
+
+function resolveFrontendFaviconPath(): string | null {
+  const candidates = [
+    path.resolve(process.cwd(), "../apps/inventory-eye/assets/favicon.png"),
+    path.resolve(process.cwd(), "apps/inventory-eye/assets/favicon.png"),
+    path.resolve(process.cwd(), "../../apps/inventory-eye/assets/favicon.png"),
+  ];
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
+}
 
 app.use((req: ReqWithId, res, next) => {
   const header = req.header("x-request-id") ?? "";
@@ -209,7 +221,7 @@ app.get("/", (req: Request, res: Response) => {
   res.setHeader("cache-control", "no-store");
   res.setHeader(
     "content-security-policy",
-    "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
   );
   res.type("html").send(
     renderApiHome({
@@ -228,6 +240,17 @@ app.get("/status.json", (_req: Request, res: Response) => {
     ok: true,
     message: "Inventory Eye API running. See /health",
   });
+});
+
+app.get(["/favicon.ico", "/favicon.png"], (_req: Request, res: Response) => {
+  const faviconPath = resolveFrontendFaviconPath();
+  if (!faviconPath) {
+    res.status(404).send("Not found");
+    return;
+  }
+
+  res.setHeader("cache-control", "public, max-age=86400");
+  res.type("png").sendFile(faviconPath);
 });
 app.get("/verify-email", async (req: Request, res: Response) => {
   const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
@@ -265,11 +288,11 @@ app.get("/health", async (_req: Request, res: Response) => {
 
 app.get("/metrics", async (req: Request, res: Response) => {
   const isProd = String(process.env.NODE_ENV ?? "").toLowerCase() === "production";
-  const token = process.env.METRICS_TOKEN;
+  const token = (process.env.METRICS_TOKEN ?? "").trim();
 
-  if (isProd && token) {
+  if (isProd || token) {
     const provided = (req.header("x-metrics-token") ?? "").trim();
-    if (!provided || provided !== token) {
+    if (!token || !provided || provided !== token) {
       res.status(404).send("Not found");
       return;
     }
