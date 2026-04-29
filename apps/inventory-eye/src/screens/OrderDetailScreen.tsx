@@ -137,6 +137,27 @@ export function OrderDetailScreen({ navigation, route }: Props) {
     ];
   }, [workflow]);
 
+  const stageSummary = useMemo(() => {
+    if (!workflow) return [];
+    return [
+      {
+        label: "1. Reserve units",
+        value: `${workflow.reservedUnits}/${workflow.requestedUnits}`,
+        tone: workflow.reservedUnits >= workflow.requestedUnits ? ("success" as const) : ("default" as const),
+      },
+      {
+        label: "2. Gate authorization",
+        value: String(workflow.activeAuthorizations),
+        tone: workflow.activeAuthorizations > 0 ? ("warning" as const) : ("default" as const),
+      },
+      {
+        label: "3. Verified exit",
+        value: `${workflow.dispatchedUnits}/${workflow.requestedUnits}`,
+        tone: workflow.dispatchedUnits >= workflow.requestedUnits ? ("success" as const) : ("default" as const),
+      },
+    ];
+  }, [workflow]);
+
   async function refreshAfterAction(loader: Promise<OrderDetailResponse | AuthorizeResponse>) {
     const res = await loader;
     setOrder(res.order);
@@ -230,6 +251,16 @@ export function OrderDetailScreen({ navigation, route }: Props) {
             <Text style={{ color: theme.colors.textMuted, marginTop: 6 }}>{order.notes}</Text>
           </View>
         ) : null}
+      </Card>
+
+      <Card>
+        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>RFID fulfillment stages</Text>
+        <MutedText>This order should move through reserve, gate authorization, and verified exit in that order.</MutedText>
+        <View style={{ marginTop: 12, gap: 10 }}>
+          {stageSummary.map((stage) => (
+            <ListRow key={stage.label} title={stage.label} subtitle={stage.value} right={<Badge label={stage.value} tone={stage.tone} />} />
+          ))}
+        </View>
       </Card>
 
       <Card>

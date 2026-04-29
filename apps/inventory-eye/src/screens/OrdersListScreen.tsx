@@ -13,6 +13,16 @@ type Order = {
   _id: string;
   status: string;
   createdAt: string;
+  authorizationLocation?: string | null;
+  authorizationExpiresAt?: string | null;
+  workflow?: {
+    requestedUnits: number;
+    reservedUnits: number;
+    taggedReservedUnits: number;
+    barcodeFallbackUnits: number;
+    activeAuthorizations: number;
+    dispatchedUnits: number;
+  };
 };
 
 type OrdersResponse = {
@@ -28,6 +38,21 @@ function toneForStatus(status: string) {
   if (status === "authorized") return "warning" as const;
   if (status === "picking") return "primary" as const;
   return "default" as const;
+}
+
+function nextStepForOrder(order: Order) {
+  if (order.status === "created") return "Start picking";
+  if (order.status === "picking") return "Authorize gate";
+  if (order.status === "authorized") return "Verify exit scans";
+  if (order.status === "fulfilled") return "Completed";
+  if (order.status === "cancelled") return "Cancelled";
+  return order.status;
+}
+
+function formatOrderProgress(order: Order) {
+  const workflow = order.workflow;
+  if (!workflow) return "Workflow summary unavailable";
+  return `Reserved ${workflow.reservedUnits}/${workflow.requestedUnits} • Gate ${workflow.activeAuthorizations} • Exited ${workflow.dispatchedUnits}`;
 }
 
 export function OrdersListScreen({ navigation }: Props) {
@@ -138,6 +163,8 @@ export function OrdersListScreen({ navigation }: Props) {
   }, [orders, q]);
 
   const openCount = useMemo(() => filtered.filter((o) => o.status !== "fulfilled" && o.status !== "cancelled").length, [filtered]);
+  const pickingCount = useMemo(() => filtered.filter((o) => o.status === "picking").length, [filtered]);
+  const gateReadyCount = useMemo(() => filtered.filter((o) => o.status === "authorized").length, [filtered]);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -200,6 +227,16 @@ export function OrdersListScreen({ navigation }: Props) {
       {isDesktopWeb ? (
         <View style={{ flex: 1, gap: theme.spacing.md }}>
           <Card>
+            <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Fulfillment flow</Text>
+            <MutedText>Create the order here, reserve units during picking, authorize a short gate window, then let RFID exit scans close the order automatically.</MutedText>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
+              <Badge label="1. Create order" />
+              <Badge label="2. Reserve + authorize" tone="primary" />
+              <Badge label="3. Exit verify" tone="warning" />
+            </View>
+          </Card>
+
+          <Card>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <TextField ref={searchRef} value={q} onChangeText={setQ} placeholder="Search: order ID or status" autoCapitalize="none" />
@@ -208,6 +245,8 @@ export function OrdersListScreen({ navigation }: Props) {
               <View style={{ flexDirection: "row", flexWrap: "nowrap", gap: 10, justifyContent: "flex-end", alignItems: "center", flexShrink: 0 }}>
                 <Badge label={`Total: ${filtered.length}`} size="header" />
                 <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} size="header" />
+                <Badge label={`Picking: ${pickingCount}`} tone={pickingCount > 0 ? "warning" : "default"} size="header" />
+                <Badge label={`Gate ready: ${gateReadyCount}`} tone={gateReadyCount > 0 ? "warning" : "default"} size="header" />
               </View>
             </View>
             <MutedText style={{ marginTop: 8 }}>Tip: click a row to open the order detail page.</MutedText>
@@ -229,11 +268,14 @@ export function OrdersListScreen({ navigation }: Props) {
               <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 2 }]} numberOfLines={1}>
                 Order
               </Text>
-              <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 2 }]} numberOfLines={1}>
+              <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
                 Created
               </Text>
-              <Text style={[theme.typography.label, { color: theme.colors.textMuted, width: 130, textAlign: "right" }]} numberOfLines={1}>
-                Status
+              <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
+                Progress
+              </Text>
+              <Text style={[theme.typography.label, { color: theme.colors.textMuted, width: 150, textAlign: "right" }]} numberOfLines={1}>
+                Next Step
               </Text>
             </View>
 
@@ -270,11 +312,17 @@ export function OrdersListScreen({ navigation }: Props) {
                         <Text style={[theme.typography.h3, { color: theme.colors.text, flex: 2 }]} numberOfLines={1}>
                           #{item._id.slice(-6)}
                         </Text>
-                        <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 2 }]} numberOfLines={1}>
+                        <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
                           {new Date(item.createdAt).toLocaleString()}
                         </Text>
-                        <View style={{ width: 130, alignItems: "flex-end" }}>
+                        <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
+                          {formatOrderProgress(item)}
+                        </Text>
+                        <View style={{ width: 150, alignItems: "flex-end", gap: 6 }}>
                           <Badge label={item.status} tone={tone} />
+                          <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]} numberOfLines={1}>
+                            {nextStepForOrder(item)}
+                          </Text>
                         </View>
                       </Pressable>
                     );
@@ -319,11 +367,17 @@ export function OrdersListScreen({ navigation }: Props) {
                       <Text style={[theme.typography.h3, { color: theme.colors.text, flex: 2 }]} numberOfLines={1}>
                         #{item._id.slice(-6)}
                       </Text>
-                      <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 2 }]} numberOfLines={1}>
+                      <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
                         {new Date(item.createdAt).toLocaleString()}
                       </Text>
-                      <View style={{ width: 130, alignItems: "flex-end" }}>
+                      <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
+                        {formatOrderProgress(item)}
+                      </Text>
+                      <View style={{ width: 150, alignItems: "flex-end", gap: 6 }}>
                         <Badge label={item.status} tone={tone} />
+                        <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]} numberOfLines={1}>
+                          {nextStepForOrder(item)}
+                        </Text>
                       </View>
                     </Pressable>
                   );
@@ -345,14 +399,22 @@ export function OrdersListScreen({ navigation }: Props) {
             scrollEventThrottle={32}
           >
             <Card>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <View style={{ flex: 1 }}>
+              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Fulfillment flow</Text>
+              <MutedText>Create the order, reserve the units, authorize the gate, then verify the leaving items in RFID Hub.</MutedText>
+            </Card>
+
+            <Card>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                <View style={{ width: "48%" }}>
                   <Badge label={`Total: ${filtered.length}`} size="header" responsive={false} fullWidth />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ width: "48%" }}>
                   <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} size="header" responsive={false} fullWidth />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ width: "48%" }}>
+                  <Badge label={`Picking: ${pickingCount}`} tone={pickingCount > 0 ? "warning" : "default"} size="header" responsive={false} fullWidth />
+                </View>
+                <View style={{ width: "48%" }}>
                   <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" style={{ width: "100%" }} />
                 </View>
               </View>
@@ -363,7 +425,7 @@ export function OrdersListScreen({ navigation }: Props) {
                 <ListRow
                   key={item._id}
                   title={`Order #${item._id.slice(-6)}`}
-                  subtitle={`Created: ${new Date(item.createdAt).toLocaleString()}`}
+                  subtitle={`Created: ${new Date(item.createdAt).toLocaleString()}\n${formatOrderProgress(item)}`}
                   right={<Badge label={item.status} tone={item.status === "fulfilled" ? "success" : item.status === "cancelled" ? "danger" : "primary"} />}
                   onPress={() => navigation.navigate("OrderDetail", { id: item._id })}
                 />
@@ -387,14 +449,20 @@ export function OrdersListScreen({ navigation }: Props) {
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
             ListHeaderComponent={
               <Card>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <View style={{ flex: 1 }}>
+                <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Fulfillment flow</Text>
+                <MutedText>Create the order, reserve the units, authorize the gate, then verify the leaving items in RFID Hub.</MutedText>
+                <View style={{ height: 12 }} />
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                  <View style={{ width: "48%" }}>
                     <Badge label={`Total: ${filtered.length}`} size="header" responsive={false} fullWidth />
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ width: "48%" }}>
                     <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} size="header" responsive={false} fullWidth />
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ width: "48%" }}>
+                    <Badge label={`Picking: ${pickingCount}`} tone={pickingCount > 0 ? "warning" : "default"} size="header" responsive={false} fullWidth />
+                  </View>
+                  <View style={{ width: "48%" }}>
                     <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" style={{ width: "100%" }} />
                   </View>
                 </View>
@@ -405,7 +473,7 @@ export function OrdersListScreen({ navigation }: Props) {
             renderItem={({ item }) => (
               <ListRow
                 title={`Order #${item._id.slice(-6)}`}
-                subtitle={`Created: ${new Date(item.createdAt).toLocaleString()}`}
+                subtitle={`Created: ${new Date(item.createdAt).toLocaleString()}\n${formatOrderProgress(item)}`}
                 right={<Badge label={item.status} tone={item.status === "fulfilled" ? "success" : item.status === "cancelled" ? "danger" : "primary"} />}
                 onPress={() => navigation.navigate("OrderDetail", { id: item._id })}
               />

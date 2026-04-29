@@ -62,7 +62,11 @@ export function InventoryEditScreen({ navigation, route }: Props) {
     navigation.navigate("InventoryList");
   }, [id, isDesktopWeb, navigation]);
 
-  const rfidRef = useRef<TextInput>(null);
+  const openRfidHub = useCallback(() => {
+    const parent = navigation.getParent();
+    (parent as any)?.navigate?.("More", { screen: "RfidHub" });
+  }, [navigation]);
+
   const barcodeRef = useRef<TextInput>(null);
 
   const DateTimePicker = useMemo(() => {
@@ -158,6 +162,10 @@ export function InventoryEditScreen({ navigation, route }: Props) {
     }
     return true;
   }, [name, sku, quantity, reorderLevel, expiryDate]);
+
+  const barcodeRecommended = useMemo(() => {
+    return barcode.trim().length > 0 ? null : "Add a barcode if untagged units should still clear the gate with barcode fallback.";
+  }, [barcode]);
 
   const load = useCallback(async () => {
     if (!token || !id) return;
@@ -276,7 +284,6 @@ export function InventoryEditScreen({ navigation, route }: Props) {
         quantity: Number(quantity) || 0,
         reorderLevel: Number(reorderLevel) || 0,
         expiryDate: expiryDate.trim() ? expiryDate.trim() : undefined,
-        rfidTagId: rfidTagId.trim() ? rfidTagId.trim() : undefined,
         vendorId: vendorId.trim() ? vendorId.trim() : undefined,
         status: status.trim() ? status.trim() : undefined,
       };
@@ -351,6 +358,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                       autoCapitalize="none"
                       returnKeyType="done"
                       onSubmitEditing={() => setBarcode((prev) => prev.trim())}
+                      helperText={barcodeRecommended ?? undefined}
                     />
                   </View>
                   <AppButton
@@ -403,21 +411,17 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                 <View style={{ height: 12 }} />
                 <TextField label="Custom status" value={status} onChangeText={setStatus} placeholder="active" autoCapitalize="none" />
                 <View style={{ height: 12 }} />
-                <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-end" }}>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <TextField
-                      ref={rfidRef}
-                      label="RFID tag ID"
-                      value={rfidTagId}
-                      onChangeText={setRfidTagId}
-                      placeholder="Scan or type"
-                      autoCapitalize="none"
-                      returnKeyType="done"
-                      onSubmitEditing={() => setRfidTagId((prev) => prev.trim())}
-                    />
+                <Text style={[theme.typography.label, { color: theme.colors.text, marginBottom: 8 }]}>RFID handoff</Text>
+                <MutedText>
+                  Create and edit the SKU here. Use RFID Hub when the physical units arrive so receiving, tag binding, authorization, and exit verification stay on the same workflow.
+                </MutedText>
+                {rfidTagId ? (
+                  <View style={{ marginTop: 10 }}>
+                    <Badge label={`Legacy RFID tag: ${rfidTagId}`} tone="warning" />
                   </View>
-                  <AppButton title="Scan RFID" onPress={() => rfidRef.current?.focus()} variant="secondary" />
-                </View>
+                ) : null}
+                <View style={{ height: 12 }} />
+                <AppButton title="Open RFID Hub" onPress={openRfidHub} variant="secondary" />
                 <View style={{ height: 12 }} />
                 <TextField
                   label="Vendor ID"
@@ -588,6 +592,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                   autoCapitalize="none"
                   returnKeyType="done"
                   onSubmitEditing={() => setBarcode((prev) => prev.trim())}
+                  helperText={barcodeRecommended ?? undefined}
                 />
               </View>
               <AppButton
@@ -705,21 +710,17 @@ export function InventoryEditScreen({ navigation, route }: Props) {
             <View style={{ height: 12 }} />
             <TextField label="Custom status" value={status} onChangeText={setStatus} placeholder="active" autoCapitalize="none" />
             <View style={{ height: 12 }} />
-            <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-end" }}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <TextField
-                  ref={rfidRef}
-                  label="RFID tag ID"
-                  value={rfidTagId}
-                  onChangeText={setRfidTagId}
-                  placeholder="Scan or type"
-                  autoCapitalize="none"
-                  returnKeyType="done"
-                  onSubmitEditing={() => setRfidTagId((prev) => prev.trim())}
-                />
+            <Text style={[theme.typography.label, { color: theme.colors.text, marginBottom: 8 }]}>RFID handoff</Text>
+            <MutedText>
+              This form owns the SKU master record. Use RFID Hub when the physical units arrive or when tags need to change.
+            </MutedText>
+            {rfidTagId ? (
+              <View style={{ marginTop: 10 }}>
+                <Badge label={`Legacy RFID tag: ${rfidTagId}`} tone="warning" />
               </View>
-              <AppButton title="Scan RFID" onPress={() => rfidRef.current?.focus()} variant="secondary" />
-            </View>
+            ) : null}
+            <View style={{ height: 12 }} />
+            <AppButton title="Open RFID Hub" onPress={openRfidHub} variant="secondary" />
             <View style={{ height: 12 }} />
             <TextField
               label="Vendor ID"

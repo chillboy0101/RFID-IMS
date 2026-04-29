@@ -142,6 +142,48 @@ async function verifyExitScan(opts: {
   };
 }
 
+router.get("/meta", async (_req, res) => {
+  res.json({
+    ok: true,
+    hardware: {
+      fixedGateReader: {
+        endpoint: "POST /rfid/gate-events",
+        headers: {
+          "X-Gate-Api-Key": "Required gate API key",
+          "X-Source": "Optional reader/source label",
+        },
+        payload: {
+          tagId: "string (recommended for RFID reads)",
+          barcode: "string (optional barcode fallback)",
+          location: "string, default EXIT_MAIN",
+          source: "string, default rfid",
+          observedAt: "ISO timestamp, optional",
+          itemId: "Mongo ObjectId, optional manual override",
+        },
+      },
+      operatorExitSession: {
+        requestSession: "POST /rfid/exit-sessions",
+        verifyScan: "POST /rfid/exit-sessions/verify",
+        auth: "Bearer JWT + X-Tenant-ID",
+        verifyPayload: {
+          token: "short-lived exit session token",
+          tagId: "string (preferred)",
+          barcode: "string (fallback)",
+          observedAt: "ISO timestamp, optional",
+        },
+      },
+      tagRegistry: {
+        list: "GET /rfid/tags",
+        get: "GET /rfid/tags/:tagId",
+        reassign: "PATCH /rfid/tags/:tagId",
+        activate: "POST /rfid/tags/:tagId/activate",
+        deactivate: "POST /rfid/tags/:tagId/deactivate",
+        removeAssignment: "DELETE /rfid/tags/:tagId",
+      },
+    },
+  });
+});
+
 router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: GateRequest, res) => {
   const tenantId = req.tenantId as string;
   const body = (req.body ?? {}) as Record<string, unknown>;

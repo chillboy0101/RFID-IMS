@@ -91,8 +91,18 @@ router.get("/", async (req, res) => {
 
   const hasMore = docs.length > limit;
   const orders = hasMore ? docs.slice(0, limit) : docs;
+  const workflows = await Promise.all(orders.map((order) => buildOrderWorkflowSummary(tenantId, order)));
 
-  res.json({ ok: true, orders, page, limit, hasMore });
+  res.json({
+    ok: true,
+    orders: orders.map((order, index) => ({
+      ...order.toObject(),
+      workflow: workflows[index],
+    })),
+    page,
+    limit,
+    hasMore,
+  });
 });
 
 router.post("/", async (req: TenantRequest, res) => {

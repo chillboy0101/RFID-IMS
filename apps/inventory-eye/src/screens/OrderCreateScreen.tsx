@@ -13,7 +13,22 @@ type InventoryItem = {
   _id: string;
   name: string;
   sku: string;
+  barcode?: string;
   quantity: number;
+  flow?: {
+    trackedUnits: number;
+    untrackedUnits: number;
+    awaitingTagUnits: number;
+    taggedUnits: number;
+    reservedUnits: number;
+    pickedUnits: number;
+    dispatchedUnits: number;
+    activeExitAuthorizations: number;
+    barcodeReady: boolean;
+    exitReadyUnits: number;
+    missingExitTrackingUnits: number;
+    nextStep: string;
+  };
 };
 
 type CartLine = {
@@ -25,6 +40,18 @@ type CartLine = {
 };
 
 type Props = NativeStackScreenProps<OrdersStackParamList, "OrderCreate">;
+
+function exitReadinessLabel(item: InventoryItem) {
+  if (!item.flow) return "Flow summary unavailable";
+  return `Exit ready ${item.flow.exitReadyUnits}/${item.quantity} • ${item.flow.nextStep}`;
+}
+
+function exitReadinessTone(item: InventoryItem) {
+  if (!item.flow) return "default" as const;
+  if (item.flow.missingExitTrackingUnits > 0 || item.flow.untrackedUnits > 0) return "warning" as const;
+  if (item.flow.exitReadyUnits >= item.quantity && item.quantity > 0) return "success" as const;
+  return "default" as const;
+}
 
 export function OrderCreateScreen({ navigation }: Props) {
   const { token } = useContext(AuthContext);
@@ -45,6 +72,10 @@ export function OrderCreateScreen({ navigation }: Props) {
     }
     navigation.navigate("OrdersList");
   }, [isDesktopWeb, navigation]);
+  const openRfidHub = useCallback(() => {
+    const parent = navigation.getParent();
+    (parent as any)?.navigate?.("More", { screen: "RfidHub" });
+  }, [navigation]);
 
   const searchRef = useRef<TextInput>(null);
   const [scanOpen, setScanOpen] = useState(false);
@@ -183,6 +214,21 @@ export function OrderCreateScreen({ navigation }: Props) {
   }, [loadItems, query, token]);
 
   const cartTotal = useMemo(() => cart.reduce((sum, l) => sum + l.quantity, 0), [cart]);
+  const cartWarnings = useMemo(() => {
+    return cart
+      .map((line) => {
+        const item = items.find((candidate) => candidate._id === line.itemId);
+        if (!item?.flow) return null;
+        if (line.quantity > item.flow.exitReadyUnits) {
+          return `${line.name}: only ${item.flow.exitReadyUnits} of ${line.quantity} requested units are exit-ready right now.`;
+        }
+        if (item.flow.untrackedUnits > 0) {
+          return `${line.name}: ${item.flow.untrackedUnits} units still need RFID Hub receiving/backfill to match live stock.`;
+        }
+        return null;
+      })
+      .filter((value): value is string => !!value);
+  }, [cart, items]);
 
   function addToCart(it: InventoryItem) {
     setCart((prev) => {
@@ -259,6 +305,16 @@ export function OrderCreateScreen({ navigation }: Props) {
           <View style={{ flexDirection: "row", gap: theme.spacing.md, alignItems: "stretch", flex: 1 }}>
             <View style={{ flex: 1, minWidth: 0, gap: theme.spacing.md }}>
             <Card>
+              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Order flow</Text>
+              <MutedText>Create the order here, then let the fulfillment team reserve units, authorize the gate, and finish the exit in RFID Hub.</MutedText>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
+                <Badge label="1. Create order" />
+                <Badge label="2. Pick + authorize" tone="primary" />
+                <Badge label="3. Exit verify in RFID Hub" tone="warning" />
+              </View>
+            </Card>
+
+            <Card>
               <TextField
                 ref={searchRef}
                 value={query}
@@ -274,6 +330,7 @@ export function OrderCreateScreen({ navigation }: Props) {
                 <View style={{ flexGrow: 1 }} />
                 <Badge label={`Selected: ${cart.length}`} tone={cart.length ? "primary" : "default"} size="header" />
                 <Badge label={`Units: ${cartTotal}`} tone={cartTotal ? "primary" : "default"} size="header" />
+                <AppButton title="RFID Hub" onPress={openRfidHub} variant="secondary" />
               </View>
             </Card>
 
@@ -298,6 +355,9 @@ export function OrderCreateScreen({ navigation }: Props) {
                 </Text>
                 <Text style={[theme.typography.label, { color: theme.colors.textMuted, width: 120, textAlign: "right" }]} numberOfLines={1}>
                   Available
+                </Text>
+                <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
+                  Exit Readiness
                 </Text>
               </View>
 
@@ -337,6 +397,9 @@ export function OrderCreateScreen({ navigation }: Props) {
                         </Text>
                         <Text style={{ color: theme.colors.text, width: 120, textAlign: "right", fontWeight: "800" }} numberOfLines={1}>
                           {item.quantity}
+                        </Text>
+                        <Text style={{ color: theme.colors.textMuted, flex: 3 }} numberOfLines={1}>
+                          {exitReadinessLabel(item)}
                         </Text>
                       </Pressable>
                     ))
@@ -384,6 +447,9 @@ export function OrderCreateScreen({ navigation }: Props) {
                       <Text style={{ color: theme.colors.text, width: 120, textAlign: "right", fontWeight: "800" }} numberOfLines={1}>
                         {item.quantity}
                       </Text>
+                      <Text style={{ color: theme.colors.textMuted, flex: 3 }} numberOfLines={1}>
+                        {exitReadinessLabel(item)}
+                      </Text>
                     </Pressable>
                   )}
                 />
@@ -394,6 +460,24 @@ export function OrderCreateScreen({ navigation }: Props) {
           <View style={{ width: 420, gap: theme.spacing.md }}>
             <Card>
               <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Selected items</Text>
+              {cartWarnings.length ? (
+                <View style={{ marginBottom: 12, gap: 8 }}>
+                  {cartWarnings.map((warning) => (
+                    <View
+                      key={warning}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: theme.colors.border,
+                        backgroundColor: "rgba(245, 158, 11, 0.14)",
+                        borderRadius: theme.radius.md,
+                        padding: 10,
+                      }}
+                    >
+                      <MutedText>{warning}</MutedText>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
               {cart.length ? (
                 <View style={{ gap: 10 }}>
                   {cart.map((l) => (
@@ -438,6 +522,11 @@ export function OrderCreateScreen({ navigation }: Props) {
           alwaysBounceVertical
         >
           <Card>
+            <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Order flow</Text>
+            <MutedText>Create the order, then move to picking, gate authorization, and RFID exit verification.</MutedText>
+          </Card>
+
+          <Card>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               <View style={{ flex: 1 }}>
                 <Badge label={`Selected: ${cart.length}`} tone={cart.length ? "primary" : "default"} size="header" responsive={false} fullWidth />
@@ -454,6 +543,24 @@ export function OrderCreateScreen({ navigation }: Props) {
 
           <Card>
             <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Selected items</Text>
+            {cartWarnings.length ? (
+              <View style={{ marginBottom: 12, gap: 8 }}>
+                {cartWarnings.map((warning) => (
+                  <View
+                    key={warning}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: theme.colors.border,
+                      backgroundColor: "rgba(245, 158, 11, 0.14)",
+                      borderRadius: theme.radius.md,
+                      padding: 10,
+                    }}
+                  >
+                    <MutedText>{warning}</MutedText>
+                  </View>
+                ))}
+              </View>
+            ) : null}
             {cart.length ? (
               <View style={{ gap: 10 }}>
                 {cart.map((l) => (
@@ -490,9 +597,9 @@ export function OrderCreateScreen({ navigation }: Props) {
                   <ListRow
                     key={item._id}
                     title={item.name}
-                    subtitle={`SKU: ${item.sku}`}
+                    subtitle={`SKU: ${item.sku}\n${exitReadinessLabel(item)}`}
                     meta={`Available: ${item.quantity}`}
-                    right={<Badge label="Add" tone="primary" />}
+                    right={<Badge label="Add" tone={exitReadinessTone(item)} />}
                     onPress={() => addToCart(item)}
                   />
                 ))}
@@ -503,9 +610,9 @@ export function OrderCreateScreen({ navigation }: Props) {
                   <ListRow
                     key={item._id}
                     title={item.name}
-                    subtitle={`SKU: ${item.sku}`}
+                    subtitle={`SKU: ${item.sku}\n${exitReadinessLabel(item)}`}
                     meta={`Available: ${item.quantity}`}
-                    right={<Badge label="Add" tone="primary" />}
+                    right={<Badge label="Add" tone={exitReadinessTone(item)} />}
                     onPress={() => addToCart(item)}
                   />
                 ))}

@@ -25,6 +25,20 @@ type InventoryItem = {
   status?: string;
   updatedAt?: string;
   createdAt?: string;
+  flow?: {
+    trackedUnits: number;
+    untrackedUnits: number;
+    awaitingTagUnits: number;
+    taggedUnits: number;
+    reservedUnits: number;
+    pickedUnits: number;
+    dispatchedUnits: number;
+    activeExitAuthorizations: number;
+    barcodeReady: boolean;
+    exitReadyUnits: number;
+    missingExitTrackingUnits: number;
+    nextStep: string;
+  };
 };
 
 type Response = { ok: true; item: InventoryItem };
@@ -93,9 +107,14 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
   );
 
   const canDelete = effectiveRole === "manager" || effectiveRole === "admin";
+  const openRfidHub = useCallback(() => {
+    const parent = navigation.getParent();
+    (parent as any)?.navigate?.("More", { screen: "RfidHub" });
+  }, [navigation]);
 
   const isLowStock = typeof item?.quantity === "number" && typeof item?.reorderLevel === "number" && item.quantity <= item.reorderLevel;
   const expiryLabel = item?.expiryDate ? new Date(item.expiryDate).toLocaleDateString() : "-";
+  const flow = item?.flow;
 
   const itemIdValue = item?._id ?? "";
   const rfidValue = item?.rfidTagId ?? "";
@@ -287,6 +306,26 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
                 <ListRow title="Created" subtitle={item?.createdAt ? new Date(item.createdAt).toLocaleString() : "-"} />
               </View>
             </Card>
+
+            <Card>
+              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Warehouse flow</Text>
+              <MutedText>SKU master data lives here. Receiving, unit tagging, gate authorization, and exit verification happen in RFID Hub.</MutedText>
+              {flow ? (
+                <View style={{ marginTop: 12, gap: 10 }}>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    <Badge label={`Exit ready ${flow.exitReadyUnits}/${item?.quantity ?? 0}`} tone={flow.missingExitTrackingUnits > 0 ? "warning" : "success"} />
+                    <Badge label={`Tagged ${flow.taggedUnits}`} tone={flow.taggedUnits > 0 ? "success" : "default"} />
+                    <Badge label={`Awaiting tags ${flow.awaitingTagUnits + flow.untrackedUnits}`} tone={flow.awaitingTagUnits + flow.untrackedUnits > 0 ? "warning" : "default"} />
+                    <Badge label={`Gate active ${flow.activeExitAuthorizations}`} tone={flow.activeExitAuthorizations > 0 ? "warning" : "default"} />
+                  </View>
+                  <ListRow title="Next step" subtitle={flow.nextStep} />
+                  <ListRow title="Tracked units" subtitle={`${flow.trackedUnits} tracked, ${flow.untrackedUnits} still bulk-only`} />
+                  <ListRow title="Order activity" subtitle={`${flow.reservedUnits} reserved, ${flow.pickedUnits} at gate prep, ${flow.dispatchedUnits} dispatched`} />
+                </View>
+              ) : (
+                <MutedText style={{ marginTop: 12 }}>Flow summary unavailable.</MutedText>
+              )}
+            </Card>
           </View>
 
           <View style={{ width: 380, gap: theme.spacing.md }}>
@@ -295,6 +334,7 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
 
               <View style={{ gap: 10 }}>
                 <ListRow title="Edit" subtitle="Update item details" onPress={() => navigation.navigate("InventoryEdit", { id })} />
+                <ListRow title="Open RFID Hub" subtitle="Receive, tag, and manage exit readiness" onPress={openRfidHub} />
                 <ListRow title="Adjust quantity" subtitle="Add or remove units" onPress={() => navigation.navigate("InventoryAdjust", { id })} />
                 <ListRow title="View logs" subtitle="Audit trail for this item" onPress={() => navigation.navigate("InventoryLogs", { id })} />
               </View>
@@ -425,10 +465,29 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
           </Card>
 
           <Card>
+            <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Warehouse flow</Text>
+            <MutedText>Use this page for SKU data. Use RFID Hub when the physical units arrive, when tags change, and when orders move through the gate.</MutedText>
+            {flow ? (
+              <View style={{ marginTop: 12, gap: 10 }}>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  <Badge label={`Exit ready ${flow.exitReadyUnits}/${item?.quantity ?? 0}`} tone={flow.missingExitTrackingUnits > 0 ? "warning" : "success"} />
+                  <Badge label={`Tagged ${flow.taggedUnits}`} tone={flow.taggedUnits > 0 ? "success" : "default"} />
+                  <Badge label={`Awaiting tags ${flow.awaitingTagUnits + flow.untrackedUnits}`} tone={flow.awaitingTagUnits + flow.untrackedUnits > 0 ? "warning" : "default"} />
+                </View>
+                <ListRow title="Next step" subtitle={flow.nextStep} />
+                <ListRow title="Order activity" subtitle={`${flow.reservedUnits} reserved, ${flow.pickedUnits} at gate prep, ${flow.activeExitAuthorizations} gate active`} />
+              </View>
+            ) : (
+              <MutedText style={{ marginTop: 12 }}>Flow summary unavailable.</MutedText>
+            )}
+          </Card>
+
+          <Card>
             <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Actions</Text>
 
             <View style={{ gap: 10 }}>
               <ListRow title="Edit" subtitle="Update item details" onPress={() => navigation.navigate("InventoryEdit", { id })} />
+              <ListRow title="Open RFID Hub" subtitle="Receive, tag, and manage exit readiness" onPress={openRfidHub} />
               <ListRow title="Adjust quantity" subtitle="Add or remove units" onPress={() => navigation.navigate("InventoryAdjust", { id })} />
               <ListRow title="View logs" subtitle="Audit trail for this item" onPress={() => navigation.navigate("InventoryLogs", { id })} />
             </View>

@@ -8,6 +8,7 @@ import { InventoryLogModel } from "../models/InventoryLog.js";
 import { InventoryUnitModel } from "../models/InventoryUnit.js";
 import { VendorModel } from "../models/Vendor.js";
 import { upsertRfidTag } from "../models/RfidTag.js";
+import { buildInventoryFlowSummaryMap } from "../utils/inventoryFlow.js";
 import { getPagination } from "../utils/pagination.js";
 import { asEnum, asNumber, asObjectId, asString, asDateFromString } from "../utils/validate.js";
 
@@ -59,8 +60,18 @@ router.get("/items", async (req, res) => {
 
   const hasMore = docs.length > limit;
   const items = (hasMore ? docs.slice(0, limit) : docs);
+  const flowSummaryByItemId = await buildInventoryFlowSummaryMap(tenantId, items);
 
-  res.json({ ok: true, items, page, limit, hasMore });
+  res.json({
+    ok: true,
+    items: items.map((item) => ({
+      ...item.toObject(),
+      flow: flowSummaryByItemId.get(item._id.toString()),
+    })),
+    page,
+    limit,
+    hasMore,
+  });
 });
 
 router.get("/lookup", async (req, res) => {
@@ -176,7 +187,8 @@ router.post("/items", async (req: TenantRequest, res) => {
     newQuantity: item.quantity,
   });
 
-  res.status(201).json({ ok: true, item });
+  const flow = (await buildInventoryFlowSummaryMap(tenantId, [item])).get(item._id.toString());
+  res.status(201).json({ ok: true, item: { ...item.toObject(), flow } });
 });
 
 router.post("/receiving/units", async (req: TenantRequest, res) => {
@@ -263,7 +275,8 @@ router.post("/receiving/units", async (req: TenantRequest, res) => {
     meta: { location, tagId: tagId || undefined, unitIds: createdUnits.map((u) => String(u._id)) },
   });
 
-  res.status(201).json({ ok: true, item, units: createdUnits });
+  const flow = (await buildInventoryFlowSummaryMap(tenantId, [item])).get(item._id.toString());
+  res.status(201).json({ ok: true, item: { ...item.toObject(), flow }, units: createdUnits });
 });
 
 router.get("/putaway/pending", async (req: TenantRequest, res) => {
@@ -385,7 +398,8 @@ router.get("/items/:id", async (req, res) => {
     return;
   }
 
-  res.json({ ok: true, item });
+  const flow = (await buildInventoryFlowSummaryMap(tenantId, [item])).get(item._id.toString());
+  res.json({ ok: true, item: { ...item.toObject(), flow } });
 });
 
 router.patch("/items/:id", async (req: TenantRequest, res) => {
@@ -535,7 +549,8 @@ router.patch("/items/:id", async (req: TenantRequest, res) => {
     meta: { updatedFields: Object.keys(updates) },
   });
 
-  res.json({ ok: true, item });
+  const flow = (await buildInventoryFlowSummaryMap(tenantId, [item])).get(item._id.toString());
+  res.json({ ok: true, item: { ...item.toObject(), flow } });
 });
 
 router.delete("/items/:id", requireRole("manager", "admin"), async (req: TenantRequest, res) => {

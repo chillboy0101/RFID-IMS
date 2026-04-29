@@ -13,10 +13,26 @@ type InventoryItem = {
   _id: string;
   name: string;
   sku: string;
+  barcode?: string;
   location?: string;
   quantity: number;
   reorderLevel: number;
+  rfidTagId?: string;
   status?: string;
+  flow?: {
+    trackedUnits: number;
+    untrackedUnits: number;
+    awaitingTagUnits: number;
+    taggedUnits: number;
+    reservedUnits: number;
+    pickedUnits: number;
+    dispatchedUnits: number;
+    activeExitAuthorizations: number;
+    barcodeReady: boolean;
+    exitReadyUnits: number;
+    missingExitTrackingUnits: number;
+    nextStep: string;
+  };
 };
 
 type ItemsResponse = {
@@ -25,6 +41,29 @@ type ItemsResponse = {
 };
 
 type Props = NativeStackScreenProps<InventoryStackParamList, "InventoryList">;
+
+function toneForInventoryFlow(item: InventoryItem) {
+  const flow = item.flow;
+  if (!flow) return "default" as const;
+  if (flow.activeExitAuthorizations > 0 || flow.pickedUnits > 0 || flow.reservedUnits > 0) return "warning" as const;
+  if (flow.missingExitTrackingUnits > 0 || flow.untrackedUnits > 0) return "danger" as const;
+  if (flow.exitReadyUnits >= item.quantity && item.quantity > 0) return "success" as const;
+  return "default" as const;
+}
+
+function formatInventoryFlow(item: InventoryItem) {
+  const flow = item.flow;
+  if (!flow) return "Flow summary unavailable";
+  return `Ready ${flow.exitReadyUnits}/${item.quantity} • ${flow.nextStep}`;
+}
+
+function compactInventoryFlowLabel(item: InventoryItem) {
+  const flow = item.flow;
+  if (!flow) return item.quantity <= item.reorderLevel ? "Low" : "Stock";
+  if (flow.missingExitTrackingUnits > 0 || flow.untrackedUnits > 0) return "Setup";
+  if (flow.activeExitAuthorizations > 0) return "Gate";
+  return `${flow.exitReadyUnits}/${item.quantity}`;
+}
 
 export function InventoryListScreen({ navigation }: Props) {
   const { token } = useContext(AuthContext);
@@ -166,12 +205,27 @@ export function InventoryListScreen({ navigation }: Props) {
   );
 
   const lowStockCount = useMemo(() => items.filter((it) => it.quantity <= it.reorderLevel).length, [items]);
+  const needsFlowSetupCount = useMemo(
+    () => items.filter((it) => (it.flow?.missingExitTrackingUnits ?? 0) > 0 || (it.flow?.untrackedUnits ?? 0) > 0).length,
+    [items]
+  );
+  const gateActiveCount = useMemo(() => items.filter((it) => (it.flow?.activeExitAuthorizations ?? 0) > 0).length, [items]);
+
+  const openRfidHub = useCallback(() => {
+    const parent = navigation.getParent();
+    (parent as any)?.navigate?.("More", { screen: "RfidHub" });
+  }, [navigation]);
 
   return (
     <Screen
       title="Inventory"
       tabBarPadding={isDesktopWeb}
-      right={<AppButton title="New" onPress={() => navigation.navigate("InventoryCreate")} variant="secondary" iconName="add" iconOnly />}
+      right={
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <AppButton title="RFID Hub" onPress={openRfidHub} variant="secondary" iconName="radio-outline" iconOnly />
+          <AppButton title="New" onPress={() => navigation.navigate("InventoryCreate")} variant="secondary" iconName="add" iconOnly />
+        </View>
+      }
     >
       <BarcodeScanModal
         visible={scanOpen}
@@ -185,6 +239,16 @@ export function InventoryListScreen({ navigation }: Props) {
       />
       {isDesktopWeb ? (
         <View style={{ flex: 1, gap: theme.spacing.md }}>
+          <Card>
+            <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Warehouse flow</Text>
+            <MutedText>Create the SKU here, receive and bind physical units in RFID Hub, then let order authorization and gate exit scans move stock out cleanly.</MutedText>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
+              <Badge label="1. Create SKU" />
+              <Badge label="2. Receive + tag in RFID Hub" tone="primary" />
+              <Badge label="3. Authorize + verify exit" tone="warning" />
+            </View>
+          </Card>
+
           <Card>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <View style={{ flex: 1, minWidth: 0 }}>
@@ -204,6 +268,8 @@ export function InventoryListScreen({ navigation }: Props) {
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 10, flexShrink: 0 }}>
                 <Badge label={`Total: ${items.length}`} tone="default" size="header" />
                 <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} size="header" />
+                <Badge label={`Needs setup: ${needsFlowSetupCount}`} tone={needsFlowSetupCount > 0 ? "danger" : "default"} size="header" />
+                <Badge label={`Gate active: ${gateActiveCount}`} tone={gateActiveCount > 0 ? "warning" : "default"} size="header" />
               </View>
             </View>
 
@@ -242,8 +308,11 @@ export function InventoryListScreen({ navigation }: Props) {
                 <Text style={[theme.typography.label, { color: theme.colors.textMuted, width: 90, textAlign: "right" }]} numberOfLines={1}>
                   Qty
                 </Text>
-                <Text style={[theme.typography.label, { color: theme.colors.textMuted, width: 110, textAlign: "right" }]} numberOfLines={1}>
-                  Reorder
+                <Text style={[theme.typography.label, { color: theme.colors.textMuted, width: 120, textAlign: "right" }]} numberOfLines={1}>
+                  Exit Ready
+                </Text>
+                <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
+                  Next Step
                 </Text>
               </View>
 
@@ -280,7 +349,7 @@ export function InventoryListScreen({ navigation }: Props) {
                             {item.name}
                           </Text>
                           <Text style={[theme.typography.caption, { color: theme.colors.textMuted, marginTop: 4 }]} numberOfLines={1}>
-                            ID: {item._id.slice(-6)}
+                            ID: {item._id.slice(-6)} {item.barcode ? "• Barcode ready" : "• No barcode"} {item.rfidTagId ? "• Legacy RFID tag" : ""}
                           </Text>
                         </View>
 
@@ -304,8 +373,15 @@ export function InventoryListScreen({ navigation }: Props) {
                           {item.quantity}
                         </Text>
 
-                        <Text style={{ color: theme.colors.textMuted, width: 110, textAlign: "right" }} numberOfLines={1}>
-                          {item.reorderLevel}
+                        <Text
+                          style={{ color: toneForInventoryFlow(item) === "danger" ? theme.colors.danger : theme.colors.textMuted, width: 120, textAlign: "right", fontWeight: "800" }}
+                          numberOfLines={1}
+                        >
+                          {item.flow ? `${item.flow.exitReadyUnits}/${item.quantity}` : "-"}
+                        </Text>
+
+                        <Text style={{ color: theme.colors.textMuted, flex: 3 }} numberOfLines={1}>
+                          {item.flow?.nextStep ?? "-"}
                         </Text>
                       </Pressable>
                     ))
@@ -349,7 +425,7 @@ export function InventoryListScreen({ navigation }: Props) {
                           {item.name}
                         </Text>
                         <Text style={[theme.typography.caption, { color: theme.colors.textMuted, marginTop: 4 }]} numberOfLines={1}>
-                          ID: {item._id.slice(-6)}
+                          ID: {item._id.slice(-6)} {item.barcode ? "• Barcode ready" : "• No barcode"} {item.rfidTagId ? "• Legacy RFID tag" : ""}
                         </Text>
                       </View>
 
@@ -373,8 +449,15 @@ export function InventoryListScreen({ navigation }: Props) {
                         {item.quantity}
                       </Text>
 
-                      <Text style={{ color: theme.colors.textMuted, width: 110, textAlign: "right" }} numberOfLines={1}>
-                        {item.reorderLevel}
+                      <Text
+                        style={{ color: toneForInventoryFlow(item) === "danger" ? theme.colors.danger : theme.colors.textMuted, width: 120, textAlign: "right", fontWeight: "800" }}
+                        numberOfLines={1}
+                      >
+                        {item.flow ? `${item.flow.exitReadyUnits}/${item.quantity}` : "-"}
+                      </Text>
+
+                      <Text style={{ color: theme.colors.textMuted, flex: 3 }} numberOfLines={1}>
+                        {item.flow?.nextStep ?? "-"}
                       </Text>
                     </Pressable>
                   )}
@@ -396,11 +479,16 @@ export function InventoryListScreen({ navigation }: Props) {
             scrollEventThrottle={32}
           >
             <Card>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <View style={{ flex: 1 }}>
+              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Warehouse flow</Text>
+              <MutedText>Create the SKU here, then move to RFID Hub for receiving, tag binding, and gate-controlled exit.</MutedText>
+            </Card>
+
+            <Card>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                <View style={{ width: "48%" }}>
                   <Badge label={`Total: ${items.length}`} tone="default" size="header" responsive={false} fullWidth />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ width: "48%" }}>
                   <Badge
                     label={`Low stock: ${lowStockCount}`}
                     tone={lowStockCount > 0 ? "warning" : "default"}
@@ -409,7 +497,16 @@ export function InventoryListScreen({ navigation }: Props) {
                     fullWidth
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ width: "48%" }}>
+                  <Badge
+                    label={`Needs setup: ${needsFlowSetupCount}`}
+                    tone={needsFlowSetupCount > 0 ? "danger" : "default"}
+                    size="header"
+                    responsive={false}
+                    fullWidth
+                  />
+                </View>
+                <View style={{ width: "48%" }}>
                   <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" style={{ width: "100%" }} />
                 </View>
               </View>
@@ -425,21 +522,10 @@ export function InventoryListScreen({ navigation }: Props) {
                 <ListRow
                   key={item._id}
                   title={item.name}
-                  subtitle={`SKU: ${item.sku}\nLocation: ${item.location ?? "-"}`}
+                  subtitle={`SKU: ${item.sku}\nLocation: ${item.location ?? "-"}\n${formatInventoryFlow(item)}`}
                   meta={`Qty: ${item.quantity} (reorder ${item.reorderLevel})`}
                   topRight={
-                    item.quantity <= item.reorderLevel ? (
-                      <View
-                        style={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: 999,
-                          backgroundColor: theme.colors.warning,
-                          borderWidth: 2,
-                          borderColor: theme.colors.surface,
-                        }}
-                      />
-                    ) : null
+                    <Badge label={compactInventoryFlowLabel(item)} tone={toneForInventoryFlow(item)} />
                   }
                   onPress={() => navigation.navigate("InventoryDetail", { id: item._id })}
                 />
@@ -463,14 +549,20 @@ export function InventoryListScreen({ navigation }: Props) {
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
             ListHeaderComponent={
               <Card>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <View style={{ flex: 1 }}>
+                <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Warehouse flow</Text>
+                <MutedText>Create the SKU here, then move to RFID Hub for receiving, tag binding, and gate-controlled exit.</MutedText>
+                <View style={{ height: 12 }} />
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                  <View style={{ width: "48%" }}>
                     <Badge label={`Total: ${items.length}`} tone="default" size="header" responsive={false} fullWidth />
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ width: "48%" }}>
                     <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} size="header" responsive={false} fullWidth />
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ width: "48%" }}>
+                    <Badge label={`Needs setup: ${needsFlowSetupCount}`} tone={needsFlowSetupCount > 0 ? "danger" : "default"} size="header" responsive={false} fullWidth />
+                  </View>
+                  <View style={{ width: "48%" }}>
                     <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" style={{ width: "100%" }} />
                   </View>
                 </View>
@@ -486,21 +578,10 @@ export function InventoryListScreen({ navigation }: Props) {
             renderItem={({ item }) => (
               <ListRow
                 title={item.name}
-                subtitle={`SKU: ${item.sku}\nLocation: ${item.location ?? "-"}`}
+                subtitle={`SKU: ${item.sku}\nLocation: ${item.location ?? "-"}\n${formatInventoryFlow(item)}`}
                 meta={`Qty: ${item.quantity} (reorder ${item.reorderLevel})`}
                 topRight={
-                  item.quantity <= item.reorderLevel ? (
-                    <View
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: 999,
-                        backgroundColor: theme.colors.warning,
-                        borderWidth: 2,
-                        borderColor: theme.colors.surface,
-                      }}
-                    />
-                  ) : null
+                  <Badge label={compactInventoryFlowLabel(item)} tone={toneForInventoryFlow(item)} />
                 }
                 onPress={() => navigation.navigate("InventoryDetail", { id: item._id })}
               />
