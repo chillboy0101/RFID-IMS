@@ -231,12 +231,11 @@ export function OrdersListScreen({ navigation }: Props) {
               <View style={{ flex: 1, minWidth: 0 }}>
                 <TextField ref={searchRef} value={q} onChangeText={setQ} placeholder="Search: order ID or status" autoCapitalize="none" />
               </View>
-              <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
+              <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly />
               <View style={{ flexDirection: "row", flexWrap: "nowrap", gap: 10, justifyContent: "flex-end", alignItems: "center", flexShrink: 0 }}>
                 <Badge label={`Total: ${filtered.length}`} size="header" />
                 <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} size="header" />
                 <Badge label={`Picking: ${pickingCount}`} tone={pickingCount > 0 ? "warning" : "default"} size="header" />
-                <Badge label={`Gate ready: ${gateReadyCount}`} tone={gateReadyCount > 0 ? "warning" : "default"} size="header" />
               </View>
             </View>
           </Card>
@@ -393,7 +392,7 @@ export function OrdersListScreen({ navigation }: Props) {
                   <Badge label={`Picking: ${pickingCount}`} tone={pickingCount > 0 ? "warning" : "default"} size="header" responsive={false} fullWidth />
                 </View>
                 <View style={{ width: "48%" }}>
-                  <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" style={{ width: "100%" }} />
+                  <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly style={{ width: "100%" }} />
                 </View>
               </View>
             </Card>
@@ -438,7 +437,7 @@ export function OrdersListScreen({ navigation }: Props) {
                     <Badge label={`Picking: ${pickingCount}`} tone={pickingCount > 0 ? "warning" : "default"} size="header" responsive={false} fullWidth />
                   </View>
                   <View style={{ width: "48%" }}>
-                    <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" style={{ width: "100%" }} />
+                    <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly style={{ width: "100%" }} />
                   </View>
                 </View>
               </Card>

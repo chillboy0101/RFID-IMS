@@ -205,24 +205,12 @@ export function InventoryListScreen({ navigation }: Props) {
   );
 
   const lowStockCount = useMemo(() => items.filter((it) => it.quantity <= it.reorderLevel).length, [items]);
-  const needsFlowSetupCount = useMemo(
-    () => items.filter((it) => (it.flow?.missingExitTrackingUnits ?? 0) > 0 || (it.flow?.untrackedUnits ?? 0) > 0).length,
-    [items]
-  );
-  const gateActiveCount = useMemo(() => items.filter((it) => (it.flow?.activeExitAuthorizations ?? 0) > 0).length, [items]);
-
-  const openRfidHub = useCallback(() => {
-    const parent = navigation.getParent();
-    (parent as any)?.navigate?.("More", { screen: "RfidHub" });
-  }, [navigation]);
-
   return (
     <Screen
       title="Inventory"
       tabBarPadding={isDesktopWeb}
       right={
         <View style={{ flexDirection: "row", gap: 8 }}>
-          <AppButton title="RFID Hub" onPress={openRfidHub} variant="secondary" iconName="radio-outline" iconOnly />
           <AppButton title="New" onPress={() => navigation.navigate("InventoryCreate")} variant="secondary" iconName="add" iconOnly />
         </View>
       }
@@ -253,13 +241,11 @@ export function InventoryListScreen({ navigation }: Props) {
                 />
               </View>
 
-              <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
+              <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly />
 
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 10, flexShrink: 0 }}>
                 <Badge label={`Total: ${items.length}`} tone="default" size="header" />
                 <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} size="header" />
-                <Badge label={`Needs setup: ${needsFlowSetupCount}`} tone={needsFlowSetupCount > 0 ? "danger" : "default"} size="header" />
-                <Badge label={`Gate active: ${gateActiveCount}`} tone={gateActiveCount > 0 ? "warning" : "default"} size="header" />
               </View>
             </View>
 
@@ -465,16 +451,7 @@ export function InventoryListScreen({ navigation }: Props) {
                   />
                 </View>
                 <View style={{ width: "48%" }}>
-                  <Badge
-                    label={`Needs setup: ${needsFlowSetupCount}`}
-                    tone={needsFlowSetupCount > 0 ? "danger" : "default"}
-                    size="header"
-                    responsive={false}
-                    fullWidth
-                  />
-                </View>
-                <View style={{ width: "48%" }}>
-                  <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" style={{ width: "100%" }} />
+                  <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly style={{ width: "100%" }} />
                 </View>
               </View>
               {error ? (
@@ -522,10 +499,7 @@ export function InventoryListScreen({ navigation }: Props) {
                     <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} size="header" responsive={false} fullWidth />
                   </View>
                   <View style={{ width: "48%" }}>
-                    <Badge label={`Needs setup: ${needsFlowSetupCount}`} tone={needsFlowSetupCount > 0 ? "danger" : "default"} size="header" responsive={false} fullWidth />
-                  </View>
-                  <View style={{ width: "48%" }}>
-                    <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" style={{ width: "100%" }} />
+                    <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly style={{ width: "100%" }} />
                   </View>
                 </View>
                 {error ? (

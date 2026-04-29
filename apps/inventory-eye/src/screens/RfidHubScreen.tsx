@@ -622,6 +622,7 @@ function AuthorizationMode({
 }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
+  const [showCompactDetail, setShowCompactDetail] = useState(false);
   const [detail, setDetail] = useState<Order | null>(null);
   const [workflow, setWorkflow] = useState<OrderWorkflow | null>(null);
   const [gateLocation, setGateLocation] = useState(stationConfig.defaults.gateLocation || DEFAULT_STATION_CONFIG.defaults.gateLocation);
@@ -638,15 +639,19 @@ function AuthorizationMode({
       const res = await apiRequest<{ ok: true; orders: Order[] }>("/orders", { method: "GET", token });
       const openOrders = res.orders.filter((order) => order.status !== "fulfilled" && order.status !== "cancelled");
       setOrders(openOrders);
-      if (!selectedId && openOrders[0]) {
+      if (isDesktopWeb && !selectedId && openOrders[0]) {
         setSelectedId(openOrders[0]._id);
+      }
+      if (!isDesktopWeb && !openOrders.some((order) => order._id === selectedId)) {
+        setSelectedId("");
+        setShowCompactDetail(false);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load orders");
     } finally {
       setLoading(false);
     }
-  }, [selectedId, token]);
+  }, [isDesktopWeb, selectedId, token]);
 
   const loadDetail = useCallback(async () => {
     if (!selectedId) {
@@ -739,9 +744,12 @@ function AuthorizationMode({
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
         <View style={{ flex: 1, gap: 4 }}>
           <Text style={[theme.typography.h3, { color: theme.colors.text }]}>{`Order #${selectedOrder._id.slice(-6)}`}</Text>
-          <MutedText>{`${selectedOrder.items.length} line${selectedOrder.items.length === 1 ? "" : "s"}`}</MutedText>
+          {!isDesktopWeb ? <MutedText>{formatStationLabel(selectedOrder.authorizationLocation || gateLocation)}</MutedText> : null}
         </View>
-        <Badge label={selectedOrder.status} tone={toneForStatus(selectedOrder.status)} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Badge label={selectedOrder.status} tone={toneForStatus(selectedOrder.status)} />
+          {!isDesktopWeb ? <AppButton title="Back" onPress={() => setShowCompactDetail(false)} variant="secondary" iconName="chevron-back" iconOnly /> : null}
+        </View>
       </View>
 
       {isDesktopWeb ? (
@@ -919,39 +927,45 @@ function AuthorizationMode({
         </View>
       ) : (
         <>
-          <Card>
-            <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Orders</Text>
+          {showCompactDetail && detailPane ? (
+            detailPane
+          ) : (
+            <Card>
+              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Orders</Text>
 
-            {loading ? (
-              <ActivityIndicator color={theme.colors.primary} />
-            ) : orders.length === 0 ? (
-              <MutedText>No open orders.</MutedText>
-            ) : (
-              <View style={{ gap: 8 }}>
-                {orders.map((order) => (
-                  <Pressable
-                    key={order._id}
-                    onPress={() => setSelectedId(order._id)}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: selectedId === order._id ? theme.colors.primary : theme.colors.border,
-                      backgroundColor: theme.colors.surface,
-                      borderRadius: theme.radius.md,
-                      padding: 12,
-                      gap: 6,
-                    }}
-                  >
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                      <Text style={[theme.typography.h3, { color: theme.colors.text }]}>{`Order #${order._id.slice(-6)}`}</Text>
-                      <Badge label={order.status} tone={toneForStatus(order.status)} />
-                    </View>
-                    <MutedText>{`${order.items.length} line${order.items.length === 1 ? "" : "s"} | ${formatStationLabel(order.authorizationLocation || gateLocation)}`}</MutedText>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-          </Card>
-          {detailPane}
+              {loading ? (
+                <ActivityIndicator color={theme.colors.primary} />
+              ) : orders.length === 0 ? (
+                <MutedText>No open orders.</MutedText>
+              ) : (
+                <View style={{ gap: 8 }}>
+                  {orders.map((order) => (
+                    <Pressable
+                      key={order._id}
+                      onPress={() => {
+                        setSelectedId(order._id);
+                        setShowCompactDetail(true);
+                      }}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: selectedId === order._id ? theme.colors.primary : theme.colors.border,
+                        backgroundColor: theme.colors.surface,
+                        borderRadius: theme.radius.md,
+                        padding: 12,
+                        gap: 6,
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                        <Text style={[theme.typography.h3, { color: theme.colors.text }]}>{`Order #${order._id.slice(-6)}`}</Text>
+                        <Badge label={order.status} tone={toneForStatus(order.status)} />
+                      </View>
+                      <MutedText>{formatStationLabel(order.authorizationLocation || gateLocation)}</MutedText>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </Card>
+          )}
         </>
       )}
     </View>
@@ -1449,52 +1463,82 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
       {message ? <MutedText>{message}</MutedText> : null}
 
       <Card>
-        <View style={{ flexDirection: isDesktopWeb ? "row" : "column", alignItems: isDesktopWeb ? "center" : "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <Text style={[theme.typography.h3, { color: theme.colors.text }]}>Registry</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {(["all", "active", "inactive"] as const).map((status) => {
-              const active = statusFilter === status;
-              return (
-                <Pressable
-                  key={status}
-                  onPress={() => setStatusFilter(status)}
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 14,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: active ? theme.colors.primary : theme.colors.border,
-                    backgroundColor: theme.colors.surface,
-                  }}
-                >
-                  <Text style={{ color: active ? theme.colors.text : theme.colors.textMuted, fontWeight: "700", fontSize: 12, textTransform: "capitalize" }}>
-                    {status}
-                  </Text>
-                </Pressable>
-              );
-            })}
-            <Pressable
-              onPress={() => void loadTags()}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 14,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: theme.colors.border,
-                backgroundColor: theme.colors.surface,
-              }}
-            >
-              <Text style={{ color: theme.colors.text, fontWeight: "700", fontSize: 12 }}>Refresh</Text>
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={() => void loadTags()}
+            style={{
+              minHeight: 36,
+              minWidth: 84,
+              paddingVertical: 7,
+              paddingHorizontal: 12,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surface,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ color: theme.colors.text, fontWeight: "700", fontSize: 12 }}>Refresh</Text>
+          </Pressable>
         </View>
 
         <View style={{ height: 12 }} />
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <Badge label={`Total ${tags.length}`} tone="default" />
-          <Badge label={`Active ${activeCount}`} tone={activeCount > 0 ? "success" : "default"} />
-          <Badge label={`Inactive ${inactiveCount}`} tone={inactiveCount > 0 ? "warning" : "default"} />
-          <Badge label={`Queued ${queuedExitCount}`} tone={queuedExitCount > 0 ? "warning" : "default"} />
+          {(["all", "active", "inactive"] as const).map((status) => {
+            const active = statusFilter === status;
+            return (
+              <Pressable
+                key={status}
+                onPress={() => setStatusFilter(status)}
+                style={{
+                  minHeight: 36,
+                  minWidth: 84,
+                  paddingVertical: 7,
+                  paddingHorizontal: 12,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: active ? theme.colors.primary : theme.colors.border,
+                  backgroundColor: theme.colors.surface,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ color: active ? theme.colors.text : theme.colors.textMuted, fontWeight: "700", fontSize: 12, textTransform: "capitalize" }}>
+                  {status}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={{ height: 12 }} />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {[
+            { label: `Total ${tags.length}`, color: theme.colors.textMuted },
+            { label: `Active ${activeCount}`, color: activeCount > 0 ? theme.colors.success : theme.colors.textMuted },
+            { label: `Inactive ${inactiveCount}`, color: inactiveCount > 0 ? theme.colors.warning : theme.colors.textMuted },
+            { label: `Queued ${queuedExitCount}`, color: queuedExitCount > 0 ? theme.colors.warning : theme.colors.textMuted },
+          ].map((stat) => (
+            <View
+              key={stat.label}
+              style={{
+                minHeight: 36,
+                minWidth: 84,
+                paddingVertical: 7,
+                paddingHorizontal: 12,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.surface2,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ color: stat.color, fontWeight: "700", fontSize: 12 }}>{stat.label}</Text>
+            </View>
+          ))}
         </View>
       </Card>
 
