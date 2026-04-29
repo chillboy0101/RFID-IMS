@@ -100,7 +100,7 @@ function EnterpriseTabBar({ state, descriptors, navigation }: BottomTabBarProps)
   const sidebarLinks: Array<{ title: string; icon?: string; match: string; onPress: () => void }> = [
     { title: "Dashboard", icon: "speedometer-outline", match: "Dashboard", onPress: () => (navigation as any).navigate("Dashboard") },
     { title: "Inventory", icon: "cube-outline", match: "Inventory", onPress: () => (navigation as any).navigate("Inventory") },
-    { title: "Fulfilment Orders", icon: "receipt-outline", match: "Orders", onPress: () => (navigation as any).navigate("Orders") },
+    { title: "Orders", icon: "receipt-outline", match: "Orders", onPress: () => (navigation as any).navigate("Orders") },
     { title: "RFID Hub", icon: "radio-outline", match: "More/RfidHub", onPress: () => (navigation as any).navigate("More", { screen: "RfidHub" }) },
     { title: "Supply Chain", icon: "swap-horizontal-outline", match: "More/SupplyChain", onPress: () => (navigation as any).navigate("More", { screen: "SupplyChain" }) },
     { title: "People & Data", icon: "people-outline", match: "More/PeopleData", onPress: () => (navigation as any).navigate("More", { screen: "PeopleData" }) },
@@ -595,14 +595,14 @@ export function AppNavigator() {
   const navigationRef = useNavigationContainerRef();
   const [currentRouteName, setCurrentRouteName] = useState<string | null>(null);
 
-  if (loading) {
-    return <FullScreenLoader />;
-  }
-
   const captureCurrentRoute = useCallback(() => {
     const route = navigationRef.getCurrentRoute();
     setCurrentRouteName(route?.name ?? null);
   }, [navigationRef]);
+
+  if (loading) {
+    return <FullScreenLoader />;
+  }
 
   const linking = {
     prefixes:

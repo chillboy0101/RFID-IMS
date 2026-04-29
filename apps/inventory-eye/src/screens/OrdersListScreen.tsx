@@ -261,10 +261,10 @@ export function OrdersListScreen({ navigation }: Props) {
                 Created
               </Text>
               <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
-                Progress
+                Gate
               </Text>
               <Text style={[theme.typography.label, { color: theme.colors.textMuted, width: 150, textAlign: "right" }]} numberOfLines={1}>
-                Next Step
+                Status
               </Text>
             </View>
 
@@ -305,13 +305,10 @@ export function OrdersListScreen({ navigation }: Props) {
                           {new Date(item.createdAt).toLocaleString()}
                         </Text>
                         <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
-                          {formatOrderProgress(item)}
+                          {item.authorizationLocation ?? "-"}
                         </Text>
-                        <View style={{ width: 150, alignItems: "flex-end", gap: 6 }}>
+                        <View style={{ width: 150, alignItems: "flex-end" }}>
                           <Badge label={item.status} tone={tone} />
-                          <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]} numberOfLines={1}>
-                            {nextStepForOrder(item)}
-                          </Text>
                         </View>
                       </Pressable>
                     );
@@ -360,13 +357,10 @@ export function OrdersListScreen({ navigation }: Props) {
                         {new Date(item.createdAt).toLocaleString()}
                       </Text>
                       <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
-                        {formatOrderProgress(item)}
+                        {item.authorizationLocation ?? "-"}
                       </Text>
-                      <View style={{ width: 150, alignItems: "flex-end", gap: 6 }}>
+                      <View style={{ width: 150, alignItems: "flex-end" }}>
                         <Badge label={item.status} tone={tone} />
-                        <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]} numberOfLines={1}>
-                          {nextStepForOrder(item)}
-                        </Text>
                       </View>
                     </Pressable>
                   );
@@ -409,7 +403,7 @@ export function OrdersListScreen({ navigation }: Props) {
                 <ListRow
                   key={item._id}
                   title={`Order #${item._id.slice(-6)}`}
-                  subtitle={`Created: ${new Date(item.createdAt).toLocaleString()}\n${formatOrderProgress(item)}`}
+                  subtitle={`Created: ${new Date(item.createdAt).toLocaleString()}\nGate: ${item.authorizationLocation ?? "-"}`}
                   right={<Badge label={item.status} tone={item.status === "fulfilled" ? "success" : item.status === "cancelled" ? "danger" : "primary"} />}
                   onPress={() => navigation.navigate("OrderDetail", { id: item._id })}
                 />
@@ -454,7 +448,7 @@ export function OrdersListScreen({ navigation }: Props) {
             renderItem={({ item }) => (
               <ListRow
                 title={`Order #${item._id.slice(-6)}`}
-                subtitle={`Created: ${new Date(item.createdAt).toLocaleString()}\n${formatOrderProgress(item)}`}
+                subtitle={`Created: ${new Date(item.createdAt).toLocaleString()}\nGate: ${item.authorizationLocation ?? "-"}`}
                 right={<Badge label={item.status} tone={item.status === "fulfilled" ? "success" : item.status === "cancelled" ? "danger" : "primary"} />}
                 onPress={() => navigation.navigate("OrderDetail", { id: item._id })}
               />

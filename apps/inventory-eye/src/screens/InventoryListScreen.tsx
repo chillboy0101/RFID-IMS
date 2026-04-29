@@ -298,10 +298,7 @@ export function InventoryListScreen({ navigation }: Props) {
                   Qty
                 </Text>
                 <Text style={[theme.typography.label, { color: theme.colors.textMuted, width: 120, textAlign: "right" }]} numberOfLines={1}>
-                  Exit Ready
-                </Text>
-                <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
-                  Next Step
+                  Status
                 </Text>
               </View>
 
@@ -362,16 +359,9 @@ export function InventoryListScreen({ navigation }: Props) {
                           {item.quantity}
                         </Text>
 
-                        <Text
-                          style={{ color: toneForInventoryFlow(item) === "danger" ? theme.colors.danger : theme.colors.textMuted, width: 120, textAlign: "right", fontWeight: "800" }}
-                          numberOfLines={1}
-                        >
-                          {item.flow ? `${item.flow.exitReadyUnits}/${item.quantity}` : "-"}
-                        </Text>
-
-                        <Text style={{ color: theme.colors.textMuted, flex: 3 }} numberOfLines={1}>
-                          {item.flow?.nextStep ?? "-"}
-                        </Text>
+                        <View style={{ width: 120, alignItems: "flex-end" }}>
+                          <Badge label={item.quantity <= item.reorderLevel ? "Low stock" : "In stock"} tone={item.quantity <= item.reorderLevel ? "warning" : "default"} />
+                        </View>
                       </Pressable>
                     ))
                   ) : (
@@ -438,16 +428,9 @@ export function InventoryListScreen({ navigation }: Props) {
                         {item.quantity}
                       </Text>
 
-                      <Text
-                        style={{ color: toneForInventoryFlow(item) === "danger" ? theme.colors.danger : theme.colors.textMuted, width: 120, textAlign: "right", fontWeight: "800" }}
-                        numberOfLines={1}
-                      >
-                        {item.flow ? `${item.flow.exitReadyUnits}/${item.quantity}` : "-"}
-                      </Text>
-
-                      <Text style={{ color: theme.colors.textMuted, flex: 3 }} numberOfLines={1}>
-                        {item.flow?.nextStep ?? "-"}
-                      </Text>
+                      <View style={{ width: 120, alignItems: "flex-end" }}>
+                        <Badge label={item.quantity <= item.reorderLevel ? "Low stock" : "In stock"} tone={item.quantity <= item.reorderLevel ? "warning" : "default"} />
+                      </View>
                     </Pressable>
                   )}
                 />
@@ -506,11 +489,9 @@ export function InventoryListScreen({ navigation }: Props) {
                 <ListRow
                   key={item._id}
                   title={item.name}
-                  subtitle={`SKU: ${item.sku}\nLocation: ${item.location ?? "-"}\n${formatInventoryFlow(item)}`}
+                  subtitle={`SKU: ${item.sku}\nLocation: ${item.location ?? "-"}`}
                   meta={`Qty: ${item.quantity} (reorder ${item.reorderLevel})`}
-                  topRight={
-                    <Badge label={compactInventoryFlowLabel(item)} tone={toneForInventoryFlow(item)} />
-                  }
+                  topRight={<Badge label={item.quantity <= item.reorderLevel ? "Low stock" : `Qty ${item.quantity}`} tone={item.quantity <= item.reorderLevel ? "warning" : "default"} />}
                   onPress={() => navigation.navigate("InventoryDetail", { id: item._id })}
                 />
               ))
@@ -559,11 +540,9 @@ export function InventoryListScreen({ navigation }: Props) {
             renderItem={({ item }) => (
               <ListRow
                 title={item.name}
-                subtitle={`SKU: ${item.sku}\nLocation: ${item.location ?? "-"}\n${formatInventoryFlow(item)}`}
+                subtitle={`SKU: ${item.sku}\nLocation: ${item.location ?? "-"}`}
                 meta={`Qty: ${item.quantity} (reorder ${item.reorderLevel})`}
-                topRight={
-                  <Badge label={compactInventoryFlowLabel(item)} tone={toneForInventoryFlow(item)} />
-                }
+                topRight={<Badge label={item.quantity <= item.reorderLevel ? "Low stock" : `Qty ${item.quantity}`} tone={item.quantity <= item.reorderLevel ? "warning" : "default"} />}
                 onPress={() => navigation.navigate("InventoryDetail", { id: item._id })}
               />
             )}

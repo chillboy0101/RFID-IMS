@@ -23,6 +23,18 @@ function normalizeLocation(value: unknown, fallback = "EXIT_MAIN") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
+function uniqueStrings(values: Array<string | null | undefined>) {
+  return [...new Set(values.map((value) => (typeof value === "string" ? value.trim() : "")).filter(Boolean))];
+}
+
+function sortStationValues(values: string[]) {
+  return [...values].sort((left, right) => left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" }));
+}
+
+function isExitLocation(value: string) {
+  return /(^|[_\s-])(EXIT|GATE|LOADING|REAR)([_\s-]|$)/i.test(value);
+}
+
 function normalizeScan(body: Record<string, unknown>) {
   const value = typeof body.value === "string" ? body.value.trim() : "";
   const tagId = typeof body.tagId === "string" ? body.tagId.trim() : "";
@@ -314,6 +326,61 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
 
 router.use(requireAuth);
 router.use(requireTenant);
+
+router.get("/stations", async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+
+  const [itemLocations, unitLocations, eventLocations, orderLocations, exitLocations, gateHints, alertLocations] = await Promise.all([
+    InventoryItemModel.distinct("location", { tenantId }),
+    InventoryUnitModel.distinct("location", { tenantId }),
+    RfidEventModel.distinct("location", { tenantId }),
+    OrderModel.distinct("authorizationLocation", { tenantId }),
+    ExitAuthorizationModel.distinct("location", { tenantId }),
+    GateApiKeyModel.distinct("locationHint", { tenantId }),
+    SecurityAlertModel.distinct("location", { tenantId }),
+  ]);
+
+  const allLocations = uniqueStrings([
+    ...itemLocations,
+    ...unitLocations,
+    ...eventLocations,
+    ...orderLocations,
+    ...exitLocations,
+    ...gateHints,
+    ...alertLocations,
+  ]);
+
+  const receiveLocations = sortStationValues(
+    uniqueStrings([...itemLocations, ...unitLocations, ...eventLocations]).filter((value) => !isExitLocation(value))
+  );
+
+  const gateLocations = sortStationValues(
+    uniqueStrings([
+      ...gateHints,
+      ...orderLocations,
+      ...exitLocations,
+      ...alertLocations,
+      ...allLocations.filter((value) => isExitLocation(value)),
+    ])
+  );
+
+  const defaultReceiveLocation = receiveLocations[0] ?? sortStationValues(allLocations.filter((value) => !isExitLocation(value)))[0] ?? "RECEIVING_STAGING";
+  const defaultGateLocation = gateLocations[0] ?? "EXIT_MAIN";
+
+  res.json({
+    ok: true,
+    stations: {
+      receiveLocations: receiveLocations.length ? receiveLocations : [defaultReceiveLocation],
+      gateLocations: gateLocations.length ? gateLocations : [defaultGateLocation],
+      windowMinutes: [5, 10, 15],
+      defaults: {
+        receiveLocation: defaultReceiveLocation,
+        gateLocation: defaultGateLocation,
+        windowMinutes: 10,
+      },
+    },
+  });
+});
 
 router.get("/events/latest", async (req: TenantRequest, res) => {
   const tenantId = req.tenantId as string;

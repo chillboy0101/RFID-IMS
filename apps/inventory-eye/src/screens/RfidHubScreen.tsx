@@ -1,5 +1,5 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Platform, Pressable, ScrollView, Text, TextInput, Vibration, View } from "react-native";
+import { ActivityIndicator, FlatList, Platform, Pressable, ScrollView, Text, TextInput, Vibration, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { apiRequest } from "../api/client";
@@ -96,9 +96,32 @@ type ExitScanLog = {
   when: Date;
 };
 
-const LOCATION_PRESETS = ["RECEIVING_STAGING", "BIN_A1", "BIN_B2", "STAGING", "EXIT_MAIN", "EXIT_LOADING_BAY"];
-const GATE_PRESETS = ["EXIT_MAIN", "EXIT_LOADING_BAY", "EXIT_REAR"];
-const WINDOW_PRESETS = [5, 10, 15];
+type StationConfig = {
+  receiveLocations: string[];
+  gateLocations: string[];
+  windowMinutes: number[];
+  defaults: {
+    receiveLocation: string;
+    gateLocation: string;
+    windowMinutes: number;
+  };
+};
+
+type StationConfigResponse = {
+  ok: true;
+  stations: StationConfig;
+};
+
+const DEFAULT_STATION_CONFIG: StationConfig = {
+  receiveLocations: ["RECEIVING_STAGING"],
+  gateLocations: ["EXIT_MAIN"],
+  windowMinutes: [5, 10, 15],
+  defaults: {
+    receiveLocation: "RECEIVING_STAGING",
+    gateLocation: "EXIT_MAIN",
+    windowMinutes: 10,
+  },
+};
 
 function successFeedback() {
   try {
@@ -179,12 +202,29 @@ function formatCountdown(expiresAt?: string | null) {
   return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
+function formatStationLabel(value: string) {
+  const normalized = value.replace(/_/g, " ").trim();
+  if (!normalized) return "";
+  if (/[a-z]/.test(normalized)) return normalized;
+  return normalized.toLowerCase().replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function truncateValue(value: string, start = 8, end = 4) {
+  if (value.length <= start + end + 3) return value;
+  return `${value.slice(0, start)}...${value.slice(-end)}`;
+}
+
+function useIsDesktopWeb() {
+  const { width } = useWindowDimensions();
+  return Platform.OS === "web" && width >= 900;
+}
+
 function ModeTabs({ mode, onChange }: { mode: Mode; onChange: (value: Mode) => void }) {
-  const items: Array<{ key: Mode; label: string; icon: keyof typeof Ionicons.glyphMap; color: string }> = [
-    { key: "assign", label: "Receive", icon: "download-outline", color: "#0D9488" },
-    { key: "authorize", label: "Authorize", icon: "shield-checkmark-outline", color: "#7C3AED" },
-    { key: "exit", label: "Exit", icon: "exit-outline", color: theme.colors.warning },
-    { key: "tags", label: "Tags", icon: "pricetag-outline", color: theme.colors.primary },
+  const items: Array<{ key: Mode; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
+    { key: "assign", label: "Receive", icon: "download-outline" },
+    { key: "authorize", label: "Authorize", icon: "shield-checkmark-outline" },
+    { key: "exit", label: "Exit", icon: "exit-outline" },
+    { key: "tags", label: "Tags", icon: "pricetag-outline" },
   ];
 
   return (
@@ -198,17 +238,17 @@ function ModeTabs({ mode, onChange }: { mode: Mode; onChange: (value: Mode) => v
             style={{
               flexDirection: "row",
               alignItems: "center",
-              gap: 8,
-              paddingVertical: 10,
-              paddingHorizontal: 16,
+              gap: 6,
+              paddingVertical: 8,
+              paddingHorizontal: 14,
               borderRadius: 999,
               borderWidth: 1,
-              borderColor: active ? item.color : theme.colors.border,
-              backgroundColor: active ? item.color : theme.colors.surface,
+              borderColor: active ? theme.colors.primary : theme.colors.border,
+              backgroundColor: theme.colors.surface,
             }}
           >
-            <Ionicons name={item.icon} size={16} color={active ? "#fff" : theme.colors.textMuted} />
-            <Text style={{ color: active ? "#fff" : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>{item.label}</Text>
+            <Ionicons name={item.icon} size={15} color={active ? theme.colors.text : theme.colors.textMuted} />
+            <Text style={{ color: active ? theme.colors.text : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>{item.label}</Text>
           </Pressable>
         );
       })}
@@ -248,21 +288,21 @@ type StationCapture = {
 
 function PassiveScanDock({
   title,
-  subtitle,
-  accentColor,
+  detail,
   enabled,
   busy,
   lastCapture,
   statusLabel,
+  minimal,
   onScan,
 }: {
   title: string;
-  subtitle: string;
-  accentColor: string;
+  detail?: string;
   enabled: boolean;
   busy: boolean;
   lastCapture: StationCapture | null;
   statusLabel?: string;
+  minimal?: boolean;
   onScan: (value: string) => void;
 }) {
   const inputRef = useRef<TextInput>(null);
@@ -300,71 +340,114 @@ function PassiveScanDock({
     return () => clearTimeout(timer);
   }, [buffer, busy, enabled, flushScan]);
 
+  const input = (
+    <TextInput
+      ref={inputRef}
+      value={buffer}
+      onChangeText={setBuffer}
+      onSubmitEditing={() => flushScan()}
+      autoCapitalize="none"
+      autoCorrect={false}
+      blurOnSubmit={false}
+      caretHidden
+      contextMenuHidden
+      showSoftInputOnFocus={false}
+      style={{ position: "absolute", width: 1, height: 1, opacity: 0 }}
+    />
+  );
+
+  if (minimal) {
+    return (
+      <Pressable onPress={focusInput}>
+        <View
+          style={{
+            minHeight: 220,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 12,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            borderRadius: theme.radius.lg,
+            backgroundColor: theme.colors.surface,
+            paddingHorizontal: 20,
+            paddingVertical: 28,
+          }}
+        >
+          <View
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 999,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: theme.colors.surface2,
+            }}
+          >
+            <Ionicons name="radio-outline" size={28} color={theme.colors.text} />
+          </View>
+          <Text style={[theme.typography.h3, { color: theme.colors.text }]}>{busy ? "Processing" : statusLabel ?? title}</Text>
+          <Text style={{ color: theme.colors.textMuted, fontSize: 14, textAlign: "center" }}>
+            {lastCapture ? `${lastCapture.label} | ${truncateValue(lastCapture.value, 12, 6)}` : detail ?? "Waiting for RFID scan"}
+          </Text>
+          {lastCapture ? <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>{lastCapture.at.toLocaleTimeString()}</Text> : null}
+          {input}
+        </View>
+      </Pressable>
+    );
+  }
+
   return (
     <Pressable onPress={focusInput}>
       <Card>
-        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-          <View style={{ flex: 1, gap: 6 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+            <View
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 999,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: theme.colors.surface2,
+              }}
+            >
+              <Ionicons name="radio-outline" size={18} color={theme.colors.text} />
+            </View>
             <Text style={[theme.typography.h3, { color: theme.colors.text }]}>{title}</Text>
-            <MutedText>{subtitle}</MutedText>
           </View>
           <Badge label={busy ? "Processing" : enabled ? statusLabel ?? "Live" : "Paused"} tone={busy ? "warning" : enabled ? "success" : "default"} />
         </View>
 
         <View
           style={{
-            marginTop: 14,
+            marginTop: 12,
             borderWidth: 1,
-            borderColor: accentColor,
-            borderStyle: "dashed",
-            borderRadius: theme.radius.lg,
-            padding: 18,
-            backgroundColor: accentColor + "10",
-            gap: 10,
+            borderColor: theme.colors.border,
+            borderRadius: theme.radius.md,
+            paddingHorizontal: 14,
+            paddingVertical: 20,
+            backgroundColor: theme.colors.surface2,
+            gap: 8,
+            alignItems: "center",
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 999,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: accentColor,
-              }}
-            >
-              <Ionicons name="radio-outline" size={18} color="#fff" />
-            </View>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ color: theme.colors.text, fontWeight: "800" }}>{busy ? "Scanner busy" : "Scanner armed"}</Text>
-              <MutedText>{lastCapture ? `${lastCapture.label}: ${lastCapture.value}` : "Waiting for the next hardware scan."}</MutedText>
-            </View>
-          </View>
-          <MutedText>{lastCapture ? `Last capture ${lastCapture.at.toLocaleTimeString()}` : "Tap anywhere on this panel if the reader focus needs to be re-armed."}</MutedText>
+          <Ionicons name="scan-outline" size={24} color={theme.colors.textMuted} />
+          <Text style={{ color: theme.colors.text, fontWeight: "700" }}>{busy ? "Processing" : statusLabel ?? "Waiting"}</Text>
+          <Text style={{ color: theme.colors.textMuted, fontSize: 13 }}>
+            {lastCapture ? `${lastCapture.label} | ${truncateValue(lastCapture.value, 12, 6)}` : detail ?? "Waiting for scan"}
+          </Text>
+          {lastCapture ? <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>{lastCapture.at.toLocaleTimeString()}</Text> : null}
         </View>
 
-        <TextInput
-          ref={inputRef}
-          value={buffer}
-          onChangeText={setBuffer}
-          onSubmitEditing={() => flushScan()}
-          autoCapitalize="none"
-          autoCorrect={false}
-          blurOnSubmit={false}
-          caretHidden
-          contextMenuHidden
-          showSoftInputOnFocus={false}
-          style={{ position: "absolute", width: 1, height: 1, opacity: 0 }}
-        />
+        {input}
       </Card>
     </Pressable>
   );
 }
 
-function ReceiveMode({ token }: { token: string }) {
+function ReceiveMode({ token, stationConfig }: { token: string; stationConfig: StationConfig }) {
   const [activeItem, setActiveItem] = useState<InventoryItem | null>(null);
-  const [location, setLocation] = useState("RECEIVING_STAGING");
+  const [location, setLocation] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -375,9 +458,16 @@ function ReceiveMode({ token }: { token: string }) {
 
   const clearSku = useCallback(() => {
     setActiveItem(null);
+    setLocation(null);
     setMessage(null);
     setLastLinkedTag(null);
+    setReceivedCount(0);
   }, []);
+
+  useEffect(() => {
+    if (!activeItem || !location || stationConfig.receiveLocations.includes(location)) return;
+    setLocation(null);
+  }, [location, stationConfig]);
 
   const lookupItem = useCallback(
     async (value: string) => {
@@ -385,11 +475,15 @@ function ReceiveMode({ token }: { token: string }) {
       try {
         const res = await apiRequest<{ ok: true; item: InventoryItem }>(`/inventory/lookup?barcode=${encodeURIComponent(value)}`, { method: "GET", token });
         setActiveItem(res.item);
+        setLocation(null);
+        setReceivedCount(0);
+        setLastLinkedTag(null);
         setLastCapture({ value, label: "SKU barcode", at: new Date() });
-        setMessage(`${res.item.name} armed for receiving`);
+        setMessage(`${res.item.name} selected`);
         successFeedback();
       } catch (e) {
         setActiveItem(null);
+        setLocation(null);
         setError(e instanceof Error ? e.message : "Item not found");
         errorFeedback();
       }
@@ -400,6 +494,11 @@ function ReceiveMode({ token }: { token: string }) {
   const assignTag = useCallback(
     async (value: string) => {
       if (!activeItem?._id || saving) return;
+      if (!location) {
+        setError("Choose a location first");
+        errorFeedback();
+        return;
+      }
       setSaving(true);
       setError(null);
       try {
@@ -445,85 +544,88 @@ function ReceiveMode({ token }: { token: string }) {
   return (
     <View style={{ gap: 14 }}>
       {error ? <ErrorText>{error}</ErrorText> : null}
-      {message ? <Badge label={message} tone="success" /> : null}
-
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        <Badge label={activeItem ? `SKU ${activeItem.sku}` : "Awaiting SKU"} tone={activeItem ? "primary" : "default"} />
-        <Badge label={`Location ${location}`} tone="default" />
-        <Badge label={`Linked ${receivedCount}`} tone={receivedCount > 0 ? "success" : "default"} />
-      </View>
+      {message ? <MutedText>{message}</MutedText> : null}
 
       <PassiveScanDock
-        title={activeItem ? "Receive lane armed" : "SKU capture armed"}
-        subtitle={
-          activeItem
-            ? `${activeItem.name} is locked for this station. Each RFID scan receives one unit into ${location}.`
-            : "Scan the incoming barcode once to lock the SKU, then keep scanning RFID tags without touching the screen."
-        }
-        accentColor="#0D9488"
+        title="Receive"
+        detail={!activeItem ? "Waiting for RFID scan" : !location ? "Choose location" : "Scan RFID tag"}
         enabled
         busy={saving}
         lastCapture={lastCapture}
-        statusLabel={activeItem ? "Receiving" : "Waiting"}
+        statusLabel={!activeItem ? "Waiting" : !location ? "Choose location" : "Ready"}
+        minimal
         onScan={(value) => void handleScan(value)}
       />
 
       {activeItem ? (
         <Card>
-          <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-            <View style={{ flex: 1, gap: 6 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <View style={{ flex: 1, gap: 4 }}>
               <Text style={[theme.typography.h3, { color: theme.colors.text }]}>{activeItem.name}</Text>
-              <MutedText>SKU: {activeItem.sku}</MutedText>
-              <MutedText>Current quantity: {activeItem.quantity}</MutedText>
-              <MutedText>Stage location: {location}</MutedText>
+              <MutedText>{activeItem.sku}</MutedText>
             </View>
-            <Badge label="Locked" tone="primary" />
-          </View>
-
-          <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {lastLinkedTag ? <Badge label={`Last tag ${lastLinkedTag}`} tone="success" /> : null}
-            <Badge label={`Session count ${receivedCount}`} tone={receivedCount > 0 ? "success" : "default"} />
+            <AppButton title="Release" onPress={clearSku} variant="secondary" />
           </View>
 
           <View style={{ height: 12 }} />
-          <AppButton title="Change active SKU" onPress={clearSku} variant="secondary" />
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {stationConfig.receiveLocations.map((station) => {
+              const active = location === station;
+              return (
+                <Pressable
+                  key={station}
+                  onPress={() => setLocation(station)}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 14,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: active ? theme.colors.primary : theme.colors.border,
+                    backgroundColor: theme.colors.surface,
+                  }}
+                >
+                  <Text style={{ color: active ? theme.colors.text : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>
+                    {formatStationLabel(station)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={{ height: 12 }} />
+          <MutedText>
+            {location ? `Next RFID tag will be received into ${formatStationLabel(location)}.` : "Choose where the scanned unit should be stored."}
+          </MutedText>
+          {receivedCount > 0 || lastLinkedTag ? (
+            <View style={{ marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              <Badge label={`Received ${receivedCount}`} tone="success" />
+              {lastLinkedTag ? <Badge label={`Last ${truncateValue(lastLinkedTag, 10, 4)}`} tone="default" /> : null}
+            </View>
+          ) : null}
         </Card>
       ) : null}
-
-      <Card>
-        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Station location</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {LOCATION_PRESETS.map((preset) => (
-            <Pressable
-              key={preset}
-              onPress={() => setLocation(preset)}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 14,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: location === preset ? "#0D9488" : theme.colors.border,
-                backgroundColor: location === preset ? "#0D9488" : theme.colors.surface,
-              }}
-            >
-              <Text style={{ color: location === preset ? "#fff" : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>{preset}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </Card>
 
       <ResultFlash visible={flashVisible} success title="TAG ASSIGNED" subtitle={message ?? undefined} />
     </View>
   );
 }
 
-function AuthorizationMode({ token, onSwitchMode }: { token: string; onSwitchMode: (mode: Mode) => void }) {
+function AuthorizationMode({
+  token,
+  onSwitchMode,
+  stationConfig,
+  isDesktopWeb,
+}: {
+  token: string;
+  onSwitchMode: (mode: Mode) => void;
+  stationConfig: StationConfig;
+  isDesktopWeb: boolean;
+}) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [detail, setDetail] = useState<Order | null>(null);
   const [workflow, setWorkflow] = useState<OrderWorkflow | null>(null);
-  const [gateLocation, setGateLocation] = useState("EXIT_MAIN");
-  const [windowMinutes, setWindowMinutes] = useState(10);
+  const [gateLocation, setGateLocation] = useState(stationConfig.defaults.gateLocation || DEFAULT_STATION_CONFIG.defaults.gateLocation);
+  const [windowMinutes, setWindowMinutes] = useState(stationConfig.defaults.windowMinutes || DEFAULT_STATION_CONFIG.defaults.windowMinutes);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -556,11 +658,11 @@ function AuthorizationMode({ token, onSwitchMode }: { token: string; onSwitchMod
       const res = await apiRequest<OrderDetailResponse>(`/orders/${selectedId}`, { method: "GET", token });
       setDetail(res.order);
       setWorkflow(res.workflow);
-      setGateLocation(res.order.authorizationLocation || "EXIT_MAIN");
+      setGateLocation(res.order.authorizationLocation || stationConfig.defaults.gateLocation || DEFAULT_STATION_CONFIG.defaults.gateLocation);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load order detail");
     }
-  }, [selectedId, token]);
+  }, [selectedId, stationConfig.defaults.gateLocation, token]);
 
   useEffect(() => {
     void loadOrders();
@@ -569,6 +671,16 @@ function AuthorizationMode({ token, onSwitchMode }: { token: string; onSwitchMod
   useEffect(() => {
     void loadDetail();
   }, [loadDetail]);
+
+  useEffect(() => {
+    if (stationConfig.gateLocations.includes(gateLocation)) return;
+    setGateLocation(stationConfig.defaults.gateLocation || stationConfig.gateLocations[0] || DEFAULT_STATION_CONFIG.defaults.gateLocation);
+  }, [gateLocation, stationConfig]);
+
+  useEffect(() => {
+    if (stationConfig.windowMinutes.includes(windowMinutes)) return;
+    setWindowMinutes(stationConfig.defaults.windowMinutes || stationConfig.windowMinutes[0] || DEFAULT_STATION_CONFIG.defaults.windowMinutes);
+  }, [stationConfig, windowMinutes]);
 
   async function startPicking() {
     if (!selectedId || saving) return;
@@ -583,7 +695,7 @@ function AuthorizationMode({ token, onSwitchMode }: { token: string; onSwitchMod
       });
       setDetail(res.order);
       setWorkflow(res.workflow);
-      setMessage("Units reserved for the selected order");
+      setMessage("Units reserved");
       successFeedback();
       void loadOrders();
     } catch (e) {
@@ -610,7 +722,7 @@ function AuthorizationMode({ token, onSwitchMode }: { token: string; onSwitchMod
       );
       setDetail(res.order);
       setWorkflow(res.workflow);
-      setMessage(`Gate ${res.authorization.location} is open until ${new Date(res.authorization.expiresAt).toLocaleTimeString()}`);
+      setMessage(`${formatStationLabel(res.authorization.location)} live until ${new Date(res.authorization.expiresAt).toLocaleTimeString()}`);
       successFeedback();
       void loadOrders();
     } catch (e) {
@@ -622,148 +734,234 @@ function AuthorizationMode({ token, onSwitchMode }: { token: string; onSwitchMod
   }
 
   const selectedOrder = useMemo(() => orders.find((order) => order._id === selectedId) ?? detail, [detail, orders, selectedId]);
-
-    return (
-      <View style={{ gap: 14 }}>
-        {error ? <ErrorText>{error}</ErrorText> : null}
-        {message ? <Badge label={message} tone="success" /> : null}
-
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <Badge label={`Open ${orders.length}`} tone={orders.length > 0 ? "primary" : "default"} />
-          <Badge label={`Gate ${gateLocation}`} tone="default" />
-          <Badge label={`Window ${windowMinutes} min`} tone="warning" />
+  const detailPane = selectedOrder && workflow ? (
+    <Card style={isDesktopWeb ? { width: 420 } : undefined}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={[theme.typography.h3, { color: theme.colors.text }]}>{`Order #${selectedOrder._id.slice(-6)}`}</Text>
+          <MutedText>{`${selectedOrder.items.length} line${selectedOrder.items.length === 1 ? "" : "s"}`}</MutedText>
         </View>
+        <Badge label={selectedOrder.status} tone={toneForStatus(selectedOrder.status)} />
+      </View>
 
-        <Card>
-          <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Order queue</Text>
-
-          {loading ? (
-            <ActivityIndicator color={theme.colors.primary} />
-          ) : orders.length === 0 ? (
-            <MutedText>No open orders right now.</MutedText>
-        ) : (
-          <View style={{ gap: 8 }}>
-            {orders.map((order) => (
-              <Pressable
-                key={order._id}
-                onPress={() => setSelectedId(order._id)}
-                style={{
-                  borderWidth: 1,
-                  borderColor: selectedId === order._id ? theme.colors.primary : theme.colors.border,
-                  backgroundColor: selectedId === order._id ? theme.colors.primarySoft : theme.colors.surface,
-                  borderRadius: theme.radius.md,
-                  padding: 12,
-                  gap: 6,
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                  <Text style={[theme.typography.h3, { color: theme.colors.text }]}>Order #{order._id.slice(-6)}</Text>
-                  <Badge label={order.status} tone={toneForStatus(order.status)} />
-                </View>
-                <MutedText>{order.items.length} line{order.items.length === 1 ? "" : "s"}</MutedText>
-              </Pressable>
+      {isDesktopWeb ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={{ minWidth: 760 }}>
+            <View style={{ flexDirection: "row", paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.colors.border, backgroundColor: theme.colors.surface2 }}>
+              {[
+                { label: "Product", width: 220 },
+                { label: "SKU", width: 160 },
+                { label: "Need", width: 70 },
+                { label: "Reserved", width: 90 },
+                { label: "Tagged", width: 80 },
+                { label: "Fallback", width: 80 },
+              ].map((column) => (
+                <Text key={column.label} style={{ width: column.width, color: theme.colors.textMuted, fontSize: 11, fontWeight: "700", textTransform: "uppercase" }}>
+                  {column.label}
+                </Text>
+              ))}
+            </View>
+            {workflow.lines.map((line) => (
+              <View key={line.itemId} style={{ flexDirection: "row", paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+                <Text style={{ width: 220, color: theme.colors.text, fontWeight: "700" }}>{line.name}</Text>
+                <Text style={{ width: 160, color: theme.colors.textMuted }}>{line.sku}</Text>
+                <Text style={{ width: 70, color: theme.colors.textMuted }}>{line.requestedQuantity}</Text>
+                <Text style={{ width: 90, color: theme.colors.textMuted }}>{line.reservedUnits}</Text>
+                <Text style={{ width: 80, color: theme.colors.textMuted }}>{line.taggedReservedUnits}</Text>
+                <Text style={{ width: 80, color: theme.colors.textMuted }}>{line.barcodeFallbackUnits}</Text>
+              </View>
             ))}
           </View>
-        )}
-      </Card>
-
-        {selectedOrder && workflow ? (
-          <>
-            <Card>
-              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Gate control</Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-                <Badge label={`Requested ${workflow.requestedUnits}`} />
-                <Badge label={`Reserved ${workflow.reservedUnits}`} tone={workflow.reservedUnits >= workflow.requestedUnits ? "primary" : "warning"} />
-                <Badge label={`Tagged ${workflow.taggedReservedUnits}`} tone={workflow.taggedReservedUnits > 0 ? "success" : "default"} />
-                <Badge label={`Gate ready ${workflow.activeAuthorizations}`} tone={workflow.activeAuthorizations > 0 ? "warning" : "default"} />
-              <Badge label={`Exited ${workflow.dispatchedUnits}`} tone={workflow.dispatchedUnits > 0 ? "success" : "default"} />
+        </ScrollView>
+      ) : (
+        <View style={{ gap: 8 }}>
+          {workflow.lines.map((line) => (
+            <View
+              key={line.itemId}
+              style={{
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+                borderRadius: theme.radius.md,
+                padding: 12,
+                backgroundColor: theme.colors.surface2,
+                gap: 4,
+              }}
+            >
+              <Text style={{ color: theme.colors.text, fontWeight: "700" }}>{line.name}</Text>
+              <MutedText>{line.sku}</MutedText>
+              <MutedText>{`Need ${line.requestedQuantity} | Reserved ${line.reservedUnits} | Tagged ${line.taggedReservedUnits}`}</MutedText>
             </View>
+          ))}
+        </View>
+      )}
 
-            <View style={{ gap: 10 }}>
-              {workflow.lines.map((line) => (
-                <View
-                  key={line.itemId}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.colors.border,
-                    borderRadius: theme.radius.md,
-                    padding: 12,
-                    backgroundColor: theme.colors.surface2,
-                    gap: 6,
-                  }}
-                >
-                  <Text style={[theme.typography.h3, { color: theme.colors.text }]}>{line.name}</Text>
-                  <MutedText>SKU: {line.sku}</MutedText>
-                  <MutedText>
-                    Need {line.requestedQuantity} | Reserved {line.reservedUnits} | Tagged {line.taggedReservedUnits} | Barcode fallback {line.barcodeFallbackUnits}
-                  </MutedText>
+      <View style={{ height: 12 }} />
+      <Text style={[theme.typography.label, { color: theme.colors.textMuted, marginBottom: 8 }]}>Gate</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {stationConfig.gateLocations.map((preset) => {
+          const active = gateLocation === preset;
+          return (
+            <Pressable
+              key={preset}
+              onPress={() => setGateLocation(preset)}
+              style={{
+                paddingVertical: 8,
+                paddingHorizontal: 14,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: active ? theme.colors.primary : theme.colors.border,
+                backgroundColor: theme.colors.surface,
+              }}
+            >
+              <Text style={{ color: active ? theme.colors.text : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>{formatStationLabel(preset)}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={{ height: 12 }} />
+      <Text style={[theme.typography.label, { color: theme.colors.textMuted, marginBottom: 8 }]}>Window</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {stationConfig.windowMinutes.map((minutes) => {
+          const active = windowMinutes === minutes;
+          return (
+            <Pressable
+              key={minutes}
+              onPress={() => setWindowMinutes(minutes)}
+              style={{
+                paddingVertical: 8,
+                paddingHorizontal: 14,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: active ? theme.colors.primary : theme.colors.border,
+                backgroundColor: theme.colors.surface,
+              }}
+            >
+              <Text style={{ color: active ? theme.colors.text : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>{minutes} min</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={{ height: 12 }} />
+      <View style={{ gap: 10 }}>
+        {selectedOrder.status === "created" ? (
+          <AppButton title="Reserve units" onPress={() => void startPicking()} variant="secondary" disabled={saving} loading={saving} />
+        ) : null}
+        <AppButton title={selectedOrder.status === "authorized" ? "Refresh authorization" : "Authorize exit"} onPress={() => void authorizeExit()} disabled={saving} loading={saving} />
+        {selectedOrder.status === "authorized" ? <AppButton title="Open Exit" onPress={() => onSwitchMode("exit")} variant="secondary" /> : null}
+      </View>
+    </Card>
+  ) : isDesktopWeb ? (
+    <Card style={{ width: 420 }}>
+      <MutedText>Select an order to see details.</MutedText>
+    </Card>
+  ) : null;
+
+  return (
+    <View style={{ gap: 14 }}>
+      {error ? <ErrorText>{error}</ErrorText> : null}
+      {message ? <MutedText>{message}</MutedText> : null}
+
+      {isDesktopWeb ? (
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 14 }}>
+          <Card style={{ flex: 1 }}>
+            <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Orders</Text>
+
+            {loading ? (
+              <ActivityIndicator color={theme.colors.primary} />
+            ) : orders.length === 0 ? (
+              <MutedText>No open orders.</MutedText>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={{ minWidth: 760 }}>
+                  <View style={{ flexDirection: "row", paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.colors.border, backgroundColor: theme.colors.surface2 }}>
+                    {[
+                      { label: "Order", width: 170 },
+                      { label: "Created", width: 190 },
+                      { label: "Gate", width: 220 },
+                      { label: "Status", width: 120 },
+                    ].map((column) => (
+                      <Text key={column.label} style={{ width: column.width, color: theme.colors.textMuted, fontSize: 11, fontWeight: "700", textTransform: "uppercase" }}>
+                        {column.label}
+                      </Text>
+                    ))}
+                  </View>
+                  {orders.map((order) => {
+                    const active = order._id === selectedId;
+                    return (
+                      <Pressable
+                        key={order._id}
+                        onPress={() => setSelectedId(order._id)}
+                        style={{
+                          flexDirection: "row",
+                          paddingHorizontal: 12,
+                          paddingVertical: 12,
+                          borderBottomWidth: 1,
+                          borderBottomColor: theme.colors.border,
+                          backgroundColor: active ? theme.colors.surface2 : theme.colors.surface,
+                        }}
+                      >
+                        <Text style={{ width: 170, color: theme.colors.text, fontWeight: "700" }}>{`Order #${order._id.slice(-6)}`}</Text>
+                        <Text style={{ width: 190, color: theme.colors.textMuted }}>{new Date(order.createdAt).toLocaleString()}</Text>
+                        <Text style={{ width: 220, color: theme.colors.textMuted }}>{formatStationLabel(order.authorizationLocation || gateLocation)}</Text>
+                        <View style={{ width: 120 }}>
+                          <Badge label={order.status} tone={toneForStatus(order.status)} />
+                        </View>
+                      </Pressable>
+                    );
+                  })}
                 </View>
-              ))}
-            </View>
-
-            <View style={{ height: 12 }} />
-            <Text style={[theme.typography.label, { color: theme.colors.textMuted, marginBottom: 8 }]}>Gate</Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {GATE_PRESETS.map((preset) => (
-                <Pressable
-                  key={preset}
-                  onPress={() => setGateLocation(preset)}
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 14,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: gateLocation === preset ? theme.colors.warning : theme.colors.border,
-                    backgroundColor: gateLocation === preset ? theme.colors.warning : theme.colors.surface,
-                  }}
-                >
-                  <Text style={{ color: gateLocation === preset ? "#fff" : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>{preset}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <View style={{ height: 12 }} />
-            <Text style={[theme.typography.label, { color: theme.colors.textMuted, marginBottom: 8 }]}>Authorization window</Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {WINDOW_PRESETS.map((minutes) => (
-                <Pressable
-                  key={minutes}
-                  onPress={() => setWindowMinutes(minutes)}
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 14,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: windowMinutes === minutes ? theme.colors.primary : theme.colors.border,
-                    backgroundColor: windowMinutes === minutes ? theme.colors.primary : theme.colors.surface,
-                  }}
-                >
-                  <Text style={{ color: windowMinutes === minutes ? "#0B0F17" : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>{minutes} min</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <View style={{ height: 12 }} />
-            <View style={{ gap: 10 }}>
-              {selectedOrder.status === "created" ? (
-                <AppButton title="Reserve units for this order" onPress={() => void startPicking()} variant="secondary" disabled={saving} loading={saving} />
-              ) : null}
-              <AppButton title={selectedOrder.status === "authorized" ? "Refresh gate authorization" : "Authorize gate exit"} onPress={() => void authorizeExit()} disabled={saving} loading={saving} />
-              {selectedOrder.status === "authorized" ? (
-                <AppButton title="Go to Exit verification" onPress={() => onSwitchMode("exit")} variant="secondary" />
-              ) : null}
-            </View>
+              </ScrollView>
+            )}
           </Card>
+          {detailPane}
+        </View>
+      ) : (
+        <>
+          <Card>
+            <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Orders</Text>
+
+            {loading ? (
+              <ActivityIndicator color={theme.colors.primary} />
+            ) : orders.length === 0 ? (
+              <MutedText>No open orders.</MutedText>
+            ) : (
+              <View style={{ gap: 8 }}>
+                {orders.map((order) => (
+                  <Pressable
+                    key={order._id}
+                    onPress={() => setSelectedId(order._id)}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: selectedId === order._id ? theme.colors.primary : theme.colors.border,
+                      backgroundColor: theme.colors.surface,
+                      borderRadius: theme.radius.md,
+                      padding: 12,
+                      gap: 6,
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                      <Text style={[theme.typography.h3, { color: theme.colors.text }]}>{`Order #${order._id.slice(-6)}`}</Text>
+                      <Badge label={order.status} tone={toneForStatus(order.status)} />
+                    </View>
+                    <MutedText>{`${order.items.length} line${order.items.length === 1 ? "" : "s"} | ${formatStationLabel(order.authorizationLocation || gateLocation)}`}</MutedText>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </Card>
+          {detailPane}
         </>
-      ) : null}
+      )}
     </View>
   );
 }
 
-function ExitMode({ token }: { token: string }) {
+function ExitMode({ token, stationConfig, isDesktopWeb }: { token: string; stationConfig: StationConfig; isDesktopWeb: boolean }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState("");
-  const [gateLocation, setGateLocation] = useState("EXIT_MAIN");
+  const [gateLocation, setGateLocation] = useState(stationConfig.defaults.gateLocation || DEFAULT_STATION_CONFIG.defaults.gateLocation);
   const [session, setSession] = useState<ExitSession | null>(null);
   const [countdown, setCountdown] = useState("-");
   const [scanLog, setScanLog] = useState<ExitScanLog[]>([]);
@@ -790,6 +988,11 @@ function ExitMode({ token }: { token: string }) {
   }, [loadOrders]);
 
   useEffect(() => {
+    if (stationConfig.gateLocations.includes(gateLocation)) return;
+    setGateLocation(stationConfig.defaults.gateLocation || stationConfig.gateLocations[0] || DEFAULT_STATION_CONFIG.defaults.gateLocation);
+  }, [gateLocation, stationConfig]);
+
+  useEffect(() => {
     if (selectedOrderId && orders.some((order) => order._id === selectedOrderId)) return;
     if (!orders[0]) {
       setSelectedOrderId("");
@@ -797,8 +1000,8 @@ function ExitMode({ token }: { token: string }) {
       return;
     }
     setSelectedOrderId(orders[0]._id);
-    setGateLocation(orders[0].authorizationLocation || "EXIT_MAIN");
-  }, [orders, selectedOrderId]);
+    setGateLocation(orders[0].authorizationLocation || stationConfig.defaults.gateLocation || DEFAULT_STATION_CONFIG.defaults.gateLocation);
+  }, [orders, selectedOrderId, stationConfig.defaults.gateLocation]);
 
   useEffect(() => {
     if (!session) {
@@ -830,7 +1033,7 @@ function ExitMode({ token }: { token: string }) {
           body: JSON.stringify({
             orderId,
             location: gateLocation,
-            minutes: 5,
+            minutes: stationConfig.windowMinutes[0] ?? 5,
           }),
         });
         setSession(res.session);
@@ -847,7 +1050,7 @@ function ExitMode({ token }: { token: string }) {
         setLoading(false);
       }
     },
-    [gateLocation, loading, selectedOrderId, token]
+    [gateLocation, loading, selectedOrderId, stationConfig.windowMinutes, token]
   );
 
   const desiredOrderId = selectedOrderId || orders[0]?._id || "";
@@ -898,7 +1101,7 @@ function ExitMode({ token }: { token: string }) {
       ]);
       setLastCapture({
         value,
-        label: resolvedMode === "barcode" ? "Barcode fallback" : "RFID tag",
+        label: resolvedMode === "barcode" ? "Barcode" : "RFID",
         at: new Date(),
       });
 
@@ -930,88 +1133,165 @@ function ExitMode({ token }: { token: string }) {
     <View style={{ gap: 14 }}>
       {error ? <ErrorText>{error}</ErrorText> : null}
 
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        <Badge label={`Authorized ${orders.length}`} tone={orders.length > 0 ? "warning" : "default"} />
-        <Badge label={`Gate ${gateLocation}`} tone="default" />
-        <Badge label={session ? `Lane ${countdown}` : "Lane re-arming"} tone={session ? "success" : "default"} />
-      </View>
-
       <Card>
-        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Exit queue</Text>
-        <View style={{ gap: 8 }}>
-          {orders.map((order) => (
-            <Pressable
-              key={order._id}
-              onPress={() => {
-                setSelectedOrderId(order._id);
-                setGateLocation(order.authorizationLocation || gateLocation);
-                setSession(null);
-              }}
-              style={{
-                borderWidth: 1,
-                borderColor: selectedOrderId === order._id ? theme.colors.primary : theme.colors.border,
-                backgroundColor: selectedOrderId === order._id ? theme.colors.primarySoft : theme.colors.surface,
-                borderRadius: theme.radius.md,
-                padding: 12,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                <Text style={{ color: theme.colors.text, fontWeight: "700" }}>Order #{order._id.slice(-6)}</Text>
-                <Badge label={order.status} tone={toneForStatus(order.status)} />
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
+          <Text style={[theme.typography.h3, { color: theme.colors.text }]}>Authorized</Text>
+          <Badge label={session ? countdown : `${orders.length}`} tone={session ? "success" : "default"} />
+        </View>
+
+        {orders.length === 0 ? (
+          <View style={{ gap: 14 }}>
+            <MutedText>No active gate authorization.</MutedText>
+            {stationConfig.gateLocations.length > 1 ? (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {stationConfig.gateLocations.map((preset) => {
+                  const active = gateLocation === preset;
+                  return (
+                    <Pressable
+                      key={preset}
+                      onPress={() => {
+                        setGateLocation(preset);
+                        setSession(null);
+                      }}
+                      style={{
+                        paddingVertical: 8,
+                        paddingHorizontal: 14,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: active ? theme.colors.primary : theme.colors.border,
+                        backgroundColor: theme.colors.surface,
+                      }}
+                    >
+                      <Text style={{ color: active ? theme.colors.text : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>{formatStationLabel(preset)}</Text>
+                    </Pressable>
+                  );
+                })}
               </View>
-                <MutedText style={{ marginTop: 6 }}>
-                  Gate {order.authorizationLocation || "-"} | Window {order.authorizationExpiresAt ? formatCountdown(order.authorizationExpiresAt) : "-"}
-                </MutedText>
+            ) : null}
+          </View>
+        ) : isDesktopWeb ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={{ minWidth: 760 }}>
+              <View style={{ flexDirection: "row", paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.colors.border, backgroundColor: theme.colors.surface2 }}>
+                {[
+                  { label: "Order", width: 170 },
+                  { label: "Status", width: 120 },
+                  { label: "Gate", width: 220 },
+                  { label: "Window", width: 100 },
+                  { label: "Lane", width: 120 },
+                ].map((column) => (
+                  <Text key={column.label} style={{ width: column.width, color: theme.colors.textMuted, fontSize: 11, fontWeight: "700", textTransform: "uppercase" }}>
+                    {column.label}
+                  </Text>
+                ))}
+              </View>
+              {orders.map((order) => {
+                const active = order._id === selectedOrderId;
+                return (
+                  <Pressable
+                    key={order._id}
+                    onPress={() => {
+                      setSelectedOrderId(order._id);
+                      setGateLocation(order.authorizationLocation || gateLocation);
+                      setSession(null);
+                    }}
+                    style={{
+                      flexDirection: "row",
+                      paddingHorizontal: 12,
+                      paddingVertical: 12,
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme.colors.border,
+                      backgroundColor: active ? theme.colors.surface2 : theme.colors.surface,
+                    }}
+                  >
+                    <Text style={{ width: 170, color: theme.colors.text, fontWeight: "700" }}>{`Order #${order._id.slice(-6)}`}</Text>
+                    <View style={{ width: 120 }}>
+                      <Badge label={order.status} tone={toneForStatus(order.status)} />
+                    </View>
+                    <Text style={{ width: 220, color: theme.colors.textMuted }}>{formatStationLabel(order.authorizationLocation || gateLocation)}</Text>
+                    <Text style={{ width: 100, color: theme.colors.textMuted }}>{order.authorizationExpiresAt ? formatCountdown(order.authorizationExpiresAt) : "-"}</Text>
+                    <Text style={{ width: 120, color: session?.orderId === order._id ? theme.colors.success : theme.colors.textMuted }}>
+                      {session?.orderId === order._id ? "Live" : "Standby"}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </ScrollView>
+        ) : (
+          <View style={{ gap: 8 }}>
+            {orders.map((order) => (
+              <Pressable
+                key={order._id}
+                onPress={() => {
+                  setSelectedOrderId(order._id);
+                  setGateLocation(order.authorizationLocation || gateLocation);
+                  setSession(null);
+                }}
+                style={{
+                  borderWidth: 1,
+                  borderColor: selectedOrderId === order._id ? theme.colors.primary : theme.colors.border,
+                  backgroundColor: theme.colors.surface,
+                  borderRadius: theme.radius.md,
+                  padding: 12,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <Text style={{ color: theme.colors.text, fontWeight: "700" }}>{`Order #${order._id.slice(-6)}`}</Text>
+                  <Badge label={order.status} tone={toneForStatus(order.status)} />
+                </View>
+                <MutedText style={{ marginTop: 6 }}>{`${formatStationLabel(order.authorizationLocation || "-")} | ${order.authorizationExpiresAt ? formatCountdown(order.authorizationExpiresAt) : "-"}`}</MutedText>
               </Pressable>
             ))}
-          {orders.length === 0 ? <MutedText>No authorized orders are waiting for exit.</MutedText> : null}
-        </View>
+          </View>
+        )}
 
-        <View style={{ height: 12 }} />
-        <Text style={[theme.typography.label, { color: theme.colors.textMuted, marginBottom: 8 }]}>Lane</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {GATE_PRESETS.map((preset) => (
-            <Pressable
-              key={preset}
-              onPress={() => {
-                setGateLocation(preset);
-                setSession(null);
-              }}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 14,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: gateLocation === preset ? theme.colors.warning : theme.colors.border,
-                backgroundColor: gateLocation === preset ? theme.colors.warning : theme.colors.surface,
-              }}
-            >
-              <Text style={{ color: gateLocation === preset ? "#fff" : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>{preset}</Text>
-            </Pressable>
-          ))}
-        </View>
+        {stationConfig.gateLocations.length > 1 ? (
+          <>
+            <View style={{ height: 12 }} />
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {stationConfig.gateLocations.map((preset) => {
+                const active = gateLocation === preset;
+                return (
+                  <Pressable
+                    key={preset}
+                    onPress={() => {
+                      setGateLocation(preset);
+                      setSession(null);
+                    }}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 14,
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: active ? theme.colors.primary : theme.colors.border,
+                      backgroundColor: theme.colors.surface,
+                    }}
+                  >
+                    <Text style={{ color: active ? theme.colors.text : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>{formatStationLabel(preset)}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
 
-        <View style={{ height: 12 }} />
-        <AppButton title="Re-arm lane" onPress={() => void requestSession()} loading={loading} variant="secondary" />
+        {orders.length > 0 ? (
+          <>
+            <View style={{ height: 12 }} />
+            <AppButton title="Re-arm" onPress={() => void requestSession()} loading={loading} variant="secondary" />
+          </>
+        ) : null}
       </Card>
 
       {session ? (
-        <PassiveScanDock
-          title="Exit lane armed"
-          subtitle={`RFID and barcode scans are being verified automatically for ${session.location}.`}
-          accentColor={theme.colors.warning}
-          enabled
-          busy={verifying || loading}
-          lastCapture={lastCapture}
-          statusLabel={`Valid ${countdown}`}
-          onScan={(value) => void verifyScan(value)}
-        />
+        <PassiveScanDock title="Exit" detail={formatStationLabel(session.location)} enabled busy={verifying || loading} lastCapture={lastCapture} statusLabel={countdown} onScan={(value) => void verifyScan(value)} />
       ) : null}
 
       {scanLog.length > 0 ? (
         <Card>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
-            <Text style={[theme.typography.h3, { color: theme.colors.text }]}>Exit log</Text>
+            <Text style={[theme.typography.h3, { color: theme.colors.text }]}>Scans</Text>
             <AppButton title="Clear" onPress={() => setScanLog([])} variant="secondary" />
           </View>
           <View style={{ gap: 8 }}>
@@ -1023,18 +1303,16 @@ function ExitMode({ token }: { token: string }) {
                   borderColor: theme.colors.border,
                   borderRadius: theme.radius.md,
                   padding: 12,
-                  backgroundColor: entry.authorized ? theme.colors.success + "11" : theme.colors.danger + "11",
+                  backgroundColor: entry.authorized ? theme.colors.success + "10" : theme.colors.danger + "10",
                   gap: 4,
                 }}
               >
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                  <Text style={{ color: theme.colors.text, fontWeight: "700" }}>{entry.value}</Text>
+                  <Text style={{ color: theme.colors.text, fontWeight: "700" }}>{truncateValue(entry.value, 12, 6)}</Text>
                   <Badge label={entry.authorized ? "Allowed" : "Denied"} tone={entry.authorized ? "success" : "danger"} />
                 </View>
                 <MutedText>{entry.itemName ?? entry.decision}</MutedText>
-                <MutedText>
-                  {entry.mode === "tagId" ? "RFID" : "Barcode fallback"} | {entry.when.toLocaleTimeString()}
-                </MutedText>
+                <MutedText>{`${entry.mode === "tagId" ? "RFID" : "Barcode"} | ${entry.when.toLocaleTimeString()}`}</MutedText>
               </View>
             ))}
           </View>
@@ -1046,7 +1324,7 @@ function ExitMode({ token }: { token: string }) {
   );
 }
 
-function TagsMode({ token }: { token: string }) {
+function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolean }) {
   const [tags, setTags] = useState<TagRecord[]>([]);
   const [selectedTagId, setSelectedTagId] = useState("");
   const [selectedTag, setSelectedTag] = useState<TagRecord | null>(null);
@@ -1168,85 +1446,216 @@ function TagsMode({ token }: { token: string }) {
   return (
     <View style={{ gap: 14 }}>
       {error ? <ErrorText>{error}</ErrorText> : null}
-      {message ? <Badge label={message} tone="success" /> : null}
+      {message ? <MutedText>{message}</MutedText> : null}
 
       <Card>
-        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Registry overview</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <Badge label={`Total ${tags.length}`} tone="default" />
-          <Badge label={`Active ${activeCount}`} tone={activeCount > 0 ? "success" : "default"} />
-          <Badge label={`Inactive ${inactiveCount}`} tone={inactiveCount > 0 ? "warning" : "default"} />
-          <Badge label={`Queued exits ${queuedExitCount}`} tone={queuedExitCount > 0 ? "warning" : "default"} />
-        </View>
-        <View style={{ height: 12 }} />
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {(["all", "active", "inactive"] as const).map((status) => (
+        <View style={{ flexDirection: isDesktopWeb ? "row" : "column", alignItems: isDesktopWeb ? "center" : "flex-start", justifyContent: "space-between", gap: 12 }}>
+          <Text style={[theme.typography.h3, { color: theme.colors.text }]}>Registry</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {(["all", "active", "inactive"] as const).map((status) => {
+              const active = statusFilter === status;
+              return (
+                <Pressable
+                  key={status}
+                  onPress={() => setStatusFilter(status)}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 14,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: active ? theme.colors.primary : theme.colors.border,
+                    backgroundColor: theme.colors.surface,
+                  }}
+                >
+                  <Text style={{ color: active ? theme.colors.text : theme.colors.textMuted, fontWeight: "700", fontSize: 12, textTransform: "capitalize" }}>
+                    {status}
+                  </Text>
+                </Pressable>
+              );
+            })}
             <Pressable
-              key={status}
-              onPress={() => setStatusFilter(status)}
+              onPress={() => void loadTags()}
               style={{
                 paddingVertical: 8,
                 paddingHorizontal: 14,
                 borderRadius: 999,
                 borderWidth: 1,
-                borderColor: statusFilter === status ? theme.colors.primary : theme.colors.border,
-                backgroundColor: statusFilter === status ? theme.colors.primary : theme.colors.surface,
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.surface,
               }}
             >
-              <Text style={{ color: statusFilter === status ? "#0B0F17" : theme.colors.textMuted, fontWeight: "700", fontSize: 12, textTransform: "capitalize" }}>
-                {status}
-              </Text>
+              <Text style={{ color: theme.colors.text, fontWeight: "700", fontSize: 12 }}>Refresh</Text>
             </Pressable>
-          ))}
-          <AppButton title="Refresh" onPress={() => void loadTags()} variant="secondary" />
+          </View>
+        </View>
+
+        <View style={{ height: 12 }} />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <Badge label={`Total ${tags.length}`} tone="default" />
+          <Badge label={`Active ${activeCount}`} tone={activeCount > 0 ? "success" : "default"} />
+          <Badge label={`Inactive ${inactiveCount}`} tone={inactiveCount > 0 ? "warning" : "default"} />
+          <Badge label={`Queued ${queuedExitCount}`} tone={queuedExitCount > 0 ? "warning" : "default"} />
         </View>
       </Card>
 
-      <Card>
-        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Tag registry</Text>
-        {loading ? (
-          <ActivityIndicator color={theme.colors.primary} />
-        ) : tags.length === 0 ? (
-          <MutedText>No tags found.</MutedText>
-        ) : (
-          <FlatList
-            data={tags}
-            keyExtractor={(item) => item._id}
-            renderItem={({ item }) => (
-              <Pressable
-                onPress={() => setSelectedTagId(item.tagId)}
-                style={{
-                  borderWidth: 1,
-                  borderColor: selectedTagId === item.tagId ? theme.colors.primary : theme.colors.border,
-                  backgroundColor: selectedTagId === item.tagId ? theme.colors.primarySoft : theme.colors.surface,
-                  borderRadius: theme.radius.md,
-                  padding: 12,
-                  marginBottom: 8,
-                  gap: 6,
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                  <Text style={{ color: theme.colors.text, fontWeight: "700" }}>{item.tagId}</Text>
-                  <Badge label={item.status} tone={toneForStatus(item.status)} />
-                </View>
-                <MutedText>{item.itemName || "Unassigned"}</MutedText>
-                <MutedText>Pending exits: {item.activeExitAuthorizations ?? 0}</MutedText>
-              </Pressable>
-            )}
-          />
-        )}
-      </Card>
+      {isDesktopWeb ? (
+        <View style={{ flexDirection: "row", gap: 14, alignItems: "flex-start" }}>
+          <View style={{ flex: 1 }}>
+            <Card>
+              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Tags</Text>
+              {loading ? (
+                <ActivityIndicator color={theme.colors.primary} />
+              ) : tags.length === 0 ? (
+                <MutedText>No tags found.</MutedText>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={{ minWidth: 820 }}>
+                    <View style={{ flexDirection: "row", paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.colors.border, backgroundColor: theme.colors.surface2 }}>
+                      {[
+                        { label: "Tag", width: 200 },
+                        { label: "Product", width: 220 },
+                        { label: "SKU", width: 140 },
+                        { label: "Status", width: 120 },
+                        { label: "Queued", width: 90 },
+                      ].map((column) => (
+                        <Text key={column.label} style={{ width: column.width, color: theme.colors.textMuted, fontSize: 11, fontWeight: "700", textTransform: "uppercase" }}>
+                          {column.label}
+                        </Text>
+                      ))}
+                    </View>
+                    {tags.map((item) => {
+                      const active = selectedTagId === item.tagId;
+                      return (
+                        <Pressable
+                          key={item._id}
+                          onPress={() => setSelectedTagId(item.tagId)}
+                          style={{
+                            flexDirection: "row",
+                            paddingHorizontal: 12,
+                            paddingVertical: 12,
+                            borderBottomWidth: 1,
+                            borderBottomColor: theme.colors.border,
+                            backgroundColor: active ? theme.colors.surface2 : theme.colors.surface,
+                          }}
+                        >
+                          <Text style={{ width: 200, color: theme.colors.text, fontWeight: "700" }}>{truncateValue(item.tagId, 16, 6)}</Text>
+                          <Text style={{ width: 220, color: theme.colors.textMuted }}>{item.itemName || "Unassigned"}</Text>
+                          <Text style={{ width: 140, color: theme.colors.textMuted }}>{item.itemSku || "-"}</Text>
+                          <View style={{ width: 120 }}>
+                            <Badge label={item.status} tone={toneForStatus(item.status)} />
+                          </View>
+                          <Text style={{ width: 90, color: theme.colors.textMuted }}>{item.activeExitAuthorizations ?? 0}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              )}
+            </Card>
+          </View>
 
-      {selectedTag ? (
+          <View style={{ width: 340, gap: 14 }}>
+            {selectedTag ? (
+              <Card>
+                <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Selected tag</Text>
+                <View style={{ gap: 8 }}>
+                  <Badge label={truncateValue(selectedTag.tagId, 14, 6)} tone="primary" />
+                  <ListRow title="Product" subtitle={selectedTag.itemName || "Unassigned"} />
+                  <ListRow title="SKU" subtitle={selectedTag.itemSku || "-"} />
+                  <ListRow title="Barcode" subtitle={selectedTag.itemBarcode || "-"} />
+                  <ListRow title="Queued exits" subtitle={String(selectedTag.activeExitAuthorizations ?? 0)} />
+                  <ListRow title="Assigned" subtitle={selectedTag.assignedAt ? new Date(selectedTag.assignedAt).toLocaleString() : "-"} />
+                  <ListRow title="Updated" subtitle={new Date(selectedTag.updatedAt).toLocaleString()} />
+                </View>
+
+                <View style={{ height: 12 }} />
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                  {selectedTag.status === "active" ? (
+                    <AppButton title="Deactivate" onPress={() => void runTagAction("deactivate", selectedTag.tagId)} variant="secondary" disabled={saving} loading={saving} />
+                  ) : (
+                    <AppButton title="Activate" onPress={() => void runTagAction("activate", selectedTag.tagId)} variant="secondary" disabled={saving} loading={saving} />
+                  )}
+                  <AppButton title="Remove assignment" onPress={() => void runTagAction("remove", selectedTag.tagId)} variant="danger" disabled={saving} loading={saving} />
+                </View>
+              </Card>
+            ) : null}
+
+            {selectedTag ? (
+              <Card>
+                <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Reassign</Text>
+                {reassignmentCandidates.length > 0 ? (
+                  <View style={{ gap: 8 }}>
+                    {reassignmentCandidates.map((item) => (
+                      <Pressable
+                        key={item._id}
+                        onPress={() => void reassignTag(selectedTag.tagId, item._id)}
+                        style={{
+                          borderWidth: 1,
+                          borderColor: theme.colors.border,
+                          borderRadius: theme.radius.md,
+                          padding: 12,
+                          backgroundColor: theme.colors.surface2,
+                        }}
+                      >
+                        <Text style={{ color: theme.colors.text, fontWeight: "700" }}>{item.name}</Text>
+                        <MutedText>{item.sku}</MutedText>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : (
+                  <MutedText>No inventory candidates loaded.</MutedText>
+                )}
+              </Card>
+            ) : null}
+          </View>
+        </View>
+      ) : (
         <Card>
-          <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Tag details</Text>
+          <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Tags</Text>
+          {loading ? (
+            <ActivityIndicator color={theme.colors.primary} />
+          ) : tags.length === 0 ? (
+            <MutedText>No tags found.</MutedText>
+          ) : (
+            <FlatList
+              data={tags}
+              keyExtractor={(item) => item._id}
+              renderItem={({ item }) => (
+                <Pressable
+                  onPress={() => setSelectedTagId(item.tagId)}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: selectedTagId === item.tagId ? theme.colors.primary : theme.colors.border,
+                    backgroundColor: theme.colors.surface,
+                    borderRadius: theme.radius.md,
+                    padding: 12,
+                    marginBottom: 8,
+                    gap: 6,
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <Text style={{ color: theme.colors.text, fontWeight: "700" }}>{truncateValue(item.tagId, 12, 6)}</Text>
+                    <Badge label={item.status} tone={toneForStatus(item.status)} />
+                  </View>
+                  <MutedText>{item.itemName || "Unassigned"}</MutedText>
+                  <MutedText>{`Queued ${item.activeExitAuthorizations ?? 0}`}</MutedText>
+                </Pressable>
+              )}
+            />
+          )}
+        </Card>
+      )}
+
+      {!isDesktopWeb && selectedTag ? (
+        <Card>
+          <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Selected tag</Text>
           <View style={{ gap: 8 }}>
-            <Badge label={selectedTag.tagId} tone="primary" />
-            <ListRow title="Assigned product" subtitle={selectedTag.itemName || "Unassigned"} />
+            <Badge label={truncateValue(selectedTag.tagId, 14, 6)} tone="primary" />
+            <ListRow title="Product" subtitle={selectedTag.itemName || "Unassigned"} />
             <ListRow title="SKU" subtitle={selectedTag.itemSku || "-"} />
             <ListRow title="Barcode" subtitle={selectedTag.itemBarcode || "-"} />
-            <ListRow title="Active exit authorizations" subtitle={String(selectedTag.activeExitAuthorizations ?? 0)} />
-            <ListRow title="Assigned at" subtitle={selectedTag.assignedAt ? new Date(selectedTag.assignedAt).toLocaleString() : "-"} />
+            <ListRow title="Queued exits" subtitle={String(selectedTag.activeExitAuthorizations ?? 0)} />
+            <ListRow title="Assigned" subtitle={selectedTag.assignedAt ? new Date(selectedTag.assignedAt).toLocaleString() : "-"} />
             <ListRow title="Updated" subtitle={new Date(selectedTag.updatedAt).toLocaleString()} />
           </View>
 
@@ -1261,7 +1670,7 @@ function TagsMode({ token }: { token: string }) {
           </View>
 
           <View style={{ height: 16 }} />
-          <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Reassign tag</Text>
+          <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Reassign</Text>
           {reassignmentCandidates.length > 0 ? (
             <View style={{ gap: 8 }}>
               {reassignmentCandidates.map((item) => (
@@ -1277,7 +1686,7 @@ function TagsMode({ token }: { token: string }) {
                   }}
                 >
                   <Text style={{ color: theme.colors.text, fontWeight: "700" }}>{item.name}</Text>
-                  <MutedText>SKU: {item.sku}</MutedText>
+                  <MutedText>{item.sku}</MutedText>
                   <MutedText>{item.barcode ? `Barcode ${item.barcode}` : "No barcode fallback"}</MutedText>
                 </Pressable>
               ))}
@@ -1293,7 +1702,37 @@ function TagsMode({ token }: { token: string }) {
 
 export function RfidHubScreen() {
   const { token } = useContext(AuthContext);
+  const isDesktopWeb = useIsDesktopWeb();
   const [mode, setMode] = useState<Mode>("assign");
+  const [stationConfig, setStationConfig] = useState<StationConfig>(DEFAULT_STATION_CONFIG);
+  const [stationsLoading, setStationsLoading] = useState(false);
+  const [stationsError, setStationsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+
+    const loadStations = async () => {
+      setStationsLoading(true);
+      setStationsError(null);
+      try {
+        const res = await apiRequest<StationConfigResponse>("/rfid/stations", { method: "GET", token });
+        if (cancelled) return;
+        setStationConfig(res.stations);
+      } catch (e) {
+        if (cancelled) return;
+        setStationConfig(DEFAULT_STATION_CONFIG);
+        setStationsError(e instanceof Error ? e.message : "Failed to load RFID stations");
+      } finally {
+        if (!cancelled) setStationsLoading(false);
+      }
+    };
+
+    void loadStations();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   if (!token) {
     return (
@@ -1306,27 +1745,15 @@ export function RfidHubScreen() {
   return (
     <Screen title="RFID Hub" scroll>
       <View style={{ gap: theme.spacing.md, paddingBottom: 40 }}>
-        <Card>
-          <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-            <View style={{ flex: 1, gap: 6 }}>
-              <Text style={[theme.typography.h2, { color: theme.colors.text }]}>RFID Control Center</Text>
-              <MutedText>Autonomous station online</MutedText>
-            </View>
-            <Badge label="Live" tone="success" />
-          </View>
-          <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            <Badge label="Hands-free receive" tone="primary" />
-            <Badge label="Auto exit verification" tone="warning" />
-            <Badge label="Registry controls" tone="default" />
-          </View>
-        </Card>
-
+        {stationsError ? <ErrorText>{stationsError}</ErrorText> : null}
         <ModeTabs mode={mode} onChange={setMode} />
 
-        {mode === "assign" ? <ReceiveMode token={token} /> : null}
-        {mode === "authorize" ? <AuthorizationMode token={token} onSwitchMode={setMode} /> : null}
-        {mode === "exit" ? <ExitMode token={token} /> : null}
-        {mode === "tags" ? <TagsMode token={token} /> : null}
+        {stationsLoading ? <ActivityIndicator color={theme.colors.primary} /> : null}
+
+        {mode === "assign" ? <ReceiveMode token={token} stationConfig={stationConfig} /> : null}
+        {mode === "authorize" ? <AuthorizationMode token={token} onSwitchMode={setMode} stationConfig={stationConfig} isDesktopWeb={isDesktopWeb} /> : null}
+        {mode === "exit" ? <ExitMode token={token} stationConfig={stationConfig} isDesktopWeb={isDesktopWeb} /> : null}
+        {mode === "tags" ? <TagsMode token={token} isDesktopWeb={isDesktopWeb} /> : null}
       </View>
     </Screen>
   );
