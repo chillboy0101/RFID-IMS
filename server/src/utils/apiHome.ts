@@ -125,6 +125,12 @@ export function renderApiHome(options: ApiHomeOptions): string {
         letter-spacing: -0.05em;
       }
 
+      .mark img {
+        width: 28px;
+        height: 28px;
+        object-fit: contain;
+      }
+
       .brand-title {
         font-size: 18px;
         font-weight: 900;
@@ -373,9 +379,9 @@ export function renderApiHome(options: ApiHomeOptions): string {
     <main class="shell">
       <header class="topbar">
         <div class="brand">
-          <div class="mark">vdl</div>
+          <div class="mark"><img src="/favicon.png" alt="VDL" /></div>
           <div>
-            <div class="brand-title">Fulfilment Ops API</div>
+            <div class="brand-title">VDL Fulfilment Ops API</div>
             <div class="brand-subtitle">${escapeHtml(options.origin)}</div>
           </div>
         </div>
