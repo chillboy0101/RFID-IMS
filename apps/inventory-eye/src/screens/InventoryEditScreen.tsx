@@ -616,7 +616,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
       {error ? <ErrorText>{error}</ErrorText> : null}
       <MutedText>{`Inventory / ${title}`}</MutedText>
 
-      <View style={{ flexDirection: "row", gap: theme.spacing.md, alignItems: "flex-start" }}>
+      <View style={{ flexDirection: "row", gap: theme.spacing.lg, alignItems: "flex-start" }}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <View
             style={{
@@ -645,8 +645,8 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                 numberOfLines={4}
                 autoCapitalize="sentences"
               />
-              <View style={{ flexDirection: "row", gap: 12 }}>
-                <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", gap: 14, alignItems: "flex-start" }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <IconField
                     label="SKU"
                     value={sku}
@@ -658,7 +658,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                     errorText={skuError}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <IconField
                     label="Barcode"
                     value={barcode}
@@ -677,8 +677,8 @@ export function InventoryEditScreen({ navigation, route }: Props) {
             {sectionDivider()}
 
             <FormSection title="Location & handling" subtitle="Where the item lives and how warehouse staff will recognize it.">
-              <View style={{ flexDirection: "row", gap: 12 }}>
-                <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", gap: 14, alignItems: "flex-start" }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <FormField
                     label="Location"
                     value={location}
@@ -687,7 +687,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                     autoCapitalize="characters"
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <FormField
                     label="Operational status"
                     value={status}
@@ -702,7 +702,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
           </View>
         </View>
 
-        <View style={{ width: 360, gap: theme.spacing.md }}>
+        <View style={{ width: 332, gap: theme.spacing.md, flexShrink: 0 }}>
           <SurfaceCard title="Stock levels">
             <FormField label={stockLabel} value={quantity} onChangeText={setQuantity} keyboardType="numeric" errorText={quantityError} placeholder="0" />
             <FormField

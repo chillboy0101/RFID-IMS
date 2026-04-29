@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import type { OrdersStackParamList } from "../navigation/types";
-import { AppButton, BarcodeScanModal, Card, ErrorText, MutedText, Screen, shadow, theme } from "../ui";
+import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, MutedText, Screen, shadow, theme } from "../ui";
 
 type InventoryItem = {
   _id: string;
@@ -44,10 +44,9 @@ type CartLine = {
 
 type Props = NativeStackScreenProps<OrdersStackParamList, "OrderCreate">;
 
-const DESKTOP_SKU_WIDTH = 140;
-const DESKTOP_LOCATION_WIDTH = 104;
-const DESKTOP_AVAILABLE_WIDTH = 58;
-const DESKTOP_PICK_WIDTH = 108;
+const DESKTOP_SKU_WIDTH = 154;
+const DESKTOP_LOCATION_WIDTH = 122;
+const DESKTOP_AVAILABLE_WIDTH = 72;
 
 function buildCartLine(item: InventoryItem, quantity: number): CartLine {
   return {
@@ -397,6 +396,18 @@ export function OrderCreateScreen({ navigation }: Props) {
     });
   }, [sheetAnim]);
 
+  const selectFromList = useCallback(
+    (item: InventoryItem) => {
+      const currentQty = selectedQtyMap.get(item._id) ?? 0;
+      if (currentQty > 0) {
+        if (!isDesktopWeb) openSummarySheet();
+        return;
+      }
+      updateLine(item, 1);
+    },
+    [isDesktopWeb, openSummarySheet, selectedQtyMap, updateLine]
+  );
+
   async function submit() {
     if (!token || submitting) return;
 
@@ -436,26 +447,46 @@ export function OrderCreateScreen({ navigation }: Props) {
   const renderDesktopRow = (item: InventoryItem) => {
     const selectedQty = selectedQtyMap.get(item._id) ?? 0;
     const selected = selectedQty > 0;
-    const canIncrease = selectedQty < item.quantity;
-
     return (
-      <View
+      <Pressable
         key={item._id}
-        style={{
+        onPress={() => selectFromList(item)}
+        style={({ pressed }) => ({
           paddingHorizontal: theme.spacing.md,
           paddingVertical: 14,
           borderBottomWidth: 1,
           borderBottomColor: theme.colors.border,
-          backgroundColor: selected ? "rgba(34, 197, 94, 0.08)" : theme.colors.surface,
+          backgroundColor: selected
+            ? "rgba(34, 197, 94, 0.08)"
+            : pressed
+              ? theme.colors.surface2
+              : theme.colors.surface,
           flexDirection: "row",
           alignItems: "center",
-          gap: 10,
-        }}
+          gap: 12,
+          ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null),
+        })}
       >
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[theme.typography.h3, { color: theme.colors.text, lineHeight: 20 }]} numberOfLines={3}>
             {item.name}
           </Text>
+          {selected ? (
+            <View style={{ marginTop: 8, alignSelf: "flex-start" }}>
+              <View
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  backgroundColor: "rgba(34, 197, 94, 0.14)",
+                  borderRadius: 999,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                }}
+              >
+                <Text style={{ color: theme.colors.success, fontSize: 12, fontWeight: "800" }}>{`Added${selectedQty > 1 ? ` · ${selectedQty}` : ""}`}</Text>
+              </View>
+            </View>
+          ) : null}
         </View>
 
         <View style={{ width: DESKTOP_SKU_WIDTH, flexShrink: 0 }}>
@@ -473,34 +504,32 @@ export function OrderCreateScreen({ navigation }: Props) {
         <View style={{ width: DESKTOP_AVAILABLE_WIDTH, flexShrink: 0 }}>
           <Text style={{ color: theme.colors.text, textAlign: "right", fontWeight: "800" }}>{item.quantity}</Text>
         </View>
-
-        <View style={{ width: DESKTOP_PICK_WIDTH, flexShrink: 0, alignItems: "flex-end" }}>
-          <QuantityStepper
-            value={selectedQty}
-            onIncrease={() => incrementLine(item)}
-            onDecrease={() => decrementLine(item)}
-            canIncrease={canIncrease}
-          />
-        </View>
-      </View>
+      </Pressable>
     );
   };
 
   const renderMobileCard = (item: InventoryItem) => {
     const selectedQty = selectedQtyMap.get(item._id) ?? 0;
     const selected = selectedQty > 0;
-    const canIncrease = selectedQty < item.quantity;
 
     return (
-      <Card
+      <Pressable
         key={item._id}
-        style={{
+        onPress={() => selectFromList(item)}
+        style={({ pressed }) => ({
           borderColor: selected ? "rgba(34, 197, 94, 0.28)" : theme.colors.border,
-          backgroundColor: selected ? "rgba(34, 197, 94, 0.05)" : theme.colors.surface,
-        }}
+          backgroundColor: selected
+            ? "rgba(34, 197, 94, 0.05)"
+            : pressed
+              ? theme.colors.surface2
+              : theme.colors.surface,
+          borderRadius: theme.radius.md,
+          borderWidth: 1,
+          padding: theme.spacing.md,
+        })}
       >
         <View style={{ gap: 12 }}>
-          <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+          <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={[theme.typography.h3, { color: theme.colors.text, lineHeight: 20 }]} numberOfLines={2}>
                 {item.name}
@@ -512,13 +541,7 @@ export function OrderCreateScreen({ navigation }: Props) {
                 {`Location: ${item.location ?? "-"}`}
               </Text>
             </View>
-            <QuantityStepper
-              compact
-              value={selectedQty}
-              onIncrease={() => incrementLine(item)}
-              onDecrease={() => decrementLine(item)}
-              canIncrease={canIncrease}
-            />
+            <Text style={{ color: theme.colors.text, fontWeight: "800", fontSize: 18 }}>{item.quantity}</Text>
           </View>
 
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
@@ -546,13 +569,14 @@ export function OrderCreateScreen({ navigation }: Props) {
                     paddingVertical: 6,
                   }}
                 >
-                  <Text style={{ color: theme.colors.success, fontSize: 12, fontWeight: "800" }}>Selected</Text>
+                  <Text style={{ color: theme.colors.success, fontSize: 12, fontWeight: "800" }}>{`Added${selectedQty > 1 ? ` · ${selectedQty}` : ""}`}</Text>
                 </View>
               ) : null}
             </View>
+            {!selected ? <MutedText>Tap to add</MutedText> : <MutedText>Open summary to edit qty</MutedText>}
           </View>
         </View>
-      </Card>
+      </Pressable>
     );
   };
 
@@ -734,6 +758,9 @@ export function OrderCreateScreen({ navigation }: Props) {
             <Text style={[theme.typography.body, { color: theme.colors.textMuted }]} numberOfLines={1}>
               {ribbonMetric(totalUnits, "units total")}
             </Text>
+            <Text style={[theme.typography.body, { color: theme.colors.textMuted }]} numberOfLines={1}>
+              Tap a line to add it
+            </Text>
             {loading ? <MutedText>Updating inventory...</MutedText> : null}
           </View>
           <AppButton title="RFID Hub" onPress={openRfidHub} variant="secondary" iconName="radio-outline" />
@@ -743,14 +770,14 @@ export function OrderCreateScreen({ navigation }: Props) {
           style={{
             paddingHorizontal: theme.spacing.md,
             paddingVertical: 12,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.colors.border,
-          backgroundColor: theme.colors.surface,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 10,
-        }}
-      >
+            borderBottomWidth: 1,
+            borderBottomColor: theme.colors.border,
+            backgroundColor: theme.colors.surface,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[theme.typography.label, { color: theme.colors.textMuted }]} numberOfLines={1}>
               Item
@@ -768,12 +795,7 @@ export function OrderCreateScreen({ navigation }: Props) {
           </View>
           <View style={{ width: DESKTOP_AVAILABLE_WIDTH, flexShrink: 0 }}>
             <Text style={[theme.typography.label, { color: theme.colors.textMuted, textAlign: "right" }]} numberOfLines={1}>
-              Avail
-            </Text>
-          </View>
-          <View style={{ width: DESKTOP_PICK_WIDTH, flexShrink: 0 }}>
-            <Text style={[theme.typography.label, { color: theme.colors.textMuted, textAlign: "right" }]} numberOfLines={1}>
-              Pick
+              Available
             </Text>
           </View>
         </View>
@@ -821,7 +843,10 @@ export function OrderCreateScreen({ navigation }: Props) {
               loading={loading}
               placeholder="Search by name, SKU, barcode"
             />
-            {loading ? <MutedText>Updating inventory...</MutedText> : null}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <MutedText>{loading ? "Updating inventory..." : "Tap an item to add it"}</MutedText>
+              {selectedItemCount ? <Badge label={`${selectedItemCount} added`} tone="success" /> : null}
+            </View>
           </View>
         </Card>
 
