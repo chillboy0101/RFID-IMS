@@ -11,7 +11,7 @@ type Props = NativeStackScreenProps<MoreStackParamList, "PeopleData">;
 
 export function PeopleDataScreen({ navigation }: Props) {
   const { effectiveRole } = useContext(AuthContext);
-  const isAdmin = effectiveRole === "admin";
+  const canManageUsers = effectiveRole === "admin";
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
   const onBack = useCallback(() => {
@@ -25,8 +25,8 @@ export function PeopleDataScreen({ navigation }: Props) {
       right={!isDesktopWeb ? <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly /> : undefined}
     >
       <ListRow
-        title="Branches & Users"
-        subtitle="Switch active branch and manage team members"
+        title={canManageUsers ? "Branches & Users" : "Branches"}
+        subtitle={canManageUsers ? "Switch active branch and manage team members" : "Switch your active branch"}
         onPress={() => navigation.navigate("Branches")}
       />
       <ListRow
@@ -49,13 +49,6 @@ export function PeopleDataScreen({ navigation }: Props) {
         subtitle="Sessions and performance summary"
         onPress={() => navigation.navigate("Progress")}
       />
-      {isAdmin ? (
-        <ListRow
-          title="Audit Trail"
-          subtitle="Track who changed what, when, and from where"
-          onPress={() => navigation.navigate("Audit")}
-        />
-      ) : null}
     </Screen>
   );
 }

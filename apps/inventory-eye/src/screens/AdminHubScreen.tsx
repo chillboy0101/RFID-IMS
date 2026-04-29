@@ -1,19 +1,34 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useContext } from "react";
 import { Platform, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
+import { AuthContext } from "../auth/AuthContext";
 import { goBackOrNavigate } from "../navigation/moreBack";
 import type { MoreStackParamList } from "../navigation/types";
-import { AppButton, ListRow, Screen } from "../ui";
+import { AppButton, Badge, ListRow, MutedText, Screen } from "../ui";
 
 type Props = NativeStackScreenProps<MoreStackParamList, "AdminHub">;
 
 export function AdminHubScreen({ navigation }: Props) {
+  const { effectiveRole } = useContext(AuthContext);
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
   const onBack = useCallback(() => {
     goBackOrNavigate(navigation, "MoreMenu");
   }, [navigation]);
+
+  if (effectiveRole !== "admin") {
+    return (
+      <Screen
+        title="Admin"
+        center
+        right={!isDesktopWeb ? <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly /> : undefined}
+      >
+        <Badge label="Admin access required" tone="danger" />
+        <MutedText style={{ marginTop: 10 }}>This area is restricted to administrators.</MutedText>
+      </Screen>
+    );
+  }
 
   return (
     <Screen
@@ -37,9 +52,9 @@ export function AdminHubScreen({ navigation }: Props) {
         onPress={() => navigation.navigate("Audit")}
       />
       <ListRow
-        title="All Feedback"
+        title="Feedback Management"
         subtitle="Review and manage user feedback"
-        onPress={() => navigation.navigate("Feedback")}
+        onPress={() => navigation.navigate("AdminFeedback")}
       />
     </Screen>
   );

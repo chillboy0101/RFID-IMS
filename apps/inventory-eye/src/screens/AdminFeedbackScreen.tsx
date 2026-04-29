@@ -5,6 +5,7 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
+import { goBackOrNavigate } from "../navigation/moreBack";
 import type { MoreStackParamList } from "../navigation/types";
 import { AppButton, Badge, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
 
@@ -34,16 +35,21 @@ export function AdminFeedbackScreen({ navigation }: Props) {
   const isWeb = Platform.OS === "web";
 
   const onBack = useCallback(() => {
-    if (isDesktopWeb) {
-      navigation.navigate("Feedback");
-      return;
-    }
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-      return;
-    }
-    navigation.navigate("Feedback");
-  }, [isDesktopWeb, navigation]);
+    goBackOrNavigate(navigation, "AdminHub");
+  }, [navigation]);
+
+  if (!isAdmin) {
+    return (
+      <Screen
+        title="Admin feedback"
+        center
+        right={!isDesktopWeb ? <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly /> : undefined}
+      >
+        <Badge label="Admin access required" tone="danger" />
+        <MutedText style={{ marginTop: 10 }}>Only administrators can manage feedback for the branch.</MutedText>
+      </Screen>
+    );
+  }
 
   const [q, setQ] = useState("");
   const [all, setAll] = useState<FeedbackItem[]>([]);
@@ -60,7 +66,7 @@ export function AdminFeedbackScreen({ navigation }: Props) {
   }, [all, q]);
 
   const load = useCallback(async () => {
-    if (!token || !isAdmin) return;
+    if (!token) return;
     setError(null);
 
     const allRes = await apiRequest<{ ok: true; feedback: FeedbackItem[] }>("/feedback/all", { method: "GET", token });
@@ -77,7 +83,7 @@ export function AdminFeedbackScreen({ navigation }: Props) {
   );
 
   async function setStatus(id: string, status: FeedbackStatus) {
-    if (!token || !isAdmin) return;
+    if (!token) return;
 
     setError(null);
     try {

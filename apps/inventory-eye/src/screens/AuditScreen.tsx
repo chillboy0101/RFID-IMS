@@ -7,7 +7,7 @@ import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import { goBackOrNavigate } from "../navigation/moreBack";
 import type { MoreStackParamList } from "../navigation/types";
-import { AppButton, ErrorText, GLOBAL_AUTO_REFRESH_MS, MutedText, Screen, TextField, theme } from "../ui";
+import { AppButton, Badge, ErrorText, GLOBAL_AUTO_REFRESH_MS, MutedText, Screen, TextField, theme } from "../ui";
 
 type AuditEvent = {
   id: string;
@@ -173,14 +173,27 @@ function formatTargetMeta(event: AuditEvent): string {
 }
 
 export function AuditScreen({ navigation }: Props) {
-  const { token } = useContext(AuthContext);
+  const { token, effectiveRole } = useContext(AuthContext);
 
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
 
   const onBack = useCallback(() => {
-    goBackOrNavigate(navigation, "PeopleData");
+    goBackOrNavigate(navigation, "AdminHub");
   }, [navigation]);
+
+  if (effectiveRole !== "admin") {
+    return (
+      <Screen
+        title="Audit Trail"
+        center
+        right={!isDesktopWeb ? <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly /> : undefined}
+      >
+        <Badge label="Admin access required" tone="danger" />
+        <MutedText style={{ marginTop: 10 }}>Audit history is restricted to administrators.</MutedText>
+      </Screen>
+    );
+  }
 
   const [q, setQ] = useState("");
   const [category, setCategory] = useState<(typeof scopes)[number]["value"]>("");

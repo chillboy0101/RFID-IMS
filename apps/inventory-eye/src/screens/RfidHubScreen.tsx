@@ -2,6 +2,7 @@ import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } 
 import { ActivityIndicator, FlatList, Platform, Pressable, ScrollView, Text, TextInput, Vibration, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
 
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
@@ -128,6 +129,19 @@ const DEFAULT_STATION_CONFIG: StationConfig = {
   },
 };
 
+const MODE_TAB_ITEMS: Array<{ key: Mode; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
+  { key: "assign", label: "Receive", icon: "download-outline" },
+  { key: "authorize", label: "Authorize", icon: "shield-checkmark-outline" },
+  { key: "exit", label: "Exit", icon: "exit-outline" },
+  { key: "tags", label: "Tags", icon: "pricetag-outline" },
+];
+
+function getAllowedModes(role?: string | null): Mode[] {
+  if (role === "admin") return ["assign", "authorize", "exit", "tags"];
+  if (role === "manager") return ["assign", "authorize", "exit"];
+  return ["assign"];
+}
+
 function successFeedback() {
   try {
     if (Platform.OS !== "web") {
@@ -224,14 +238,15 @@ function useIsDesktopWeb() {
   return Platform.OS === "web" && width >= 900;
 }
 
-function ModeTabs({ mode, onChange }: { mode: Mode; onChange: (value: Mode) => void }) {
-  const items: Array<{ key: Mode; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
-    { key: "assign", label: "Receive", icon: "download-outline" },
-    { key: "authorize", label: "Authorize", icon: "shield-checkmark-outline" },
-    { key: "exit", label: "Exit", icon: "exit-outline" },
-    { key: "tags", label: "Tags", icon: "pricetag-outline" },
-  ];
-
+function ModeTabs({
+  mode,
+  onChange,
+  items,
+}: {
+  mode: Mode;
+  onChange: (value: Mode) => void;
+  items: Array<{ key: Mode; label: string; icon: keyof typeof Ionicons.glyphMap }>;
+}) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
       {items.map((item) => {
@@ -1717,41 +1732,43 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
 }
 
 export function RfidHubScreen({ navigation }: Props) {
-  const { token } = useContext(AuthContext);
+  const { token, effectiveRole } = useContext(AuthContext);
   const isDesktopWeb = useIsDesktopWeb();
   const [mode, setMode] = useState<Mode>("assign");
   const [stationConfig, setStationConfig] = useState<StationConfig>(DEFAULT_STATION_CONFIG);
   const [stationsLoading, setStationsLoading] = useState(false);
   const [stationsError, setStationsError] = useState<string | null>(null);
+  const allowedModes = useMemo(() => getAllowedModes(effectiveRole), [effectiveRole]);
+  const modeTabItems = useMemo(() => MODE_TAB_ITEMS.filter((item) => allowedModes.includes(item.key)), [allowedModes]);
   const onBack = useCallback(() => {
     goBackOrNavigate(navigation, "MoreMenu");
   }, [navigation]);
 
-  useEffect(() => {
+  const loadStations = useCallback(async () => {
     if (!token) return;
-    let cancelled = false;
-
-    const loadStations = async () => {
-      setStationsLoading(true);
-      setStationsError(null);
-      try {
-        const res = await apiRequest<StationConfigResponse>("/rfid/stations", { method: "GET", token });
-        if (cancelled) return;
-        setStationConfig(res.stations);
-      } catch (e) {
-        if (cancelled) return;
-        setStationConfig(DEFAULT_STATION_CONFIG);
-        setStationsError(e instanceof Error ? e.message : "Failed to load RFID stations");
-      } finally {
-        if (!cancelled) setStationsLoading(false);
-      }
-    };
-
-    void loadStations();
-    return () => {
-      cancelled = true;
-    };
+    setStationsLoading(true);
+    setStationsError(null);
+    try {
+      const res = await apiRequest<StationConfigResponse>("/rfid/stations", { method: "GET", token });
+      setStationConfig(res.stations);
+    } catch (e) {
+      setStationConfig(DEFAULT_STATION_CONFIG);
+      setStationsError(e instanceof Error ? e.message : "Failed to load RFID stations");
+    } finally {
+      setStationsLoading(false);
+    }
   }, [token]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadStations();
+    }, [loadStations])
+  );
+
+  useEffect(() => {
+    if (allowedModes.includes(mode)) return;
+    setMode(allowedModes[0] ?? "assign");
+  }, [allowedModes, mode]);
 
   if (!token) {
     return (
@@ -1773,7 +1790,7 @@ export function RfidHubScreen({ navigation }: Props) {
     >
       <View style={{ gap: theme.spacing.md, paddingBottom: 40 }}>
         {stationsError ? <ErrorText>{stationsError}</ErrorText> : null}
-        <ModeTabs mode={mode} onChange={setMode} />
+        <ModeTabs mode={mode} onChange={setMode} items={modeTabItems} />
 
         {stationsLoading ? <ActivityIndicator color={theme.colors.primary} /> : null}
 
