@@ -1,5 +1,5 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { Alert, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
+import { Alert, Modal, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -115,8 +115,73 @@ function labelForStatus(status: KeyStatus) {
 
 function formatValidUntil(key: GateKey, nowMs: number) {
   if (!key.expiresAt) return "No expiry";
-  const formatted = formatDate(key.expiresAt);
-  return isExpiredKey(key, nowMs) ? `Expired ${formatted}` : formatted;
+  return formatDate(key.expiresAt);
+}
+
+function StatusPill({ status }: { status: KeyStatus }) {
+  const tone = toneForStatus(status);
+  const bg =
+    tone === "success"
+      ? "rgba(34, 197, 94, 0.16)"
+      : tone === "warning"
+        ? "rgba(245, 158, 11, 0.16)"
+        : "rgba(239, 68, 68, 0.16)";
+  const fg = tone === "success" ? theme.colors.success : tone === "warning" ? theme.colors.warning : theme.colors.danger;
+
+  return (
+    <View
+      style={{
+        width: 82,
+        minHeight: 34,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        backgroundColor: bg,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingHorizontal: 10,
+      }}
+    >
+      <Text style={[theme.typography.label, { color: fg }]} numberOfLines={1}>
+        {labelForStatus(status)}
+      </Text>
+    </View>
+  );
+}
+
+function RevokePill({
+  disabled,
+  onPress,
+}: {
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        {
+          width: 82,
+          minHeight: 34,
+          borderRadius: 999,
+          borderWidth: 1,
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.surface2,
+          alignItems: "center",
+          justifyContent: "center",
+          paddingHorizontal: 10,
+          opacity: disabled ? 0.6 : 1,
+          ...(Platform.OS === "web" ? ({ cursor: disabled ? "default" : "pointer" } as any) : null),
+        },
+        pressed ? ({ transform: [{ translateY: 1 }] } as any) : null,
+      ]}
+    >
+      <Text style={[theme.typography.label, { color: theme.colors.text }]} numberOfLines={1}>
+        Revoke
+      </Text>
+    </Pressable>
+  );
 }
 
 function FilterChip({
@@ -212,7 +277,7 @@ function KeyListDesktop({
         <View style={{ flex: 1.05, minWidth: 150 }}>
           <MutedText>Valid until</MutedText>
         </View>
-        <View style={{ width: 112, alignItems: "center" }}>
+        <View style={{ width: 96, alignItems: "center" }}>
           <MutedText>Status</MutedText>
         </View>
       </View>
@@ -274,32 +339,10 @@ function KeyListDesktop({
             </Text>
           </View>
 
-          <View style={{ width: 112, alignItems: "stretch", justifyContent: "center", gap: 8 }}>
-            <View style={{ alignItems: "center" }}>
-              <Badge label={labelForStatus(status)} tone={toneForStatus(status)} />
-            </View>
+          <View style={{ width: 96, alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <StatusPill status={status} />
             {!key.revokedAt ? (
-              <Pressable
-                onPress={() => onRevoke(key._id, key.name)}
-                disabled={refreshing}
-                style={({ pressed }) => [
-                  {
-                    paddingHorizontal: 10,
-                    paddingVertical: 8,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: theme.colors.border,
-                    backgroundColor: theme.colors.surface2,
-                    minWidth: 76,
-                    alignItems: "center",
-                    ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null),
-                    opacity: refreshing ? 0.6 : 1,
-                  },
-                  pressed ? ({ transform: [{ translateY: 1 }] } as any) : null,
-                ]}
-              >
-                <Text style={[theme.typography.label, { color: theme.colors.text }]}>Revoke</Text>
-              </Pressable>
+              <RevokePill disabled={refreshing} onPress={() => onRevoke(key._id, key.name)} />
             ) : null}
           </View>
               </>
@@ -335,7 +378,7 @@ function KeyListMobile({
                 </Text>
                 <MutedText style={{ marginTop: 4 }}>{formatLocation(key.locationHint)}</MutedText>
               </View>
-              <Badge label={labelForStatus(status)} tone={toneForStatus(status)} />
+              <StatusPill status={status} />
             </View>
 
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
@@ -352,8 +395,8 @@ function KeyListMobile({
             </View>
 
             {!key.revokedAt ? (
-              <View style={{ marginTop: 14 }}>
-                <AppButton title="Revoke key" onPress={() => onRevoke(key._id, key.name)} variant="secondary" disabled={refreshing} />
+              <View style={{ marginTop: 14, alignItems: "flex-start" }}>
+                <RevokePill disabled={refreshing} onPress={() => onRevoke(key._id, key.name)} />
               </View>
             ) : null}
           </Card>
@@ -529,121 +572,158 @@ export function GateKeysScreen({ navigation }: Props) {
     }
   }, [expiryPreset, loadPageData, locationHint, name, token]);
 
-  const createPanel = showCreate ? (
-    <Card>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-        <Text style={[theme.typography.h2, { color: theme.colors.text }]}>New key</Text>
-        <Pressable
-          onPress={() => {
-            setShowCreate(false);
-            setCreateError(null);
-          }}
-          style={({ pressed }) => [
-            {
-              paddingHorizontal: 10,
-              paddingVertical: 8,
-              borderRadius: 999,
+  const closeCreateModal = useCallback(() => {
+    if (createLoading) return;
+    setShowCreate(false);
+    setCreateError(null);
+  }, [createLoading]);
+
+  const modalShellStyle = {
+    flex: 1,
+    justifyContent: isDesktopWeb ? "center" : "flex-end",
+    alignItems: "center",
+    backgroundColor: "rgba(15, 23, 42, 0.32)",
+    padding: isDesktopWeb ? 24 : 12,
+  } as const;
+
+  const modalCardStyle = {
+    width: isDesktopWeb ? 520 : "100%",
+    maxWidth: 560,
+    maxHeight: isDesktopWeb ? "86%" : "88%",
+    borderRadius: isDesktopWeb ? theme.radius.md : theme.radius.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    padding: theme.spacing.md,
+  } as const;
+
+  const createModal = (
+    <Modal visible={showCreate} transparent animationType="fade" onRequestClose={closeCreateModal}>
+      <View style={modalShellStyle}>
+        <View style={modalCardStyle}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+            <Text style={[theme.typography.h2, { color: theme.colors.text }]}>New key</Text>
+            <Pressable
+              onPress={closeCreateModal}
+              disabled={createLoading}
+              style={({ pressed }) => [
+                {
+                  width: 42,
+                  height: 42,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.surface2,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: createLoading ? 0.55 : 1,
+                  ...(Platform.OS === "web" ? ({ cursor: createLoading ? "default" : "pointer" } as any) : null),
+                },
+                pressed ? ({ transform: [{ translateY: 1 }] } as any) : null,
+              ]}
+            >
+              <Text style={[theme.typography.label, { color: theme.colors.text }]}>X</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <View style={{ gap: 14 }}>
+              {createError ? <ErrorText>{createError}</ErrorText> : null}
+
+              <TextField
+                label="Key name"
+                value={name}
+                onChangeText={setName}
+                placeholder="Main exit reader"
+                autoCapitalize="words"
+              />
+
+              <View style={{ gap: 8 }}>
+                <Text style={[theme.typography.label, { color: theme.colors.textMuted }]}>Gate</Text>
+                {suggestedGateLocations.length ? (
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {suggestedGateLocations.map((gate) => (
+                      <GateSuggestion
+                        key={gate}
+                        label={formatLocation(gate)}
+                        active={locationHint.trim() === gate}
+                        onPress={() => setLocationHint(gate)}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+                <TextField
+                  value={locationHint}
+                  onChangeText={setLocationHint}
+                  placeholder="EXIT_MAIN"
+                  autoCapitalize="characters"
+                />
+              </View>
+
+              <View style={{ gap: 8 }}>
+                <Text style={[theme.typography.label, { color: theme.colors.textMuted }]}>Expiry</Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {expiryPresets.map((preset) => (
+                    <GateSuggestion
+                      key={preset.key}
+                      label={preset.label}
+                      active={expiryPreset === preset.key}
+                      onPress={() => setExpiryPreset(preset.key)}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              <MutedText>Saved gates appear in RFID Hub station options, and the key becomes valid for hardware immediately.</MutedText>
+
+              <AppButton title="Save key" onPress={handleCreate} loading={createLoading} disabled={createLoading} />
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const createdModal = (
+    <Modal visible={Boolean(createdKey)} transparent animationType="fade" onRequestClose={() => setCreatedKey(null)}>
+      <View style={modalShellStyle}>
+        <View style={modalCardStyle}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <LivePulse />
+            <View style={{ flex: 1 }}>
+              <Text style={[theme.typography.h2, { color: theme.colors.text }]}>Key created</Text>
+              <MutedText>{createdKey?.name}</MutedText>
+            </View>
+          </View>
+
+          {createdKey?.locationHint ? <StatusPill status="active" /> : null}
+          {createdKey?.locationHint ? <MutedText style={{ marginTop: 8 }}>{formatLocation(createdKey.locationHint)}</MutedText> : null}
+
+          <View
+            style={{
+              marginTop: 12,
+              borderRadius: theme.radius.sm,
               borderWidth: 1,
               borderColor: theme.colors.border,
               backgroundColor: theme.colors.surface2,
-              ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null),
-            },
-            pressed ? ({ transform: [{ translateY: 1 }] } as any) : null,
-          ]}
-        >
-          <Text style={[theme.typography.label, { color: theme.colors.text }]}>Close</Text>
-        </Pressable>
-      </View>
+              padding: 12,
+            }}
+          >
+            <Text selectable style={{ color: theme.colors.text, fontFamily: "monospace" as any }}>
+              {createdKey?.rawKey ?? ""}
+            </Text>
+          </View>
 
-      <View style={{ gap: 14 }}>
-        {createError ? <ErrorText>{createError}</ErrorText> : null}
+          <MutedText style={{ marginTop: 10 }}>Copy this now. The raw key is only shown once.</MutedText>
 
-        <TextField
-          label="Key name"
-          value={name}
-          onChangeText={setName}
-          placeholder="Main exit reader"
-          autoCapitalize="words"
-        />
-
-        <View style={{ gap: 8 }}>
-          <Text style={[theme.typography.label, { color: theme.colors.textMuted }]}>Gate</Text>
-          {suggestedGateLocations.length ? (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {suggestedGateLocations.map((gate) => (
-                <GateSuggestion
-                  key={gate}
-                  label={formatLocation(gate)}
-                  active={locationHint.trim() === gate}
-                  onPress={() => setLocationHint(gate)}
-                />
-              ))}
-            </View>
-          ) : null}
-          <TextField
-            value={locationHint}
-            onChangeText={setLocationHint}
-            placeholder="EXIT_MAIN"
-            autoCapitalize="characters"
-          />
-        </View>
-
-        <View style={{ gap: 8 }}>
-          <Text style={[theme.typography.label, { color: theme.colors.textMuted }]}>Expiry</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {expiryPresets.map((preset) => (
-              <GateSuggestion
-                key={preset.key}
-                label={preset.label}
-                active={expiryPreset === preset.key}
-                onPress={() => setExpiryPreset(preset.key)}
-              />
-            ))}
+          <View style={{ flexDirection: isDesktopWeb ? "row" : "column", gap: 10, marginTop: 14 }}>
+            <AppButton title="Copy key" onPress={handleCopy} variant="secondary" style={isDesktopWeb ? { flex: 1 } : undefined} />
+            <AppButton title="Done" onPress={() => setCreatedKey(null)} style={isDesktopWeb ? { flex: 1 } : undefined} />
           </View>
         </View>
-
-        <MutedText>Saved gates appear in RFID Hub station options, and the key becomes valid for hardware immediately.</MutedText>
-
-        <AppButton title="Save key" onPress={handleCreate} loading={createLoading} disabled={createLoading} />
       </View>
-    </Card>
-  ) : null;
-
-  const createdPanel = createdKey ? (
-    <Card style={createdKey ? { borderWidth: 1.5, borderColor: theme.colors.success } : undefined}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <LivePulse />
-        <View style={{ flex: 1 }}>
-          <Text style={[theme.typography.h2, { color: theme.colors.text }]}>Key created</Text>
-          <MutedText>{createdKey.name}</MutedText>
-        </View>
-      </View>
-
-      {createdKey.locationHint ? <Badge label={formatLocation(createdKey.locationHint)} tone="success" /> : null}
-
-      <View
-        style={{
-          marginTop: 12,
-          borderRadius: theme.radius.sm,
-          borderWidth: 1,
-          borderColor: theme.colors.border,
-          backgroundColor: theme.colors.surface2,
-          padding: 12,
-        }}
-      >
-        <Text selectable style={{ color: theme.colors.text, fontFamily: "monospace" as any }}>
-          {createdKey.rawKey}
-        </Text>
-      </View>
-
-      <MutedText style={{ marginTop: 10 }}>Copy this now. The raw key is only shown once.</MutedText>
-
-      <View style={{ flexDirection: isDesktopWeb ? "row" : "column", gap: 10, marginTop: 14 }}>
-        <AppButton title="Copy key" onPress={handleCopy} variant="secondary" style={isDesktopWeb ? { flex: 1 } : undefined} />
-        <AppButton title="Done" onPress={() => setCreatedKey(null)} style={isDesktopWeb ? { flex: 1 } : undefined} />
-      </View>
-    </Card>
-  ) : null;
+    </Modal>
+  );
 
   if (effectiveRole !== "admin") {
     return (
@@ -693,9 +773,6 @@ export function GateKeysScreen({ navigation }: Props) {
           ) : null}
         </View>
 
-        {createdPanel}
-        {createPanel}
-
         {filteredKeys.length ? (
           useTableLayout ? (
             <KeyListDesktop keys={filteredKeys} refreshing={refreshing} onRevoke={handleRevoke} nowMs={nowMs} />
@@ -715,6 +792,8 @@ export function GateKeysScreen({ navigation }: Props) {
             </MutedText>
           </Card>
         )}
+        {createModal}
+        {createdModal}
       </View>
     </Screen>
   );

@@ -3,31 +3,14 @@ import { ActivityIndicator, Platform, Pressable, Text, View, useWindowDimensions
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 
-import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import { AppButton, Badge, Card, ErrorText, LivePulse, MutedText, Screen, theme, useThemeMode } from "../ui";
 
 function formatRole(userRole?: string | null, effectiveRole?: string | null) {
   if (userRole === "admin") return "Super admin";
-  if (effectiveRole === "manager") return "Manager";
   if (effectiveRole === "admin") return "Admin";
+  if (effectiveRole === "manager") return "Manager";
   return "Inventory staff";
-}
-
-function formatMode(mode: "system" | "light" | "dark") {
-  if (mode === "system") return "System";
-  if (mode === "light") return "Light";
-  return "Dark";
-}
-
-function formatTimestamp(value: number | null) {
-  if (!value) return "Waiting for check";
-  return new Date(value).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 function SettingSegment({
@@ -48,12 +31,13 @@ function SettingSegment({
       style={(state) => [
         {
           minHeight: 44,
+          minWidth: 92,
           paddingHorizontal: 16,
           paddingVertical: 10,
           borderRadius: 999,
           borderWidth: 1,
           borderColor: active ? theme.colors.primary : theme.colors.border,
-          backgroundColor: active ? theme.colors.primarySoft : theme.colors.surface,
+          backgroundColor: active ? theme.colors.primarySoft : theme.colors.surface2,
           justifyContent: "center",
           alignItems: "center",
           opacity: loading ? 0.65 : 1,
@@ -102,7 +86,7 @@ function SettingsStat({
         borderRadius: theme.radius.sm,
         borderWidth: 1,
         borderColor: theme.colors.border,
-        backgroundColor: theme.colors.surface,
+        backgroundColor: theme.colors.surface2,
         paddingHorizontal: 12,
         paddingVertical: 11,
       }}
@@ -119,18 +103,15 @@ function SettingsStat({
 }
 
 export function SettingsScreen() {
-  const { user, signOut, effectiveRole, apiOnline, apiLastCheckedAt, apiLastError, activeTenantId, tenants } = useContext(AuthContext);
+  const { user, signOut, effectiveRole, apiOnline, apiLastError, activeTenantId, tenants } = useContext(AuthContext);
   const navigation = useNavigation();
   const { mode, setMode, resolved } = useThemeMode();
 
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
 
-  const [pinging, setPinging] = useState(false);
   const [themeLoading, setThemeLoading] = useState<null | "system" | "light" | "dark">(null);
   const [signingOut, setSigningOut] = useState(false);
-  const [pingResult, setPingResult] = useState<string>("");
-  const [pingError, setPingError] = useState<string | null>(null);
 
   const roleLabel = formatRole(user?.role, effectiveRole);
   const activeBranchName = useMemo(() => {
@@ -138,7 +119,7 @@ export function SettingsScreen() {
   }, [activeTenantId, tenants]);
 
   const onlineTone = apiOnline === false ? "danger" : apiOnline === true ? "success" : "default";
-  const onlineLabel = apiOnline === false ? "Offline" : apiOnline === true ? "Online" : "Checking";
+  const onlineLabel = apiOnline === false ? "Offline" : apiOnline === true ? "Connected" : "Syncing";
 
   const onBack = useCallback(() => {
     if (!isDesktopWeb) {
@@ -151,21 +132,6 @@ export function SettingsScreen() {
     }
     (navigation as any).navigate?.("More", { screen: "MoreMenu" });
   }, [isDesktopWeb, navigation]);
-
-  const pingApi = useCallback(async () => {
-    if (pinging) return;
-    setPinging(true);
-    setPingError(null);
-    setPingResult("");
-    try {
-      const res = await apiRequest<{ ok: true; dbConnected: boolean }>("/health", { method: "GET" });
-      setPingResult(`API reachable · database ${res.dbConnected ? "connected" : "unavailable"}`);
-    } catch (e) {
-      setPingError(e instanceof Error ? e.message : "Network request failed");
-    } finally {
-      setPinging(false);
-    }
-  }, [pinging]);
 
   const changeTheme = useCallback(
     async (nextMode: "system" | "light" | "dark") => {
@@ -191,11 +157,11 @@ export function SettingsScreen() {
   }, [signOut, signingOut]);
 
   const accountCard = (
-    <Card>
+    <Card style={{ gap: 16 }}>
       <View style={{ flexDirection: isDesktopWeb ? "row" : "column", gap: 16, justifyContent: "space-between" }}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <Text style={[theme.typography.title, { color: theme.colors.text, fontSize: 24 }]}>
+            <Text style={[theme.typography.title, { color: theme.colors.text, fontSize: 24 }]} numberOfLines={1}>
               {user?.name ?? "Account"}
             </Text>
             <Badge label={roleLabel} tone={user?.role === "admin" ? "warning" : effectiveRole === "manager" ? "primary" : "default"} />
@@ -203,20 +169,54 @@ export function SettingsScreen() {
           <MutedText style={{ marginTop: 8 }}>{user?.email ?? "-"}</MutedText>
         </View>
 
-        <View style={{ width: isDesktopWeb ? 280 : "100%", gap: 10 }}>
-          <SettingsStat
-            icon="business-outline"
-            label="Active branch"
-            value={activeBranchName}
-          />
-          <SettingsStat
-            icon="cloud-done-outline"
-            label="Sync status"
-            value={onlineLabel}
-            accent={onlineTone}
-            pulse={apiOnline === true}
-          />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignSelf: isDesktopWeb ? "flex-start" : "stretch" }}>
+          <Badge label={activeBranchName} tone="default" />
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surface2,
+            }}
+          >
+            {apiOnline === true ? <LivePulse /> : <Ionicons name="cloud-outline" size={16} color={theme.colors.textMuted} />}
+            <Text
+              style={{
+                color:
+                  onlineTone === "danger"
+                    ? theme.colors.danger
+                    : onlineTone === "success"
+                      ? theme.colors.success
+                      : theme.colors.textMuted,
+                fontSize: 12,
+                fontWeight: "800",
+              }}
+            >
+              {onlineLabel}
+            </Text>
+          </View>
         </View>
+      </View>
+      {apiLastError ? <ErrorText>{apiLastError}</ErrorText> : null}
+    </Card>
+  );
+
+  const workspaceCard = (
+    <Card>
+      <Text style={[theme.typography.h2, { color: theme.colors.text }]}>Workspace</Text>
+      <View style={{ marginTop: 16, gap: 10 }}>
+        <SettingsStat icon="business-outline" label="Active branch" value={activeBranchName} />
+        <SettingsStat
+          icon={Platform.OS === "web" ? "laptop-outline" : "phone-portrait-outline"}
+          label="Device"
+          value={Platform.OS === "web" ? "Web / Desktop" : "Mobile"}
+        />
+        <SettingsStat icon="shield-checkmark-outline" label="Access level" value={roleLabel} accent={user?.role === "admin" ? "warning" : "default"} />
       </View>
     </Card>
   );
@@ -226,7 +226,7 @@ export function SettingsScreen() {
       <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
         <View style={{ flex: 1 }}>
           <Text style={[theme.typography.h2, { color: theme.colors.text }]}>Appearance</Text>
-          <MutedText style={{ marginTop: 6 }}>Keep the interface consistent across warehouse devices and desktop stations.</MutedText>
+          <MutedText style={{ marginTop: 6 }}>Choose the display mode for this device.</MutedText>
         </View>
         <Badge label={`Active ${resolved}`} tone={resolved === "dark" ? "primary" : "default"} />
       </View>
@@ -235,45 +235,6 @@ export function SettingsScreen() {
         <SettingSegment label="System" active={mode === "system"} onPress={() => changeTheme("system")} loading={themeLoading === "system"} />
         <SettingSegment label="Light" active={mode === "light"} onPress={() => changeTheme("light")} loading={themeLoading === "light"} />
         <SettingSegment label="Dark" active={mode === "dark"} onPress={() => changeTheme("dark")} loading={themeLoading === "dark"} />
-      </View>
-    </Card>
-  );
-
-  const systemCard = (
-    <Card>
-      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={[theme.typography.h2, { color: theme.colors.text }]}>System</Text>
-          <MutedText style={{ marginTop: 6 }}>Connection, compatibility, and service checks.</MutedText>
-        </View>
-        {apiOnline === true ? <LivePulse /> : null}
-      </View>
-
-      <View style={{ marginTop: 16, gap: 10 }}>
-        <SettingsStat
-          icon="server-outline"
-          label="API"
-          value={apiOnline === false ? "Offline" : apiOnline === true ? "Reachable" : "Checking"}
-          accent={onlineTone}
-        />
-        <SettingsStat
-          icon="time-outline"
-          label="Last check"
-          value={formatTimestamp(apiLastCheckedAt)}
-        />
-        <SettingsStat
-          icon={Platform.OS === "web" ? "laptop-outline" : "phone-portrait-outline"}
-          label="Device"
-          value={Platform.OS === "web" ? "Web / Desktop" : "Mobile"}
-        />
-      </View>
-
-      {apiLastError ? <ErrorText style={{ marginTop: 14 }}>{apiLastError}</ErrorText> : null}
-      {pingError ? <ErrorText style={{ marginTop: 8 }}>{pingError}</ErrorText> : null}
-      {pingResult ? <MutedText style={{ marginTop: 10 }}>{pingResult}</MutedText> : null}
-
-      <View style={{ marginTop: 16 }}>
-        <AppButton title="Run connection check" onPress={pingApi} loading={pinging} disabled={pinging} />
       </View>
     </Card>
   );
@@ -300,18 +261,18 @@ export function SettingsScreen() {
         <View style={{ flexDirection: "row", alignItems: "flex-start", gap: theme.spacing.md }}>
           <View style={{ flex: 1.4, minWidth: 0, gap: theme.spacing.md }}>
             {accountCard}
-            {systemCard}
+            {appearanceCard}
           </View>
           <View style={{ flex: 1, minWidth: 320, gap: theme.spacing.md }}>
-            {appearanceCard}
+            {workspaceCard}
             {sessionCard}
           </View>
         </View>
       ) : (
         <View style={{ gap: theme.spacing.md }}>
           {accountCard}
+          {workspaceCard}
           {appearanceCard}
-          {systemCard}
           {sessionCard}
         </View>
       )}
