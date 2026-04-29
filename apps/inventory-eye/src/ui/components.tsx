@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   Image,
   Platform,
   Pressable,
@@ -427,6 +429,74 @@ export function Badge({ label, tone = "default", size = "default", responsive = 
       <Text style={[theme.typography.label, { color: fg }]} numberOfLines={1}>
         {label}
       </Text>
+    </View>
+  );
+}
+
+export function LivePulse() {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    loop.start();
+    return () => {
+      loop.stop();
+    };
+  }, [pulse]);
+
+  return (
+    <View
+      style={{
+        width: 18,
+        height: 18,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Animated.View
+        style={{
+          position: "absolute",
+          width: 18,
+          height: 18,
+          borderRadius: 999,
+          backgroundColor: theme.colors.success,
+          opacity: pulse.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0.32, 0],
+          }),
+          transform: [
+            {
+              scale: pulse.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.9, 1.9],
+              }),
+            },
+          ],
+        }}
+      />
+      <View
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 999,
+          backgroundColor: theme.colors.success,
+        }}
+      />
     </View>
   );
 }

@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import type { OrdersStackParamList } from "../navigation/types";
-import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, ListRow, MutedText, Screen, theme } from "../ui";
+import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, ListRow, LivePulse, MutedText, Screen, theme } from "../ui";
 
 type Order = {
   _id: string;
@@ -419,7 +419,7 @@ export function OrdersListScreen({ navigation }: Props) {
             <View style={{ flex: 1, minWidth: 0 }}>
               <FilterTabs tabs={filterTabs} activeValue={filter} onChange={setFilter} />
             </View>
-            <MutedText>{q.trim() ? `Showing ${visibleOrders.length} results` : "Active order board"}</MutedText>
+            <LivePulse />
           </View>
 
           <View

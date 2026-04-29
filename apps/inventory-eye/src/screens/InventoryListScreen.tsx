@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import type { InventoryStackParamList } from "../navigation/types";
-import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, MutedText, Screen, shadow, theme } from "../ui";
+import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, LivePulse, MutedText, Screen, shadow, theme } from "../ui";
 
 type InventoryItem = {
   _id: string;
@@ -493,7 +493,7 @@ export function InventoryListScreen({ navigation }: Props) {
             <View style={{ flex: 1, minWidth: 0 }}>
               <FilterTabs tabs={filterTabs} activeValue={filter} onChange={setFilter} />
             </View>
-            <MutedText>{q.trim() ? `Showing ${visibleItems.length} results` : "Live inventory"}</MutedText>
+            <LivePulse />
           </View>
 
           <View
