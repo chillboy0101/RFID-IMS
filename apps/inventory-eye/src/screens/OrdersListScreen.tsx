@@ -174,6 +174,9 @@ export function OrdersListScreen({ navigation }: Props) {
 
   const headerSearchRef = useRef<TextInput>(null);
   const compactSearchRef = useRef<TextInput>(null);
+  const webListRef = useRef<ScrollView>(null);
+  const nativeListRef = useRef<FlatList<Order>>(null);
+  const scrollOffsetRef = useRef(0);
   const compactSearchAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -267,10 +270,19 @@ export function OrdersListScreen({ navigation }: Props) {
     outputRange: [-12, 0],
   });
 
+  const restoreCompactScroll = useCallback(() => {
+    const offset = scrollOffsetRef.current;
+    if (Platform.OS === "web") {
+      webListRef.current?.scrollTo?.({ y: offset, animated: false });
+      return;
+    }
+    nativeListRef.current?.scrollToOffset?.({ offset, animated: false });
+  }, []);
+
   const closeCompactSearch = useCallback(() => {
     setCompactSearchOpen(false);
-    setQ("");
-  }, []);
+    setTimeout(restoreCompactScroll, 40);
+  }, [restoreCompactScroll]);
 
   const right = isDesktopWeb ? (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -361,34 +373,15 @@ export function OrdersListScreen({ navigation }: Props) {
   };
 
   const compactHeader = (
-    <View style={{ gap: 12 }}>
-      <Animated.View
-        style={{
-          height: compactSearchHeight,
-          opacity: compactSearchAnim,
-          overflow: "hidden",
-          transform: [{ translateY: compactSearchTranslate }],
-        }}
-      >
-        <Card>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View style={{ flex: 1 }}>
-              <SearchControl inputRef={compactSearchRef} value={q} onChangeText={setQ} placeholder="Search orders" />
-            </View>
-            <AppButton title="Close" iconName="close" iconOnly variant="secondary" onPress={closeCompactSearch} />
-          </View>
-        </Card>
-      </Animated.View>
-
-      <Card style={{ paddingBottom: 10 }}>
-        <FilterTabs tabs={filterTabs} activeValue={filter} onChange={setFilter} />
-        {error ? (
-          <View style={{ marginTop: 10 }}>
-            <ErrorText>{error}</ErrorText>
-          </View>
-        ) : null}
-      </Card>
-    </View>
+    <Card style={{ paddingBottom: 10 }}>
+      <FilterTabs tabs={filterTabs} activeValue={filter} onChange={setFilter} />
+      {q.trim() ? <MutedText style={{ marginTop: 8 }}>{`Searching "${q.trim()}"`}</MutedText> : null}
+      {error ? (
+        <View style={{ marginTop: 10 }}>
+          <ErrorText>{error}</ErrorText>
+        </View>
+      ) : null}
+    </Card>
   );
 
   return (
@@ -473,9 +466,14 @@ export function OrdersListScreen({ navigation }: Props) {
         </Card>
       ) : Platform.OS === "web" ? (
         <ScrollView
+          ref={webListRef}
           style={{ flex: 1 }}
           contentContainerStyle={{ gap: 12, paddingBottom: theme.spacing.lg + insets.bottom + 156 }}
           keyboardShouldPersistTaps="handled"
+          onScroll={(event) => {
+            scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
         >
           {compactHeader}
 
@@ -495,10 +493,15 @@ export function OrdersListScreen({ navigation }: Props) {
         </ScrollView>
       ) : (
         <FlatList
+          ref={nativeListRef}
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 156 }}
           data={visibleOrders}
           keyExtractor={(order) => order._id}
+          onScroll={(event) => {
+            scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
           ListHeaderComponent={compactHeader}
           ListHeaderComponentStyle={{ marginBottom: 12 }}
@@ -513,6 +516,30 @@ export function OrdersListScreen({ navigation }: Props) {
           )}
         />
       )}
+
+      {!isDesktopWeb ? (
+        <View pointerEvents="box-none" style={{ position: "absolute", top: 0, left: 0, right: 0 }}>
+          <Animated.View
+            pointerEvents={compactSearchOpen ? "auto" : "none"}
+            style={{
+              paddingHorizontal: theme.spacing.md,
+              height: compactSearchHeight,
+              opacity: compactSearchAnim,
+              overflow: "hidden",
+              transform: [{ translateY: compactSearchTranslate }],
+            }}
+          >
+            <Card>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <SearchControl inputRef={compactSearchRef} value={q} onChangeText={setQ} placeholder="Search orders" />
+                </View>
+                <AppButton title="Close" iconName="close" iconOnly variant="secondary" onPress={closeCompactSearch} />
+              </View>
+            </Card>
+          </Animated.View>
+        </View>
+      ) : null}
     </Screen>
   );
 }

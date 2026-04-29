@@ -1,5 +1,6 @@
-import React, { useCallback, useContext, useMemo, useRef, useState } from "react";
-import { Animated, FlatList, PanResponder, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { ActivityIndicator, Animated, Modal, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,13 +8,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import type { OrdersStackParamList } from "../navigation/types";
-import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
+import { AppButton, BarcodeScanModal, Card, ErrorText, MutedText, Screen, shadow, theme } from "../ui";
 
 type InventoryItem = {
   _id: string;
   name: string;
   sku: string;
   barcode?: string;
+  location?: string;
   quantity: number;
   flow?: {
     trackedUnits: number;
@@ -35,31 +37,224 @@ type CartLine = {
   itemId: string;
   name: string;
   sku: string;
+  location?: string;
   quantity: number;
-  quantityText: string;
+  available: number;
 };
 
 type Props = NativeStackScreenProps<OrdersStackParamList, "OrderCreate">;
 
-function exitReadinessLabel(item: InventoryItem) {
-  if (!item.flow) return "Flow summary unavailable";
-  return `Exit ready ${item.flow.exitReadyUnits}/${item.quantity} • ${item.flow.nextStep}`;
+const DESKTOP_SKU_WIDTH = 140;
+const DESKTOP_LOCATION_WIDTH = 104;
+const DESKTOP_AVAILABLE_WIDTH = 58;
+const DESKTOP_PICK_WIDTH = 108;
+
+function buildCartLine(item: InventoryItem, quantity: number): CartLine {
+  return {
+    itemId: item._id,
+    name: item.name,
+    sku: item.sku,
+    location: item.location,
+    quantity,
+    available: item.quantity,
+  };
 }
 
-function exitReadinessTone(item: InventoryItem) {
-  if (!item.flow) return "default" as const;
-  if (item.flow.missingExitTrackingUnits > 0 || item.flow.untrackedUnits > 0) return "warning" as const;
-  if (item.flow.exitReadyUnits >= item.quantity && item.quantity > 0) return "success" as const;
-  return "default" as const;
+function ribbonMetric(value: number, label: string) {
+  return `${value} ${label}`;
 }
+
+function SearchDock({
+  inputRef,
+  value,
+  onChangeText,
+  onScan,
+  loading,
+  placeholder,
+}: {
+  inputRef?: React.RefObject<TextInput | null>;
+  value: string;
+  onChangeText: (value: string) => void;
+  onScan: () => void;
+  loading?: boolean;
+  placeholder: string;
+}) {
+  return (
+    <View
+      style={{
+        minHeight: 54,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.surface2,
+        borderRadius: theme.radius.sm,
+        paddingLeft: 12,
+        paddingRight: 8,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+      }}
+    >
+      <Ionicons name="search" size={16} color={theme.colors.textMuted} />
+      <TextInput
+        ref={inputRef}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={theme.colors.textMuted}
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="search"
+        style={{
+          flex: 1,
+          minHeight: 48,
+          color: theme.colors.text,
+          fontSize: 15,
+          ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null),
+        }}
+      />
+      {loading ? <ActivityIndicator size="small" color={theme.colors.textMuted} /> : null}
+      <Pressable
+        onPress={onScan}
+        style={({ pressed }) => ({
+          width: 40,
+          height: 40,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: theme.colors.border,
+          backgroundColor: pressed ? theme.colors.surface : theme.colors.surface,
+          alignItems: "center",
+          justifyContent: "center",
+        })}
+      >
+        <Ionicons name="barcode-outline" size={18} color={theme.colors.textMuted} />
+      </Pressable>
+    </View>
+  );
+}
+
+function QuantityStepper({
+  value,
+  onIncrease,
+  onDecrease,
+  canIncrease,
+  compact,
+}: {
+  value: number;
+  onIncrease: () => void;
+  onDecrease: () => void;
+  canIncrease: boolean;
+  compact?: boolean;
+}) {
+  const height = compact ? 40 : 44;
+  const buttonWidth = compact ? 40 : 42;
+  const countWidth = compact ? 34 : 38;
+
+  return (
+    <View
+      style={{
+        height,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.surface2,
+        borderRadius: 14,
+        overflow: "hidden",
+        flexDirection: "row",
+        alignItems: "stretch",
+      }}
+    >
+      <Pressable
+        onPress={onDecrease}
+        disabled={value <= 0}
+        style={({ pressed }) => ({
+          width: buttonWidth,
+          alignItems: "center",
+          justifyContent: "center",
+          borderRightWidth: 1,
+          borderRightColor: theme.colors.border,
+          opacity: value <= 0 ? 0.35 : 1,
+          backgroundColor: pressed ? theme.colors.surface : theme.colors.surface2,
+        })}
+      >
+        <Ionicons name="remove" size={16} color={theme.colors.text} />
+      </Pressable>
+      <View style={{ width: countWidth, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ color: theme.colors.text, fontWeight: "800", fontSize: compact ? 13 : 14 }}>{value}</Text>
+      </View>
+      <Pressable
+        onPress={onIncrease}
+        disabled={!canIncrease}
+        style={({ pressed }) => ({
+          width: buttonWidth,
+          alignItems: "center",
+          justifyContent: "center",
+          borderLeftWidth: 1,
+          borderLeftColor: theme.colors.border,
+          opacity: canIncrease ? 1 : 0.35,
+          backgroundColor: pressed ? theme.colors.surface : theme.colors.surface2,
+        })}
+      >
+        <Ionicons name="add" size={16} color={theme.colors.text} />
+      </Pressable>
+    </View>
+  );
+}
+
+function GhostNotesField({
+  value,
+  onChangeText,
+  placeholder,
+}: {
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={[theme.typography.label, { color: theme.colors.text }]}>Order notes</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={theme.colors.textMuted}
+        multiline
+        numberOfLines={4}
+        textAlignVertical="top"
+        style={{
+          minHeight: 110,
+          borderRadius: theme.radius.sm,
+          backgroundColor: theme.colors.surface2,
+          paddingHorizontal: 14,
+          paddingVertical: 14,
+          color: theme.colors.text,
+          ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null),
+        }}
+      />
+    </View>
+  );
+}
+
 
 export function OrderCreateScreen({ navigation }: Props) {
   const { token } = useContext(AuthContext);
   const { width } = useWindowDimensions();
-  const { height } = useWindowDimensions();
-  const isDesktopWeb = Platform.OS === "web" && width >= 900;
-  const isWeb = Platform.OS === "web";
+  const isDesktopWeb = Platform.OS === "web" && width >= 1100;
   const insets = useSafeAreaInsets();
+
+  const searchRef = useRef<TextInput>(null);
+  const sheetAnim = useRef(new Animated.Value(0)).current;
+  const autoSearchInitialSkipRef = useRef(true);
+  const autoSearchReqIdRef = useRef(0);
+  const autoSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [scanOpen, setScanOpen] = useState(false);
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [query, setQuery] = useState("");
+  const [notes, setNotes] = useState("");
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   const onBack = useCallback(() => {
     if (isDesktopWeb) {
@@ -72,120 +267,42 @@ export function OrderCreateScreen({ navigation }: Props) {
     }
     navigation.navigate("OrdersList");
   }, [isDesktopWeb, navigation]);
+
   const openRfidHub = useCallback(() => {
     const parent = navigation.getParent();
     (parent as any)?.navigate?.("More", { screen: "RfidHub" });
   }, [navigation]);
 
-  const searchRef = useRef<TextInput>(null);
-  const [scanOpen, setScanOpen] = useState(false);
-
-  const [items, setItems] = useState<InventoryItem[]>([]);
-  const [query, setQuery] = useState("");
-  const [notes, setNotes] = useState("");
-  const [cart, setCart] = useState<CartLine[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-
-  const autoSearchInitialSkipRef = useRef(true);
-  const autoSearchReqIdRef = useRef(0);
-  const autoSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const [showFloatingSearch] = useState(true);
-  const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
-  const overlayAnim = useRef(new Animated.Value(0)).current;
-  const overlaySearchRef = useRef<TextInput>(null);
-  const overlaySpace = theme.spacing.md + insets.top + 104;
-
-  const floatingPos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-  const floatingDraggedRef = useRef(false);
-  const floatingStartRef = useRef({ x: 0, y: 0 });
-
-  const buttonSize = 52;
-  const floatingMargin = theme.spacing.md;
-  const floatingTop = theme.spacing.md + insets.top + 16;
-  const floatingBottomLimit = theme.spacing.md + insets.bottom + 168;
-  const maxX = Math.max(0, width - buttonSize - floatingMargin * 2);
-  const maxY = Math.max(0, height - buttonSize - floatingTop - floatingBottomLimit);
-
-  const floatingPan = useMemo(
-    () => {
-      const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
-      return PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
-        onPanResponderGrant: () => {
-          floatingStartRef.current = {
-            x: (floatingPos.x as any).__getValue?.() ?? 0,
-            y: (floatingPos.y as any).__getValue?.() ?? 0,
-          };
-          floatingPos.extractOffset();
-        },
-        onPanResponderMove: (_, g) => {
-          if (Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2) floatingDraggedRef.current = true;
-
-          const start = floatingStartRef.current;
-          const nextX = clamp(start.x + g.dx, 0, maxX);
-          const nextY = clamp(start.y + g.dy, 0, maxY);
-          floatingPos.setValue({ x: nextX - start.x, y: nextY - start.y });
-        },
-        onPanResponderRelease: () => {
-          floatingPos.flattenOffset();
-          const x = clamp((floatingPos.x as any).__getValue?.() ?? 0, 0, maxX);
-          const y = clamp((floatingPos.y as any).__getValue?.() ?? 0, 0, maxY);
-          const snapX = x < maxX / 2 ? 0 : maxX;
-          Animated.spring(floatingPos, { toValue: { x: snapX, y }, useNativeDriver: false, friction: 7, tension: 90 }).start();
-        },
-      });
-    },
-    [floatingPos, maxX, maxY]
-  );
-
-  React.useEffect(() => {
-    if (!showFloatingSearch) {
-      floatingDraggedRef.current = false;
-      return;
-    }
-    if (floatingDraggedRef.current) return;
-    floatingPos.setValue({ x: maxX, y: maxY / 2 });
-  }, [floatingPos, maxX, showFloatingSearch]);
-
-  const openSearchOverlay = useCallback(() => {
-    setSearchOverlayOpen(true);
-    overlayAnim.setValue(0);
-    Animated.timing(overlayAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
-    setTimeout(() => overlaySearchRef.current?.focus(), 50);
-  }, [overlayAnim]);
-
-  const closeSearchOverlay = useCallback(() => {
-    Animated.timing(overlayAnim, { toValue: 0, duration: 160, useNativeDriver: true }).start(({ finished }) => {
-      if (!finished) return;
-      setSearchOverlayOpen(false);
-    });
-  }, [overlayAnim]);
-
   const loadItems = useCallback(
-    async (qOverride?: string) => {
-    if (!token) return;
-    const q = (qOverride ?? query).trim();
-    const path = q ? `/inventory/items?q=${encodeURIComponent(q)}` : "/inventory/items";
-    const res = await apiRequest<{ ok: true; items: InventoryItem[] }>(path, { method: "GET", token });
-    setItems(res.items);
+    async (queryValue?: string) => {
+      if (!token) return;
+      const trimmed = (queryValue ?? query).trim();
+      const path = trimmed ? `/inventory/items?q=${encodeURIComponent(trimmed)}` : "/inventory/items";
+      const res = await apiRequest<{ ok: true; items: InventoryItem[] }>(path, { method: "GET", token });
+      setItems(res.items);
     },
     [query, token]
   );
 
   useFocusEffect(
     useCallback(() => {
+      let cancelled = false;
       setLoading(true);
       loadItems()
-        .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
-        .finally(() => setLoading(false));
+        .catch((e) => {
+          if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+
+      return () => {
+        cancelled = true;
+      };
     }, [loadItems])
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!token) return;
 
     if (autoSearchInitialSkipRef.current) {
@@ -206,66 +323,99 @@ export function OrderCreateScreen({ navigation }: Props) {
         .finally(() => {
           if (autoSearchReqIdRef.current === reqId) setLoading(false);
         });
-    }, 300);
+    }, 260);
 
     return () => {
       if (autoSearchTimerRef.current) clearTimeout(autoSearchTimerRef.current);
     };
   }, [loadItems, query, token]);
 
-  const cartTotal = useMemo(() => cart.reduce((sum, l) => sum + l.quantity, 0), [cart]);
-  const cartWarnings = useMemo(() => {
-    return cart
-      .map((line) => {
-        const item = items.find((candidate) => candidate._id === line.itemId);
-        if (!item?.flow) return null;
-        if (line.quantity > item.flow.exitReadyUnits) {
-          return `${line.name}: only ${item.flow.exitReadyUnits} of ${line.quantity} requested units are exit-ready right now.`;
-        }
-        if (item.flow.untrackedUnits > 0) {
-          return `${line.name}: ${item.flow.untrackedUnits} units still need RFID Hub receiving/backfill to match live stock.`;
-        }
-        return null;
+  useEffect(() => {
+    if (!items.length) return;
+    setCart((prev) =>
+      prev.map((line) => {
+        const match = items.find((item) => item._id === line.itemId);
+        return match ? buildCartLine(match, line.quantity) : line;
       })
-      .filter((value): value is string => !!value);
-  }, [cart, items]);
+    );
+  }, [items]);
 
-  function addToCart(it: InventoryItem) {
+  useEffect(() => {
+    if (cart.length === 0 && summaryOpen) {
+      sheetAnim.setValue(0);
+      setSummaryOpen(false);
+    }
+  }, [cart.length, summaryOpen, sheetAnim]);
+
+  const selectedQtyMap = useMemo(() => new Map(cart.map((line) => [line.itemId, line.quantity])), [cart]);
+  const selectedItemCount = cart.length;
+  const totalUnits = useMemo(() => cart.reduce((sum, line) => sum + line.quantity, 0), [cart]);
+
+  const updateLine = useCallback((item: InventoryItem, nextQuantity: number) => {
+    const cappedQuantity = Math.max(0, Math.min(item.quantity, nextQuantity));
+
     setCart((prev) => {
-      const existing = prev.find((p) => p.itemId === it._id);
-      if (!existing) return [...prev, { itemId: it._id, name: it.name, sku: it.sku, quantity: 1, quantityText: "1" }];
-      return prev.map((p) => {
-        if (p.itemId !== it._id) return p;
-        const nextQty = (p.quantity || 0) + 1;
-        return { ...p, quantity: nextQty, quantityText: String(nextQty) };
-      });
+      const existing = prev.find((line) => line.itemId === item._id);
+
+      if (cappedQuantity <= 0) {
+        return prev.filter((line) => line.itemId !== item._id);
+      }
+
+      if (!existing) {
+        return [...prev, buildCartLine(item, cappedQuantity)];
+      }
+
+      return prev.map((line) => (line.itemId === item._id ? buildCartLine(item, cappedQuantity) : line));
     });
-  }
+  }, []);
 
-  function setLineQty(itemId: string, qtyText: string) {
-    const clean = qtyText.replace(/[^0-9]/g, "");
-    const qty = clean ? Number(clean) : 0;
-    if (!Number.isFinite(qty) || qty < 0) return;
-    setCart((prev) => prev.map((p) => (p.itemId === itemId ? { ...p, quantity: qty, quantityText: clean } : p)));
-  }
+  const incrementLine = useCallback(
+    (item: InventoryItem) => {
+      const currentQty = selectedQtyMap.get(item._id) ?? 0;
+      updateLine(item, currentQty + 1);
+    },
+    [selectedQtyMap, updateLine]
+  );
 
-  function removeLine(itemId: string) {
-    setCart((prev) => prev.filter((p) => p.itemId !== itemId));
-  }
+  const decrementLine = useCallback(
+    (item: InventoryItem) => {
+      const currentQty = selectedQtyMap.get(item._id) ?? 0;
+      updateLine(item, currentQty - 1);
+    },
+    [selectedQtyMap, updateLine]
+  );
+
+  const openSummarySheet = useCallback(() => {
+    setSummaryOpen(true);
+    sheetAnim.setValue(0);
+    Animated.timing(sheetAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+  }, [sheetAnim]);
+
+  const closeSummarySheet = useCallback(() => {
+    Animated.timing(sheetAnim, { toValue: 0, duration: 160, useNativeDriver: true }).start(({ finished }) => {
+      if (finished) setSummaryOpen(false);
+    });
+  }, [sheetAnim]);
 
   async function submit() {
     if (!token || submitting) return;
-    const validLines = cart.filter((l) => typeof l.quantity === "number" && l.quantity > 0);
+
+    const validLines = cart.filter((line) => line.quantity > 0);
     if (!validLines.length) {
       setError("Add at least one item");
+      return;
+    }
+    if (validLines.some((line) => line.quantity > line.available)) {
+      setError("One or more selected items exceed available stock.");
       return;
     }
 
     setSubmitting(true);
     setError(null);
+
     try {
       const body = {
-        items: validLines.map((l) => ({ itemId: l.itemId, quantity: l.quantity })),
+        items: validLines.map((line) => ({ itemId: line.itemId, quantity: line.quantity })),
         notes: notes.trim() ? notes.trim() : undefined,
       };
 
@@ -283,8 +433,492 @@ export function OrderCreateScreen({ navigation }: Props) {
     }
   }
 
+  const renderDesktopRow = (item: InventoryItem) => {
+    const selectedQty = selectedQtyMap.get(item._id) ?? 0;
+    const selected = selectedQty > 0;
+    const canIncrease = selectedQty < item.quantity;
+
+    return (
+      <View
+        key={item._id}
+        style={{
+          paddingHorizontal: theme.spacing.md,
+          paddingVertical: 14,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.border,
+          backgroundColor: selected ? "rgba(34, 197, 94, 0.08)" : theme.colors.surface,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[theme.typography.h3, { color: theme.colors.text, lineHeight: 20 }]} numberOfLines={3}>
+            {item.name}
+          </Text>
+        </View>
+
+        <View style={{ width: DESKTOP_SKU_WIDTH, flexShrink: 0 }}>
+          <Text style={[theme.typography.body, { color: theme.colors.text }]} numberOfLines={1}>
+            {item.sku}
+          </Text>
+        </View>
+
+        <View style={{ width: DESKTOP_LOCATION_WIDTH, flexShrink: 0 }}>
+          <Text style={[theme.typography.body, { color: theme.colors.textMuted }]} numberOfLines={1}>
+            {item.location ?? "-"}
+          </Text>
+        </View>
+
+        <View style={{ width: DESKTOP_AVAILABLE_WIDTH, flexShrink: 0 }}>
+          <Text style={{ color: theme.colors.text, textAlign: "right", fontWeight: "800" }}>{item.quantity}</Text>
+        </View>
+
+        <View style={{ width: DESKTOP_PICK_WIDTH, flexShrink: 0, alignItems: "flex-end" }}>
+          <QuantityStepper
+            value={selectedQty}
+            onIncrease={() => incrementLine(item)}
+            onDecrease={() => decrementLine(item)}
+            canIncrease={canIncrease}
+          />
+        </View>
+      </View>
+    );
+  };
+
+  const renderMobileCard = (item: InventoryItem) => {
+    const selectedQty = selectedQtyMap.get(item._id) ?? 0;
+    const selected = selectedQty > 0;
+    const canIncrease = selectedQty < item.quantity;
+
+    return (
+      <Card
+        key={item._id}
+        style={{
+          borderColor: selected ? "rgba(34, 197, 94, 0.28)" : theme.colors.border,
+          backgroundColor: selected ? "rgba(34, 197, 94, 0.05)" : theme.colors.surface,
+        }}
+      >
+        <View style={{ gap: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[theme.typography.h3, { color: theme.colors.text, lineHeight: 20 }]} numberOfLines={2}>
+                {item.name}
+              </Text>
+              <Text style={[theme.typography.body, { color: theme.colors.textMuted, marginTop: 6 }]} numberOfLines={1}>
+                {`SKU: ${item.sku}`}
+              </Text>
+              <Text style={[theme.typography.body, { color: theme.colors.textMuted, marginTop: 2 }]} numberOfLines={1}>
+                {`Location: ${item.location ?? "-"}`}
+              </Text>
+            </View>
+            <QuantityStepper
+              compact
+              value={selectedQty}
+              onIncrease={() => incrementLine(item)}
+              onDecrease={() => decrementLine(item)}
+              canIncrease={canIncrease}
+            />
+          </View>
+
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <View
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.surface2,
+                  borderRadius: 999,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                }}
+              >
+                <Text style={{ color: theme.colors.textMuted, fontSize: 12, fontWeight: "800" }}>{`Available ${item.quantity}`}</Text>
+              </View>
+              {selected ? (
+                <View
+                  style={{
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                    backgroundColor: "rgba(34, 197, 94, 0.14)",
+                    borderRadius: 999,
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                  }}
+                >
+                  <Text style={{ color: theme.colors.success, fontSize: 12, fontWeight: "800" }}>Selected</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      </Card>
+    );
+  };
+
+  const renderSummaryLine = (line: CartLine, compact?: boolean) => {
+    const sourceItem = items.find((item) => item._id === line.itemId);
+    const displayItem: InventoryItem =
+      sourceItem ??
+      ({
+        _id: line.itemId,
+        name: line.name,
+        sku: line.sku,
+        location: line.location,
+        quantity: line.available,
+      } as InventoryItem);
+
+    return (
+      <View
+        key={line.itemId}
+        style={{
+          borderWidth: 1,
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.surface,
+          borderRadius: theme.radius.sm,
+          padding: 12,
+          gap: 10,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[theme.typography.h3, { color: theme.colors.text, lineHeight: 20 }]} numberOfLines={2}>
+              {line.name}
+            </Text>
+            <Text style={[theme.typography.caption, { color: theme.colors.textMuted, marginTop: 4 }]} numberOfLines={1}>
+              {`${line.sku} | ${line.location || "-"}`}
+            </Text>
+          </View>
+          <QuantityStepper
+            compact={compact}
+            value={line.quantity}
+            onIncrease={() => incrementLine(displayItem)}
+            onDecrease={() => decrementLine(displayItem)}
+            canIncrease={line.quantity < line.available}
+          />
+        </View>
+      </View>
+    );
+  };
+
+  const desktopSummary = (
+    <Card style={{ flex: 1, padding: 0, minHeight: 0 }}>
+      <View
+        style={{
+          paddingHorizontal: theme.spacing.md,
+          paddingVertical: 14,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.border,
+        }}
+      >
+        <Text style={{ color: theme.colors.text, fontSize: 13, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" }}>Order summary</Text>
+      </View>
+
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: theme.spacing.md, gap: 12 }}>
+        {cart.length ? (
+          <View style={{ gap: 10 }}>
+            {cart.map((line) => renderSummaryLine(line))}
+          </View>
+        ) : (
+          <View
+            style={{
+              minHeight: 180,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              borderStyle: "dashed",
+              borderRadius: theme.radius.md,
+              alignItems: "center",
+              justifyContent: "center",
+              padding: theme.spacing.lg,
+            }}
+          >
+            <Text style={[theme.typography.h2, { color: theme.colors.textMuted }]}>No items added yet</Text>
+            <MutedText style={{ marginTop: 8, textAlign: "center" }}>Add products from the list and the cart will build here live.</MutedText>
+          </View>
+        )}
+
+        <GhostNotesField value={notes} onChangeText={setNotes} placeholder="Order notes (optional)..." />
+      </ScrollView>
+
+      <View
+        style={{
+          borderTopWidth: 1,
+          borderTopColor: theme.colors.border,
+          padding: theme.spacing.md,
+        }}
+      >
+        <AppButton title="Create order" onPress={submit} disabled={!totalUnits || submitting} loading={submitting} />
+      </View>
+    </Card>
+  );
+
+  const mobileFab = cart.length ? (
+    <View
+      pointerEvents="box-none"
+      style={{
+        position: "absolute",
+        left: theme.spacing.md,
+        right: theme.spacing.md,
+        bottom: 86 + insets.bottom,
+      }}
+    >
+      <Pressable
+        onPress={openSummarySheet}
+        style={({ pressed }) => [
+          {
+            borderRadius: 18,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            backgroundColor: theme.colors.surfaceGlass,
+            paddingHorizontal: 14,
+            paddingVertical: 12,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            opacity: pressed ? 0.95 : 1,
+          },
+          shadow(2),
+        ]}
+      >
+        <View>
+          <Text style={[theme.typography.h3, { color: theme.colors.text }]}>{`View order (${selectedItemCount})`}</Text>
+          <MutedText>{`${totalUnits} units selected`}</MutedText>
+        </View>
+        <Ionicons name="chevron-up" size={18} color={theme.colors.textMuted} />
+      </Pressable>
+    </View>
+  ) : null;
+
+  const desktopContent = (
+    <View style={{ flex: 1, flexDirection: "row", gap: theme.spacing.md, minHeight: 0 }}>
+      <Card style={{ flex: 1, padding: 0, minHeight: 0 }}>
+        <View
+          style={{
+            padding: theme.spacing.md,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.colors.border,
+            gap: 12,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <SearchDock
+                inputRef={searchRef}
+                value={query}
+                onChangeText={setQuery}
+                onScan={() => setScanOpen(true)}
+                loading={loading}
+                placeholder="Search by name, SKU, barcode, location"
+              />
+            </View>
+          </View>
+        </View>
+
+        <View
+          style={{
+            paddingHorizontal: theme.spacing.md,
+            paddingVertical: 12,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.colors.border,
+            backgroundColor: theme.colors.surface2,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+            <Text style={[theme.typography.h3, { color: theme.colors.text }]} numberOfLines={1}>
+              {ribbonMetric(selectedItemCount, "items selected")}
+            </Text>
+            <Text style={[theme.typography.body, { color: theme.colors.textMuted }]} numberOfLines={1}>
+              {ribbonMetric(totalUnits, "units total")}
+            </Text>
+            {loading ? <MutedText>Updating inventory...</MutedText> : null}
+          </View>
+          <AppButton title="RFID Hub" onPress={openRfidHub} variant="secondary" iconName="radio-outline" />
+        </View>
+
+        <View
+          style={{
+            paddingHorizontal: theme.spacing.md,
+            paddingVertical: 12,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.border,
+          backgroundColor: theme.colors.surface,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[theme.typography.label, { color: theme.colors.textMuted }]} numberOfLines={1}>
+              Item
+            </Text>
+          </View>
+          <View style={{ width: DESKTOP_SKU_WIDTH, flexShrink: 0 }}>
+            <Text style={[theme.typography.label, { color: theme.colors.textMuted }]} numberOfLines={1}>
+              SKU
+            </Text>
+          </View>
+          <View style={{ width: DESKTOP_LOCATION_WIDTH, flexShrink: 0 }}>
+            <Text style={[theme.typography.label, { color: theme.colors.textMuted }]} numberOfLines={1}>
+              Location
+            </Text>
+          </View>
+          <View style={{ width: DESKTOP_AVAILABLE_WIDTH, flexShrink: 0 }}>
+            <Text style={[theme.typography.label, { color: theme.colors.textMuted, textAlign: "right" }]} numberOfLines={1}>
+              Avail
+            </Text>
+          </View>
+          <View style={{ width: DESKTOP_PICK_WIDTH, flexShrink: 0 }}>
+            <Text style={[theme.typography.label, { color: theme.colors.textMuted, textAlign: "right" }]} numberOfLines={1}>
+              Pick
+            </Text>
+          </View>
+        </View>
+
+        {error ? (
+          <View style={{ paddingHorizontal: theme.spacing.md, paddingTop: theme.spacing.md }}>
+            <ErrorText>{error}</ErrorText>
+          </View>
+        ) : null}
+
+        <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
+          {items.length ? (
+            items.map((item) => renderDesktopRow(item))
+          ) : (
+            <View style={{ padding: theme.spacing.lg }}>
+              <MutedText>{query.trim() ? "No matching inventory items" : "No inventory items available"}</MutedText>
+            </View>
+          )}
+        </ScrollView>
+      </Card>
+
+      <View style={{ width: width >= 1320 ? 320 : 288, minHeight: 0 }}>{desktopSummary}</View>
+    </View>
+  );
+
+  const mobileContent = (
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          gap: theme.spacing.md,
+          paddingBottom: cart.length ? 172 + insets.bottom : 112 + insets.bottom,
+        }}
+        keyboardShouldPersistTaps="handled"
+      >
+        {error ? <ErrorText>{error}</ErrorText> : null}
+
+        <Card>
+          <View style={{ gap: 12 }}>
+            <SearchDock
+              inputRef={searchRef}
+              value={query}
+              onChangeText={setQuery}
+              onScan={() => setScanOpen(true)}
+              loading={loading}
+              placeholder="Search by name, SKU, barcode"
+            />
+            {loading ? <MutedText>Updating inventory...</MutedText> : null}
+          </View>
+        </Card>
+
+        {items.length ? (
+          items.map((item) => renderMobileCard(item))
+        ) : (
+          <Card>
+            <MutedText>{query.trim() ? "No matching inventory items" : "No inventory items available"}</MutedText>
+          </Card>
+        )}
+      </ScrollView>
+
+      {mobileFab}
+
+      <Modal transparent visible={summaryOpen} animationType="none" onRequestClose={closeSummarySheet}>
+        <View style={{ flex: 1, justifyContent: "flex-end" }}>
+          <Pressable
+            onPress={closeSummarySheet}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.28)",
+            }}
+          />
+
+          <Animated.View
+            style={{
+              maxHeight: "78%",
+              backgroundColor: theme.colors.surface,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              transform: [
+                {
+                  translateY: sheetAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [420, 0],
+                  }),
+                },
+              ],
+            }}
+          >
+            <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 6 }}>
+              <View style={{ width: 48, height: 5, borderRadius: 999, backgroundColor: theme.colors.border }} />
+            </View>
+
+            <View
+              style={{
+                paddingHorizontal: theme.spacing.md,
+                paddingBottom: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: theme.colors.border,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <View>
+                <Text style={[theme.typography.h2, { color: theme.colors.text }]}>Order summary</Text>
+              </View>
+              <AppButton title="RFID Hub" onPress={openRfidHub} variant="secondary" iconName="radio-outline" />
+            </View>
+
+            <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ padding: theme.spacing.md, gap: 12 }}>
+              <View style={{ gap: 10 }}>{cart.map((line) => renderSummaryLine(line, true))}</View>
+              <GhostNotesField value={notes} onChangeText={setNotes} placeholder="Order notes (optional)..." />
+            </ScrollView>
+
+            <View
+              style={{
+                borderTopWidth: 1,
+                borderTopColor: theme.colors.border,
+                paddingHorizontal: theme.spacing.md,
+                paddingTop: 12,
+                paddingBottom: insets.bottom + 12,
+              }}
+            >
+              <AppButton title="Create order" onPress={submit} disabled={!totalUnits || submitting} loading={submitting} />
+            </View>
+          </Animated.View>
+        </View>
+      </Modal>
+    </View>
+  );
+
   return (
-    <Screen title="New order" tabBarPadding={false} right={<AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />}>
+    <Screen
+      title="New order"
+      right={<AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />}
+      scroll={false}
+      tabBarPadding={isDesktopWeb}
+    >
       <BarcodeScanModal
         visible={scanOpen}
         title="Scan barcode"
@@ -292,374 +926,10 @@ export function OrderCreateScreen({ navigation }: Props) {
         onScanned={(value) => {
           setQuery(value);
           setScanOpen(false);
-          setTimeout(() => {
-            if (searchOverlayOpen) overlaySearchRef.current?.focus();
-            else searchRef.current?.focus();
-          }, 50);
+          setTimeout(() => searchRef.current?.focus(), 40);
         }}
       />
-      {error ? <ErrorText>{error}</ErrorText> : null}
-
-      {isDesktopWeb ? (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flex: 1 }} nestedScrollEnabled>
-          <View style={{ flexDirection: "row", gap: theme.spacing.md, alignItems: "stretch", flex: 1 }}>
-            <View style={{ flex: 1, minWidth: 0, gap: theme.spacing.md }}>
-            <Card>
-              <TextField
-                ref={searchRef}
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search: name, SKU, barcode, location, RFID tag"
-                autoCapitalize="none"
-                returnKeyType="search"
-                onSubmitEditing={() => setQuery((prev) => prev.trim())}
-              />
-              <View style={{ height: 12 }} />
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-                <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" />
-                <View style={{ flexGrow: 1 }} />
-                <Badge label={`Selected: ${cart.length}`} tone={cart.length ? "primary" : "default"} size="header" />
-                <Badge label={`Units: ${cartTotal}`} tone={cartTotal ? "primary" : "default"} size="header" />
-                <AppButton title="RFID Hub" onPress={openRfidHub} variant="secondary" />
-              </View>
-            </Card>
-
-            <Card style={{ padding: 0 }}>
-              <View
-                style={{
-                  paddingHorizontal: theme.spacing.md,
-                  paddingVertical: 12,
-                  borderBottomWidth: 1,
-                  borderBottomColor: theme.colors.border,
-                  backgroundColor: theme.colors.surface2,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 12,
-                }}
-              >
-                <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
-                  Item
-                </Text>
-                <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 2 }]} numberOfLines={1}>
-                  SKU
-                </Text>
-                <Text style={[theme.typography.label, { color: theme.colors.textMuted, width: 120, textAlign: "right" }]} numberOfLines={1}>
-                  Available
-                </Text>
-                <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
-                  Exit Readiness
-                </Text>
-              </View>
-
-              {isWeb ? (
-                <View style={{ padding: theme.spacing.md, gap: 8 }}>
-                  {items.length ? (
-                    items.map((item) => (
-                      <Pressable
-                        key={item._id}
-                        onPress={() => addToCart(item)}
-                        style={(state) => {
-                          const pressed = state.pressed;
-                          const hovered = !!(state as any).hovered;
-                          return [
-                            {
-                              paddingVertical: 12,
-                              paddingHorizontal: theme.spacing.md,
-                              borderRadius: theme.radius.md,
-                              borderWidth: 1,
-                              borderColor: theme.colors.border,
-                              backgroundColor: pressed ? theme.colors.surface2 : hovered ? theme.colors.surface2 : theme.colors.surface,
-                              flexDirection: "row",
-                              alignItems: "center",
-                              gap: 12,
-                              ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null),
-                            },
-                            hovered && !pressed ? ({ transform: [{ translateY: -0.5 }] } as any) : null,
-                            pressed ? ({ transform: [{ translateY: 1 }] } as any) : null,
-                          ];
-                        }}
-                      >
-                        <Text style={[theme.typography.h3, { color: theme.colors.text, flex: 3 }]} numberOfLines={1}>
-                          {item.name}
-                        </Text>
-                        <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 2 }]} numberOfLines={1}>
-                          {item.sku}
-                        </Text>
-                        <Text style={{ color: theme.colors.text, width: 120, textAlign: "right", fontWeight: "800" }} numberOfLines={1}>
-                          {item.quantity}
-                        </Text>
-                        <Text style={{ color: theme.colors.textMuted, flex: 3 }} numberOfLines={1}>
-                          {exitReadinessLabel(item)}
-                        </Text>
-                      </Pressable>
-                    ))
-                  ) : (
-                    <MutedText>No items</MutedText>
-                  )}
-                </View>
-              ) : (
-                <FlatList
-                  scrollEnabled={false}
-                  contentContainerStyle={{ padding: theme.spacing.md, gap: 8 }}
-                  data={items}
-                  keyExtractor={(i) => i._id}
-                  ListEmptyComponent={<MutedText>No items</MutedText>}
-                  renderItem={({ item }) => (
-                    <Pressable
-                      onPress={() => addToCart(item)}
-                      style={(state) => {
-                        const pressed = state.pressed;
-                        const hovered = !!(state as any).hovered;
-                        return [
-                          {
-                            paddingVertical: 12,
-                            paddingHorizontal: theme.spacing.md,
-                            borderRadius: theme.radius.md,
-                            borderWidth: 1,
-                            borderColor: theme.colors.border,
-                            backgroundColor: pressed ? theme.colors.surface2 : hovered ? theme.colors.surface2 : theme.colors.surface,
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 12,
-                            ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null),
-                          },
-                          hovered && !pressed ? ({ transform: [{ translateY: -0.5 }] } as any) : null,
-                          pressed ? ({ transform: [{ translateY: 1 }] } as any) : null,
-                        ];
-                      }}
-                    >
-                      <Text style={[theme.typography.h3, { color: theme.colors.text, flex: 3 }]} numberOfLines={1}>
-                        {item.name}
-                      </Text>
-                      <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 2 }]} numberOfLines={1}>
-                        {item.sku}
-                      </Text>
-                      <Text style={{ color: theme.colors.text, width: 120, textAlign: "right", fontWeight: "800" }} numberOfLines={1}>
-                        {item.quantity}
-                      </Text>
-                      <Text style={{ color: theme.colors.textMuted, flex: 3 }} numberOfLines={1}>
-                        {exitReadinessLabel(item)}
-                      </Text>
-                    </Pressable>
-                  )}
-                />
-              )}
-            </Card>
-          </View>
-
-          <View style={{ width: 420, gap: theme.spacing.md }}>
-            <Card>
-              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Selected items</Text>
-              {cartWarnings.length ? (
-                <View style={{ marginBottom: 12, gap: 8 }}>
-                  {cartWarnings.map((warning) => (
-                    <View
-                      key={warning}
-                      style={{
-                        borderWidth: 1,
-                        borderColor: theme.colors.border,
-                        backgroundColor: "rgba(245, 158, 11, 0.14)",
-                        borderRadius: theme.radius.md,
-                        padding: 10,
-                      }}
-                    >
-                      <MutedText>{warning}</MutedText>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-              {cart.length ? (
-                <View style={{ gap: 10 }}>
-                  {cart.map((l) => (
-                    <Card key={l.itemId}>
-                      <ListRow title={l.name} subtitle={`SKU: ${l.sku}`} right={<Badge label={`x${l.quantity || 0}`} tone="primary" />} />
-                      <View style={{ height: 10 }} />
-                      <TextField
-                        label="Quantity"
-                        value={l.quantityText}
-                        onChangeText={(t) => setLineQty(l.itemId, t)}
-                        keyboardType="numeric"
-                      />
-                      <View style={{ height: 10 }} />
-                      <AppButton title="Remove item" onPress={() => removeLine(l.itemId)} variant="secondary" />
-                    </Card>
-                  ))}
-                </View>
-              ) : (
-                <MutedText>No items selected yet</MutedText>
-              )}
-            </Card>
-
-            <Card>
-              <TextField label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional" multiline numberOfLines={3} />
-              <View style={{ height: 16 }} />
-              <AppButton title="Create order" onPress={submit} disabled={submitting} loading={submitting} />
-            </Card>
-          </View>
-        </View>
-        </ScrollView>
-      ) : (
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{
-            gap: theme.spacing.md,
-            paddingBottom: theme.spacing.lg + insets.bottom + 156,
-            paddingTop: searchOverlayOpen ? overlaySpace : 0,
-            minHeight: height - insets.top - 100,
-            flexGrow: 1,
-          }}
-          keyboardShouldPersistTaps="handled"
-          alwaysBounceVertical
-        >
-          <Card>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <View style={{ flex: 1 }}>
-                <Badge label={`Selected: ${cart.length}`} tone={cart.length ? "primary" : "default"} size="header" responsive={false} fullWidth />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Badge label={`Total units: ${cartTotal}`} tone={cartTotal ? "primary" : "default"} size="header" responsive={false} fullWidth />
-              </View>
-              <View style={{ flex: 1 }}>
-                <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" style={{ width: "100%" }} />
-              </View>
-            </View>
-          </Card>
-
-          <Card>
-            <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Selected items</Text>
-            {cartWarnings.length ? (
-              <View style={{ marginBottom: 12, gap: 8 }}>
-                {cartWarnings.map((warning) => (
-                  <View
-                    key={warning}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: theme.colors.border,
-                      backgroundColor: "rgba(245, 158, 11, 0.14)",
-                      borderRadius: theme.radius.md,
-                      padding: 10,
-                    }}
-                  >
-                    <MutedText>{warning}</MutedText>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-            {cart.length ? (
-              <View style={{ gap: 10 }}>
-                {cart.map((l) => (
-                  <Card key={l.itemId}>
-                    <ListRow title={l.name} subtitle={`SKU: ${l.sku}`} right={<Badge label={`x${l.quantity || 0}`} tone="primary" />} />
-                    <View style={{ height: 10 }} />
-                    <TextField
-                      label="Quantity"
-                      value={l.quantityText}
-                      onChangeText={(t) => setLineQty(l.itemId, t)}
-                      keyboardType="numeric"
-                    />
-                    <View style={{ height: 10 }} />
-                    <AppButton title="Remove item" onPress={() => removeLine(l.itemId)} variant="secondary" />
-                  </Card>
-                ))}
-              </View>
-            ) : (
-              <MutedText>No items selected yet</MutedText>
-            )}
-          </Card>
-
-          <Card>
-            <TextField label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional" multiline numberOfLines={3} />
-            <View style={{ height: 16 }} />
-            <AppButton title="Create order" onPress={submit} disabled={submitting} loading={submitting} />
-          </Card>
-
-          <Card>
-            <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Inventory</Text>
-            {isWeb ? (
-              <View style={{ gap: 10 }}>
-                {items.map((item) => (
-                  <ListRow
-                    key={item._id}
-                    title={item.name}
-                    subtitle={`SKU: ${item.sku}\n${exitReadinessLabel(item)}`}
-                    meta={`Available: ${item.quantity}`}
-                    right={<Badge label="Add" tone={exitReadinessTone(item)} />}
-                    onPress={() => addToCart(item)}
-                  />
-                ))}
-              </View>
-            ) : (
-              <View style={{ gap: 10 }}>
-                {items.map((item) => (
-                  <ListRow
-                    key={item._id}
-                    title={item.name}
-                    subtitle={`SKU: ${item.sku}\n${exitReadinessLabel(item)}`}
-                    meta={`Available: ${item.quantity}`}
-                    right={<Badge label="Add" tone={exitReadinessTone(item)} />}
-                    onPress={() => addToCart(item)}
-                  />
-                ))}
-              </View>
-            )}
-          </Card>
-        </ScrollView>
-      )}
-
-      {!isDesktopWeb && showFloatingSearch && !searchOverlayOpen ? (
-        <Animated.View
-          style={{
-            position: "absolute",
-            left: floatingMargin,
-            top: floatingTop,
-            zIndex: 999,
-            elevation: 999,
-            transform: floatingPos.getTranslateTransform(),
-          }}
-          pointerEvents="box-none"
-          {...floatingPan.panHandlers}
-        >
-          <AppButton title="Search" iconName="search" iconOnly iconSize={28} variant="secondary" onPress={openSearchOverlay} />
-        </Animated.View>
-      ) : null}
-
-      {searchOverlayOpen ? (
-        <View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 60, elevation: 60 }} pointerEvents="box-none">
-          <Animated.View
-            style={{
-              padding: theme.spacing.md,
-              paddingTop: theme.spacing.md + insets.top,
-              transform: [
-                {
-                  translateY: overlayAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-180, 0],
-                  }),
-                },
-              ],
-              opacity: overlayAnim,
-            }}
-          >
-            <Card>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <TextField
-                    ref={overlaySearchRef}
-                    value={query}
-                    onChangeText={setQuery}
-                    placeholder="Search inventory"
-                    autoCapitalize="none"
-                    returnKeyType="search"
-                    onSubmitEditing={() => setQuery((prev) => prev.trim())}
-                  />
-                </View>
-                <AppButton title="Close" iconName="close" iconOnly variant="secondary" onPress={closeSearchOverlay} />
-              </View>
-              {loading ? <MutedText style={{ marginTop: 10 }}>Searching…</MutedText> : null}
-            </Card>
-          </Animated.View>
-        </View>
-      ) : null}
+      {isDesktopWeb ? desktopContent : mobileContent}
     </Screen>
   );
 }
