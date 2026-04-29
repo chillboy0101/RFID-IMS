@@ -293,9 +293,9 @@ export function renderApiHome(options: ApiHomeOptions): string {
         white-space: nowrap;
       }
 
-      .endpoints {
+      .checks {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
         margin-top: 16px;
       }
@@ -357,7 +357,7 @@ export function renderApiHome(options: ApiHomeOptions): string {
 
         .hero,
         .grid,
-        .endpoints {
+        .checks {
           grid-template-columns: 1fr;
         }
 
@@ -384,7 +384,7 @@ export function renderApiHome(options: ApiHomeOptions): string {
       <section class="hero">
         <div class="hero-main">
           <h1>Backend service is online.</h1>
-          <p class="lead">A minimal status surface for the RFID warehouse API, hardware events, inventory, orders, users, and audit operations.</p>
+          <p class="lead">A minimal status surface for uptime, health checks, database state, and runtime readiness.</p>
         </div>
         <aside class="hero-side">
           <div class="timer-label">Live uptime</div>
@@ -412,12 +412,8 @@ export function renderApiHome(options: ApiHomeOptions): string {
         </div>
       </section>
 
-      <section class="endpoints" aria-label="Primary endpoints">
+      <section class="checks" aria-label="Service checks">
         ${endpointLink("Health", "/health")}
-        ${endpointLink("RFID", "/rfid")}
-        ${endpointLink("Inventory", "/inventory")}
-        ${endpointLink("Orders", "/orders")}
-        ${endpointLink("Audit", "/audit")}
         ${endpointLink("Status JSON", "/status.json")}
       </section>
 
