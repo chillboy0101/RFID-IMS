@@ -1,14 +1,26 @@
-import React from "react";
+import React, { useCallback } from "react";
+import { Platform, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
+import { goBackOrNavigate } from "../navigation/moreBack";
 import type { MoreStackParamList } from "../navigation/types";
-import { ListRow, Screen } from "../ui";
+import { AppButton, ListRow, Screen } from "../ui";
 
 type Props = NativeStackScreenProps<MoreStackParamList, "AdminHub">;
 
 export function AdminHubScreen({ navigation }: Props) {
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === "web" && width >= 900;
+  const onBack = useCallback(() => {
+    goBackOrNavigate(navigation, "MoreMenu");
+  }, [navigation]);
+
   return (
-    <Screen title="Admin" scroll>
+    <Screen
+      title="Admin"
+      scroll
+      right={!isDesktopWeb ? <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly /> : undefined}
+    >
       <ListRow
         title="Gate Keys"
         subtitle="Manage RFID gate API keys for hardware"

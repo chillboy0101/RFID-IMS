@@ -5,6 +5,7 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
+import { goBackOrNavigate } from "../navigation/moreBack";
 import type { MoreStackParamList } from "../navigation/types";
 import { AUTO_REFRESH_PAUSE_MS, GLOBAL_AUTO_REFRESH_MS, AppButton, Badge, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
 
@@ -29,13 +30,7 @@ export function VendorsScreen({ navigation }: Props) {
   const isWeb = Platform.OS === "web";
 
   const onBack = useCallback(() => {
-    const state = navigation.getState();
-    const first = state.routes?.[0]?.name;
-    if (first === "MoreMenu") {
-      navigation.popToTop();
-      return;
-    }
-    navigation.navigate("MoreMenu");
+    goBackOrNavigate(navigation, "SupplyChain");
   }, [navigation]);
 
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -112,20 +107,12 @@ export function VendorsScreen({ navigation }: Props) {
       busy={refreshing || updating}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.text} />}
       right={
-        isDesktopWeb ? (
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            {canCreateOrEdit ? (
-              <AppButton title="New" onPress={() => navigation.navigate("VendorsCreate")} variant="secondary" iconName="add" iconOnly />
-            ) : null}
-          </View>
-        ) : (
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />
-            {canCreateOrEdit ? (
-              <AppButton title="New" onPress={() => navigation.navigate("VendorsCreate")} variant="secondary" iconName="add" iconOnly />
-            ) : null}
-          </View>
-        )
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />
+          {canCreateOrEdit ? (
+            <AppButton title="New" onPress={() => navigation.navigate("VendorsCreate")} variant="secondary" iconName="add" iconOnly />
+          ) : null}
+        </View>
       }
     >
       {error ? <ErrorText>{error}</ErrorText> : null}

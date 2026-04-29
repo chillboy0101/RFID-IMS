@@ -5,6 +5,7 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
+import { goBackOrNavigate } from "../navigation/moreBack";
 import type { MoreStackParamList } from "../navigation/types";
 import { formatTaskSessionRoute, taskSessionKindLabels, type TaskSessionKind } from "../progress/workflow";
 import { GLOBAL_AUTO_REFRESH_MS, AppButton, Badge, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
@@ -53,13 +54,7 @@ export function ProgressScreen({ navigation }: Props) {
   const isWeb = Platform.OS === "web";
 
   const onBack = useCallback(() => {
-    const state = navigation.getState();
-    const first = state.routes?.[0]?.name;
-    if (first === "MoreMenu") {
-      navigation.popToTop();
-      return;
-    }
-    navigation.navigate("MoreMenu");
+    goBackOrNavigate(navigation, "PeopleData");
   }, [navigation]);
 
   const [days, setDays] = useState("7");
@@ -176,7 +171,7 @@ export function ProgressScreen({ navigation }: Props) {
       title="Progress"
       scroll
       busy={loading || updating}
-      right={!isDesktopWeb ? <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly /> : null}
+      right={<AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />}
     >
       {error ? <ErrorText>{error}</ErrorText> : null}
 

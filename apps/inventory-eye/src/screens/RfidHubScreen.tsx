@@ -1,9 +1,12 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Platform, Pressable, ScrollView, Text, TextInput, Vibration, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
+import { goBackOrNavigate } from "../navigation/moreBack";
+import type { MoreStackParamList } from "../navigation/types";
 import { AppButton, Badge, Card, ErrorText, ListRow, MutedText, Screen, theme } from "../ui";
 
 type Mode = "assign" | "authorize" | "exit" | "tags";
@@ -111,6 +114,8 @@ type StationConfigResponse = {
   ok: true;
   stations: StationConfig;
 };
+
+type Props = NativeStackScreenProps<MoreStackParamList, "RfidHub">;
 
 const DEFAULT_STATION_CONFIG: StationConfig = {
   receiveLocations: ["RECEIVING_STAGING"],
@@ -1711,13 +1716,16 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
   );
 }
 
-export function RfidHubScreen() {
+export function RfidHubScreen({ navigation }: Props) {
   const { token } = useContext(AuthContext);
   const isDesktopWeb = useIsDesktopWeb();
   const [mode, setMode] = useState<Mode>("assign");
   const [stationConfig, setStationConfig] = useState<StationConfig>(DEFAULT_STATION_CONFIG);
   const [stationsLoading, setStationsLoading] = useState(false);
   const [stationsError, setStationsError] = useState<string | null>(null);
+  const onBack = useCallback(() => {
+    goBackOrNavigate(navigation, "MoreMenu");
+  }, [navigation]);
 
   useEffect(() => {
     if (!token) return;
@@ -1747,14 +1755,22 @@ export function RfidHubScreen() {
 
   if (!token) {
     return (
-      <Screen title="RFID Hub" center>
+      <Screen
+        title="RFID Hub"
+        center
+        right={!isDesktopWeb ? <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly /> : undefined}
+      >
         <MutedText>Sign in to use RFID operations.</MutedText>
       </Screen>
     );
   }
 
   return (
-    <Screen title="RFID Hub" scroll>
+    <Screen
+      title="RFID Hub"
+      scroll
+      right={!isDesktopWeb ? <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly /> : undefined}
+    >
       <View style={{ gap: theme.spacing.md, paddingBottom: 40 }}>
         {stationsError ? <ErrorText>{stationsError}</ErrorText> : null}
         <ModeTabs mode={mode} onChange={setMode} />

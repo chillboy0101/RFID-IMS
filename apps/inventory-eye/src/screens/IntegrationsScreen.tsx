@@ -6,6 +6,7 @@ import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import { API_BASE_URL } from "../config";
 import { getApiTenantId } from "../api/tenant";
+import { goBackOrNavigate } from "../navigation/moreBack";
 import type { MoreStackParamList } from "../navigation/types";
 import { AppButton, Badge, Card, ErrorText, MutedText, Screen, TextField, theme } from "../ui";
 
@@ -23,13 +24,7 @@ export function IntegrationsScreen({ navigation }: Props) {
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
 
   const onBack = useCallback(() => {
-    const state = navigation.getState();
-    const first = state.routes?.[0]?.name;
-    if (first === "MoreMenu") {
-      navigation.popToTop();
-      return;
-    }
-    navigation.navigate("MoreMenu");
+    goBackOrNavigate(navigation, "AdminHub");
   }, [navigation]);
 
   const [exportType, setExportType] = useState<ExportType>("inventory");
@@ -350,7 +345,7 @@ export function IntegrationsScreen({ navigation }: Props) {
     <Screen
       title="Import & Export"
       scroll
-      right={!isDesktopWeb ? <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly /> : null}
+      right={<AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />}
     >
       {error ? <ErrorText>{error}</ErrorText> : null}
 

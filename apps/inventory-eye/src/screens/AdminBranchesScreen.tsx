@@ -5,6 +5,7 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import { apiRequest } from "../api/client";
 import { AuthContext, type UserRole } from "../auth/AuthContext";
+import { goBackOrNavigate } from "../navigation/moreBack";
 import type { MoreStackParamList } from "../navigation/types";
 import { AppButton, Badge, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
 
@@ -476,11 +477,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
   );
 
   const onBack = useCallback(() => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-      return;
-    }
-    navigation.navigate("MoreMenu");
+    goBackOrNavigate(navigation, "PeopleData");
   }, [navigation]);
 
   const selectBranch = useCallback(
@@ -642,7 +639,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
     <Screen
       title="Branches and Users"
       scroll
-      right={!isDesktopWeb ? <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly /> : undefined}
+      right={<AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />}
       busy={busy}
     >
       <View style={{ gap: theme.spacing.md }}>

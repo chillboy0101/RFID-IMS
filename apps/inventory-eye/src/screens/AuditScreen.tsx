@@ -5,6 +5,7 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
+import { goBackOrNavigate } from "../navigation/moreBack";
 import type { MoreStackParamList } from "../navigation/types";
 import { AppButton, ErrorText, GLOBAL_AUTO_REFRESH_MS, MutedText, Screen, TextField, theme } from "../ui";
 
@@ -178,13 +179,7 @@ export function AuditScreen({ navigation }: Props) {
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
 
   const onBack = useCallback(() => {
-    const state = navigation.getState();
-    const first = state.routes?.[0]?.name;
-    if (first === "MoreMenu") {
-      navigation.popToTop();
-      return;
-    }
-    navigation.navigate("PeopleData");
+    goBackOrNavigate(navigation, "PeopleData");
   }, [navigation]);
 
   const [q, setQ] = useState("");
@@ -312,7 +307,7 @@ export function AuditScreen({ navigation }: Props) {
       scroll
       busy={loading || updating}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.text} />}
-      right={!isDesktopWeb ? <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly /> : null}
+      right={<AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />}
     >
       {error ? <ErrorText>{error}</ErrorText> : null}
 

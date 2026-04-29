@@ -5,6 +5,7 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
+import { goBackOrNavigate } from "../navigation/moreBack";
 import type { MoreStackParamList } from "../navigation/types";
 import { AppButton, Badge, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
 
@@ -189,10 +190,7 @@ export function GateKeysScreen({ navigation }: Props) {
   };
 
   const onBack = useCallback(() => {
-    const state = navigation.getState();
-    const first = state.routes?.[0]?.name;
-    if (first === "MoreMenu") { navigation.popToTop(); return; }
-    navigation.navigate("MoreMenu");
+    goBackOrNavigate(navigation, "AdminHub");
   }, [navigation]);
 
   if (effectiveRole !== "admin") {
@@ -208,7 +206,7 @@ export function GateKeysScreen({ navigation }: Props) {
     <Screen
       title="Gate Keys"
       scroll
-      right={!isWideWeb ? <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly /> : null}
+      right={<AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />}
     >
       {/* Newly created key banner */}
       {newlyCreated ? (

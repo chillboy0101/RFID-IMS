@@ -5,6 +5,7 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
+import { goBackOrNavigate } from "../navigation/moreBack";
 import type { MoreStackParamList } from "../navigation/types";
 import { AUTO_REFRESH_PAUSE_MS, GLOBAL_AUTO_REFRESH_MS, AppButton, Badge, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
 
@@ -35,13 +36,7 @@ export function AlertsScreen({ navigation }: Props) {
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
 
   const onBack = useCallback(() => {
-    const state = navigation.getState();
-    const first = state.routes?.[0]?.name;
-    if (first === "MoreMenu") {
-      navigation.popToTop();
-      return;
-    }
-    navigation.navigate("MoreMenu");
+    goBackOrNavigate(navigation, "PeopleData");
   }, [navigation]);
 
   const [expiryDays, setExpiryDays] = useState("30");
@@ -143,7 +138,7 @@ export function AlertsScreen({ navigation }: Props) {
       scroll
       busy={refreshing || updating}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.text} />}
-      right={!isDesktopWeb ? <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly /> : null}
+      right={<AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />}
     >
       {error ? <ErrorText>{error}</ErrorText> : null}
 
