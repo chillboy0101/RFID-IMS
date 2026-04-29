@@ -19,6 +19,25 @@ function createTemporaryPassword(): string {
   return `VDL-${crypto.randomBytes(6).toString("base64url")}`;
 }
 
+function normalizeEmail(value: unknown): string {
+  return String(value ?? "").toLowerCase().trim();
+}
+
+function isValidEmail(value: string): boolean {
+  return value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function isValidTenantSlug(value: string): boolean {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
+}
+
+async function isSuperAdminUser(userId: string): Promise<boolean> {
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL ?? "equalizerjr@gmail.com").toLowerCase().trim();
+  const actor = await UserModel.findById(userId).select({ email: 1 }).exec();
+  const actorEmail = normalizeEmail((actor as any)?.email);
+  return Boolean(actorEmail && actorEmail === superAdminEmail);
+}
+
 type CreatedTenantUser = {
   id: string;
   name: string;
@@ -189,7 +208,21 @@ router.post("/", requireRole("admin"), async (req: AuthRequest, res) => {
   }
 
   const cleanSlug = slug.toLowerCase().trim();
-  const doc = await TenantModel.create({ name: name.trim(), slug: cleanSlug });
+  if (!isValidTenantSlug(cleanSlug)) {
+    res.status(400).json({ ok: false, error: "Slug must use lowercase letters, numbers, and single hyphens" });
+    return;
+  }
+
+  let doc;
+  try {
+    doc = await TenantModel.create({ name: name.trim(), slug: cleanSlug });
+  } catch (error) {
+    if ((error as any)?.code === 11000) {
+      res.status(409).json({ ok: false, error: "Branch slug already exists" });
+      return;
+    }
+    throw error;
+  }
 
   res.status(201).json({ ok: true, tenant: { id: doc._id.toString(), name: doc.name, slug: doc.slug } });
 });
@@ -229,7 +262,12 @@ router.post("/:id/members", requireTenant, requireRole("admin"), async (req: Ten
     }
     user = await UserModel.findById(userId).exec();
   } else if (email) {
-    user = await UserModel.findOne({ email: email.toLowerCase().trim() }).exec();
+    const cleanEmail = normalizeEmail(email);
+    if (!isValidEmail(cleanEmail)) {
+      res.status(400).json({ ok: false, error: "Email is invalid" });
+      return;
+    }
+    user = await UserModel.findOne({ email: cleanEmail }).exec();
   } else {
     res.status(400).json({ ok: false, error: "Provide userId or email" });
     return;
@@ -241,10 +279,7 @@ router.post("/:id/members", requireTenant, requireRole("admin"), async (req: Ten
   }
 
   if (Boolean(makeSuperAdmin)) {
-    const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL ?? "equalizerjr@gmail.com").toLowerCase().trim();
-    const actor = await UserModel.findById(auth.id).select({ email: 1 }).exec();
-    const actorEmail = String((actor as any)?.email ?? "").toLowerCase().trim();
-    if (!actorEmail || actorEmail !== superAdminEmail) {
+    if (!(await isSuperAdminUser(auth.id))) {
       res.status(403).json({ ok: false, error: "Forbidden" });
       return;
     }
@@ -263,6 +298,17 @@ router.post("/:id/members", requireTenant, requireRole("admin"), async (req: Ten
   }
 
   const existing = await TenantMembershipModel.findOne({ tenantId: tenant._id, userId: user._id }).exec();
+  if (existing?.role === "admin" && effectiveRole !== "admin") {
+    if (String(user._id) === String(auth.id)) {
+      res.status(400).json({ ok: false, error: "Cannot change your own branch admin role" });
+      return;
+    }
+    const branchAdminCount = await TenantMembershipModel.countDocuments({ tenantId: tenant._id, role: "admin" }).exec();
+    if (branchAdminCount <= 1) {
+      res.status(409).json({ ok: false, error: "Cannot remove the last branch admin" });
+      return;
+    }
+  }
 
   const membership = await TenantMembershipModel.findOneAndUpdate(
     { tenantId: tenant._id, userId: user._id },
@@ -328,12 +374,16 @@ router.post("/:id/users", requireTenant, requireRole("admin"), async (req: Tenan
     role?: UserRole;
     makeSuperAdmin?: boolean;
   };
-  const cleanEmail = String(email ?? "").toLowerCase().trim();
+  const cleanEmail = normalizeEmail(email);
   const cleanName = String(name ?? "").trim();
   const memberRole = role && userRoles.includes(role) ? role : ("inventory_staff" as UserRole);
 
   if (!cleanName || !cleanEmail) {
     res.status(400).json({ ok: false, error: "name and email are required" });
+    return;
+  }
+  if (!isValidEmail(cleanEmail)) {
+    res.status(400).json({ ok: false, error: "Email is invalid" });
     return;
   }
 
@@ -343,10 +393,7 @@ router.post("/:id/users", requireTenant, requireRole("admin"), async (req: Tenan
     return;
   }
 
-  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL ?? "equalizerjr@gmail.com").toLowerCase().trim();
-  const actor = await UserModel.findById(auth.id).select({ email: 1 }).exec();
-  const actorEmail = String((actor as any)?.email ?? "").toLowerCase().trim();
-  const canMakeSuperAdmin = Boolean(makeSuperAdmin) && actorEmail && actorEmail === superAdminEmail;
+  const canMakeSuperAdmin = Boolean(makeSuperAdmin) && (await isSuperAdminUser(auth.id));
 
   const temporaryPassword = createTemporaryPassword();
   const passwordHash = await bcrypt.hash(temporaryPassword, 12);
@@ -452,6 +499,117 @@ router.post("/:id/users", requireTenant, requireRole("admin"), async (req: Tenan
   });
 });
 
+router.post("/:id/users/:userId/resend-temporary-password", requireTenant, requireRole("admin"), async (req: TenantRequest, res) => {
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const { id, userId } = req.params;
+  const tenantId = req.tenantId as string;
+  if (String(tenantId) !== String(id)) {
+    res.status(400).json({ ok: false, error: "X-Tenant-ID must match :id" });
+    return;
+  }
+
+  if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(userId)) {
+    res.status(400).json({ ok: false, error: "Invalid id" });
+    return;
+  }
+
+  const [tenant, membership, targetUser] = await Promise.all([
+    TenantModel.findById(id).exec(),
+    TenantMembershipModel.findOne({ tenantId: id, userId }).exec(),
+    UserModel.findById(userId).exec(),
+  ]);
+
+  if (!tenant) {
+    res.status(404).json({ ok: false, error: "Tenant not found" });
+    return;
+  }
+  if (!membership || !targetUser) {
+    res.status(404).json({ ok: false, error: "User is not a member of this branch" });
+    return;
+  }
+  if (String(targetUser._id) === String(auth.id)) {
+    res.status(400).json({ ok: false, error: "Use forgot password or change password for your own account" });
+    return;
+  }
+  if (targetUser.role === "admin" && !(await isSuperAdminUser(auth.id))) {
+    res.status(403).json({ ok: false, error: "Only the super-admin can reset a super-admin account" });
+    return;
+  }
+
+  const temporaryPassword = createTemporaryPassword();
+  const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+  const previousPasswordHash = targetUser.passwordHash;
+  const previousMustChangePassword = targetUser.mustChangePassword;
+  const previousEmailVerified = targetUser.emailVerified;
+
+  targetUser.passwordHash = passwordHash;
+  targetUser.mustChangePassword = true;
+  targetUser.emailVerified = true;
+  await targetUser.save();
+
+  const appBaseUrl = resolveAppBaseUrl(req) ?? "http://localhost:8081";
+  const loginUrl = `${appBaseUrl}/login`;
+  const emailMessage = buildProvisionedAccountEmail({
+    email: targetUser.email,
+    loginUrl,
+    roleLabel: targetUser.role === "admin" ? "super_admin" : (membership.role as UserRole),
+    temporaryPassword,
+    tenantName: tenant.name,
+  });
+
+  const emailSent = await sendEmail({
+    to: targetUser.email,
+    subject: emailMessage.subject,
+    html: emailMessage.html,
+    text: emailMessage.text,
+  });
+
+  if (!emailSent) {
+    targetUser.passwordHash = previousPasswordHash;
+    targetUser.mustChangePassword = previousMustChangePassword;
+    targetUser.emailVerified = previousEmailVerified;
+    await targetUser.save();
+    res.status(502).json({ ok: false, error: "Temporary password email could not be delivered. The password was not changed." });
+    return;
+  }
+
+  await AuthSessionModel.updateMany(
+    { userId: targetUser._id, revokedAt: { $exists: false } },
+    {
+      $set: {
+        revokedAt: new Date(),
+        revokedByUserId: auth.id,
+        revokedByRole: "password_reset",
+      },
+    }
+  ).exec();
+
+  setAuditContext(res, {
+    type: "tenants.user.temporary_password_resend",
+    category: "tenants",
+    entityType: "user",
+    entityId: targetUser._id.toString(),
+    entityLabel: `${targetUser.name} (${targetUser.email})`,
+    summary: `Resent temporary password to ${targetUser.name}`,
+    targetUserId: targetUser._id.toString(),
+    metadata: {
+      tenantName: tenant.name,
+      tenantSlug: tenant.slug,
+      notification: "email",
+    },
+  });
+
+  res.json({
+    ok: true,
+    notification: { email: targetUser.email, delivered: true },
+  });
+});
+
 router.get("/:id/members", requireTenant, requireRole("admin"), async (req: TenantRequest, res) => {
   const { id } = req.params;
   const tenantId = req.tenantId as string;
@@ -516,11 +674,28 @@ router.delete("/:id/members/:userId", requireTenant, requireRole("admin"), async
     return;
   }
 
-  const membership = await TenantMembershipModel.findOneAndDelete({ tenantId: tenant._id, userId }).exec();
+  const membership = await TenantMembershipModel.findOne({ tenantId: tenant._id, userId }).exec();
   if (!membership) {
     res.status(404).json({ ok: false, error: "Membership not found" });
     return;
   }
+  if (String(userId) === String(auth.id)) {
+    res.status(400).json({ ok: false, error: "Cannot remove yourself from the active branch" });
+    return;
+  }
+  if (membership.role === "admin") {
+    const branchAdminCount = await TenantMembershipModel.countDocuments({ tenantId: tenant._id, role: "admin" }).exec();
+    if (branchAdminCount <= 1) {
+      res.status(409).json({ ok: false, error: "Cannot remove the last branch admin" });
+      return;
+    }
+  }
+
+  await TenantMembershipModel.deleteOne({ _id: membership._id }).exec();
+  await AuthSessionModel.updateMany(
+    { userId, lastSeenTenantId: tenant._id, revokedAt: { $exists: false } },
+    { $set: { revokedAt: new Date(), revokedByUserId: auth.id, revokedByRole: "admin" } }
+  ).exec();
 
   const targetUser = await UserModel.findById(userId).select({ name: 1, email: 1 }).exec();
   setAuditContext(res, {

@@ -3146,3 +3146,16 @@ inventory-eye-server listening on http://localhost:4000
 {"ts":"2026-04-29T16:25:31.444Z","requestId":"6fc37116-b56e-4d68-ac83-4e55bbd52def","method":"GET","path":"/tenants","status":200,"ms":469,"ip":"::1","hasAuth":true}
 {"ts":"2026-04-29T16:26:58.496Z","requestId":"6c62f1bc-8595-43d8-9f65-3ccc11483387","method":"POST","path":"/progress/sessions/auto-sync","status":201,"ms":1126,"ip":"::1","hasAuth":true}
 {"ts":"2026-04-29T16:26:59.596Z","requestId":"f077a413-f7e4-48d4-b67e-e420811601b2","method":"POST","path":"/progress/sessions/auto-sync","status":200,"ms":783,"ip":"::1","hasAuth":true}
+{"ts":"2026-04-29T16:27:25.006Z","requestId":"2ae684e7-6063-4e3f-a411-9a0f8b065bfc","method":"GET","path":"/auth/me","status":200,"ms":489,"ip":"::ffff:127.0.0.1","hasAuth":true}
+{"ts":"2026-04-29T16:27:25.522Z","requestId":"696dd79c-497a-449a-96ae-7f3d3664af5a","method":"GET","path":"/tenants","status":200,"ms":511,"ip":"::ffff:127.0.0.1","hasAuth":true}
+{"ts":"2026-04-29T16:27:31.066Z","requestId":"e08643a5-06b2-4cea-8ce2-7263fbfdec4c","method":"GET","path":"/auth/me","status":200,"ms":612,"ip":"::1","hasAuth":true}
+{"ts":"2026-04-29T16:27:31.553Z","requestId":"b488d221-2f4a-415a-bca2-18e2237788e3","method":"GET","path":"/tenants","status":200,"ms":481,"ip":"::1","hasAuth":true}
+{"ts":"2026-04-29T16:29:25.101Z","requestId":"70eabe00-0f2f-4dd6-a649-a5a576b7d3f3","method":"GET","path":"/auth/me","status":200,"ms":580,"ip":"::ffff:127.0.0.1","hasAuth":true}
+{"ts":"2026-04-29T16:29:25.646Z","requestId":"ee684660-564e-4f98-b284-f986b4622502","method":"GET","path":"/tenants","status":200,"ms":541,"ip":"::ffff:127.0.0.1","hasAuth":true}
+{"ts":"2026-04-29T16:29:40.941Z","requestId":"1327ccd6-7f6d-472d-a495-55f7dbefe91f","method":"GET","path":"/auth/me","status":200,"ms":483,"ip":"::1","hasAuth":true}
+{"ts":"2026-04-29T16:29:41.462Z","requestId":"b07d4786-73d6-4d19-aaff-f247d5ae22a2","method":"GET","path":"/tenants","status":200,"ms":516,"ip":"::1","hasAuth":true}
+{"ts":"2026-04-29T16:31:25.081Z","requestId":"e84d6090-6f48-4e27-a63d-3aaba84a5c2f","method":"GET","path":"/auth/me","status":200,"ms":567,"ip":"::ffff:127.0.0.1","hasAuth":true}
+{"ts":"2026-04-29T16:31:25.568Z","requestId":"d169d17d-4c4a-468c-9d9f-2db0bce445c5","method":"GET","path":"/tenants","status":200,"ms":483,"ip":"::ffff:127.0.0.1","hasAuth":true}
+{"ts":"2026-04-29T16:31:40.951Z","requestId":"c7e9bdd9-62e2-464c-81db-4164741b1a3f","method":"GET","path":"/auth/me","status":200,"ms":495,"ip":"::1","hasAuth":true}
+{"ts":"2026-04-29T16:31:41.431Z","requestId":"a9fcb563-212f-4a5f-8076-7b7b797ff8e7","method":"GET","path":"/tenants","status":200,"ms":472,"ip":"::1","hasAuth":true}
+{"ts":"2026-04-29T16:32:58.433Z","requestId":"4cb718df-f278-4609-b7c3-d6fd04af8548","method":"POST","path":"/progress/sessions/auto-sync","status":200,"ms":640,"ip":"::ffff:127.0.0.1","hasAuth":true}

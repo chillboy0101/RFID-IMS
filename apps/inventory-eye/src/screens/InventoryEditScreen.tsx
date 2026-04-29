@@ -302,6 +302,41 @@ function MetaButton({
   );
 }
 
+function StartingStockNotice() {
+  return (
+    <View
+      style={{
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        borderRadius: theme.radius.sm,
+        backgroundColor: theme.colors.surface2,
+        padding: 14,
+        gap: 10,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <View
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 999,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: theme.colors.primarySoft,
+          }}
+        >
+          <Ionicons name="radio-outline" size={17} color={theme.colors.primary} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[theme.typography.h3, { color: theme.colors.text }]}>Stock starts at 0</Text>
+          <MutedText>Receive physical units through RFID after saving this item.</MutedText>
+        </View>
+      </View>
+      <Badge label="RFID receiving controls quantity" tone="primary" />
+    </View>
+  );
+}
+
 function AccordionSection({
   title,
   subtitle,
@@ -396,8 +431,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
   const initialRef = useRef<InventoryItem | null>(null);
 
   const title = id ? "Edit item" : "New item";
-  const stockLabel = id ? "On-hand quantity" : "Starting quantity";
-  const quantityHelperText = id ? undefined : "New items start at 0. Receive units through the RFID Hub.";
+  const stockLabel = "On-hand quantity";
 
   const hydrateFromItem = useCallback((item: InventoryItem | null) => {
     initialRef.current = item;
@@ -743,16 +777,11 @@ export function InventoryEditScreen({ navigation, route }: Props) {
 
         <View style={{ width: 332, gap: theme.spacing.md, flexShrink: 0 }}>
           <SurfaceCard title="Stock levels">
-            <FormField
-              label={stockLabel}
-              value={id ? quantity : "0"}
-              onChangeText={id ? setQuantity : () => undefined}
-              keyboardType="numeric"
-              errorText={quantityError}
-              placeholder="0"
-              helperText={quantityHelperText}
-              editable={Boolean(id)}
-            />
+            {id ? (
+              <FormField label={stockLabel} value={quantity} onChangeText={setQuantity} keyboardType="numeric" errorText={quantityError} placeholder="0" />
+            ) : (
+              <StartingStockNotice />
+            )}
             <FormField
               label="Low stock alert"
               value={reorderLevel}
@@ -952,16 +981,11 @@ export function InventoryEditScreen({ navigation, route }: Props) {
         </AccordionSection>
 
         <AccordionSection title="Stock & status" subtitle="Quantity, alerts, and visibility" defaultOpen>
-          <FormField
-            label={stockLabel}
-            value={id ? quantity : "0"}
-            onChangeText={id ? setQuantity : () => undefined}
-            keyboardType="numeric"
-            errorText={quantityError}
-            placeholder="0"
-            helperText={quantityHelperText}
-            editable={Boolean(id)}
-          />
+          {id ? (
+            <FormField label={stockLabel} value={quantity} onChangeText={setQuantity} keyboardType="numeric" errorText={quantityError} placeholder="0" />
+          ) : (
+            <StartingStockNotice />
+          )}
           <FormField
             label="Low stock alert"
             value={reorderLevel}

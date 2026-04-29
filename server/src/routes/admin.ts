@@ -359,7 +359,24 @@ router.patch("/users/:id/role", requireRole("admin"), async (req: AuthRequest, r
     return;
   }
 
-  const user = await UserModel.findByIdAndUpdate(id, { role }, { new: true }).exec();
+  if (String(auth.id) === String(id) && role !== "admin") {
+    res.status(400).json({ ok: false, error: "Cannot remove your own global admin role" });
+    return;
+  }
+
+  const target = await UserModel.findById(id).exec();
+  if (!target) {
+    res.status(404).json({ ok: false, error: "User not found" });
+    return;
+  }
+  const targetEmail = String(target.email ?? "").toLowerCase().trim();
+  if (targetEmail === superAdminEmail && role !== "admin") {
+    res.status(403).json({ ok: false, error: "Cannot remove the configured super-admin role" });
+    return;
+  }
+
+  target.role = role;
+  const user = await target.save();
   if (!user) {
     res.status(404).json({ ok: false, error: "User not found" });
     return;

@@ -422,6 +422,13 @@ const auditDescriptorMap: Record<string, AuditDescriptor> = {
     successSummary: "Created tenant user",
     failureSummary: "Failed to create tenant user",
   },
+  "POST /tenants/:id/users/:userId/resend-temporary-password": {
+    type: "tenants.user.temporary_password_resend",
+    category: "tenants",
+    entityType: "user",
+    successSummary: "Resent temporary password",
+    failureSummary: "Failed to resend temporary password",
+  },
   "POST /vendors": {
     type: "vendors.create",
     category: "vendors",
