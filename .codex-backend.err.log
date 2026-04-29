@@ -1,0 +1,455 @@
+(node:6676) [MONGOOSE] Warning: Duplicate schema index on {"expiresAt":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6676) [MONGOOSE] Warning: Duplicate schema index on {"expiresAt":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:6676) [MONGOOSE] Warning: Duplicate schema index on {"expiresAt":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+mongodb connect failed MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1100:11)
+    at async ensureMongoConnected (C:\Users\wiskal\Documents\RFID-IMS\server\src\index.ts:321:7) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  cause: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  }
+}
+mongodb connect failed MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1100:11)
+    at async ensureMongoConnected (C:\Users\wiskal\Documents\RFID-IMS\server\src\index.ts:321:7) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  cause: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  }
+}
+mongodb connect failed MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1100:11)
+    at async ensureMongoConnected (C:\Users\wiskal\Documents\RFID-IMS\server\src\index.ts:321:7) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  cause: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  }
+}
+mongodb connect failed MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1100:11)
+    at async ensureMongoConnected (C:\Users\wiskal\Documents\RFID-IMS\server\src\index.ts:321:7) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  cause: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  }
+}
+mongodb connect failed MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1100:11)
+    at async ensureMongoConnected (C:\Users\wiskal\Documents\RFID-IMS\server\src\index.ts:321:7) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  cause: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  }
+}
+mongodb connect failed MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1100:11)
+    at async ensureMongoConnected (C:\Users\wiskal\Documents\RFID-IMS\server\src\index.ts:321:7) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  cause: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  }
+}
+mongodb connect failed MongooseServerSelectionError: Server selection timed out after 10000 ms
+    at _handleConnectionErrors (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1100:11)
+    at async ensureMongoConnected (C:\Users\wiskal\Documents\RFID-IMS\server\src\index.ts:321:7) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: 30
+  },
+  code: undefined,
+  cause: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: 30
+  }
+}
+mongodb connect failed MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1100:11)
+    at async ensureMongoConnected (C:\Users\wiskal\Documents\RFID-IMS\server\src\index.ts:321:7) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  cause: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  }
+}
+mongodb connect failed MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1100:11)
+    at async ensureMongoConnected (C:\Users\wiskal\Documents\RFID-IMS\server\src\index.ts:321:7) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  cause: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  }
+}
+mongodb connect failed MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1100:11)
+    at async ensureMongoConnected (C:\Users\wiskal\Documents\RFID-IMS\server\src\index.ts:321:7) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  cause: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  }
+}
+mongodb connect failed MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\wiskal\Documents\RFID-IMS\server\node_modules\mongoose\lib\connection.js:1100:11)
+    at async ensureMongoConnected (C:\Users\wiskal\Documents\RFID-IMS\server\src\index.ts:321:7) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  cause: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-47zquhc-shard-00-00.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-01.vqdfgzm.mongodb.net:27017' => [ServerDescription],
+      'ac-47zquhc-shard-00-02.vqdfgzm.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-odlfog-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  }
+}

@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useState } from "react";
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import { Image, Modal, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 
 import { NavigationContainer, useNavigationContainerRef } from "@react-navigation/native";
@@ -96,6 +96,12 @@ function EnterpriseTabBar({ state, descriptors, navigation }: BottomTabBarProps)
   })();
 
   const activeKey = activeTab?.name === "More" ? moreActiveKey : activeTab?.name;
+
+  useEffect(() => {
+    if (quickCreateOpen) {
+      setQuickCreateOpen(false);
+    }
+  }, [activeKey, nestedName, state.index]);
 
   const sidebarLinks: Array<{ title: string; icon?: string; match: string; onPress: () => void }> = [
     { title: "Dashboard", icon: "speedometer-outline", match: "Dashboard", onPress: () => (navigation as any).navigate("Dashboard") },

@@ -1,0 +1,145 @@
+env: load .env
+env: export EXPERIMENTATION_CONFIG_ITEM_KEY NEXT_PUBLIC_STATSIG_CLIENT_KEY STATSIG_SERVER_API_KEY EXPERIMENTATION_CONFIG EXPO_PUBLIC_API_BASE_URL
+Starting project at C:\Users\wiskal\Documents\RFID-IMS\apps\inventory-eye
+Starting Metro Bundler
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+Web .\index.ts ▓▓▓▓▓▓░░░░░░░░░░ 38.7% (239/384)
+Web .\index.ts ▓▓▓▓▓▓▓▓░░░░░░░░ 53.4% (679/938)
+Web .\index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 95.0% (1234/1266)
+Web .\index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.6% (1344/1347)
+Web .\index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.7% (1345/1347)
+Web Bundled 14567ms index.ts (1347 modules)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 104ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 93ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 87ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 93ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 87ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 88ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 90ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 91ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Unable to resolve "../screens/InventoryListScreen" from "src\navigation\AppNavigator.tsx"
+[0m [90m 17 |[39m [36mimport[39m { [33mRecoverAccountScreen[39m } [36mfrom[39m [32m"../screens/RecoverAccountScreen"[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m { [33mDashboardScreen[39m } [36mfrom[39m [32m"../screens/DashboardScreen"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 19 |[39m [36mimport[39m { [33mInventoryListScreen[39m } [36mfrom[39m [32m"../screens/InventoryListScreen"[39m[33m;[39m
+ [90m    |[39m                                      [31m[1m^[22m[39m
+ [90m 20 |[39m [36mimport[39m { [33mOrdersListScreen[39m } [36mfrom[39m [32m"../screens/OrdersListScreen"[39m[33m;[39m
+ [90m 21 |[39m [36mimport[39m { [33mSettingsScreen[39m } [36mfrom[39m [32m"../screens/SettingsScreen"[39m[33m;[39m
+ [90m 22 |[39m [36mimport[39m { [33mInventoryDetailScreen[39m } [36mfrom[39m [32m"../screens/InventoryDetailScreen"[39m[33m;[39m[0m
+
+Import stack:
+
+ src\navigation\AppNavigator.tsx
+ | import "../screens/InventoryListScreen"
+
+ App.tsx
+ | import "./src/navigation/AppNavigator"
+
+ index.ts
+ | import "./App"
+
+ 
+ | import "./index.ts"
+
+Unable to resolve "../screens/OrdersListScreen" from "src\navigation\AppNavigator.tsx"
+[0m [90m 18 |[39m [36mimport[39m { [33mDashboardScreen[39m } [36mfrom[39m [32m"../screens/DashboardScreen"[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m { [33mInventoryListScreen[39m } [36mfrom[39m [32m"../screens/InventoryListScreen"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 20 |[39m [36mimport[39m { [33mOrdersListScreen[39m } [36mfrom[39m [32m"../screens/OrdersListScreen"[39m[33m;[39m
+ [90m    |[39m                                   [31m[1m^[22m[39m
+ [90m 21 |[39m [36mimport[39m { [33mSettingsScreen[39m } [36mfrom[39m [32m"../screens/SettingsScreen"[39m[33m;[39m
+ [90m 22 |[39m [36mimport[39m { [33mInventoryDetailScreen[39m } [36mfrom[39m [32m"../screens/InventoryDetailScreen"[39m[33m;[39m
+ [90m 23 |[39m [36mimport[39m { [33mInventoryEditScreen[39m } [36mfrom[39m [32m"../screens/InventoryEditScreen"[39m[33m;[39m[0m
+
+Import stack:
+
+ src\navigation\AppNavigator.tsx
+ | import "../screens/OrdersListScreen"
+
+ App.tsx
+ | import "./src/navigation/AppNavigator"
+
+ index.ts
+ | import "./App"
+
+ 
+ | import "./index.ts"
+
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 85ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 79ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 111ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Unable to resolve "../screens/InventoryEditScreen" from "src\navigation\AppNavigator.tsx"
+[0m [90m 21 |[39m [36mimport[39m { [33mSettingsScreen[39m } [36mfrom[39m [32m"../screens/SettingsScreen"[39m[33m;[39m
+ [90m 22 |[39m [36mimport[39m { [33mInventoryDetailScreen[39m } [36mfrom[39m [32m"../screens/InventoryDetailScreen"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 23 |[39m [36mimport[39m { [33mInventoryEditScreen[39m } [36mfrom[39m [32m"../screens/InventoryEditScreen"[39m[33m;[39m
+ [90m    |[39m                                      [31m[1m^[22m[39m
+ [90m 24 |[39m [36mimport[39m { [33mInventoryAdjustScreen[39m } [36mfrom[39m [32m"../screens/InventoryAdjustScreen"[39m[33m;[39m
+ [90m 25 |[39m [36mimport[39m { [33mInventoryLogsScreen[39m } [36mfrom[39m [32m"../screens/InventoryLogsScreen"[39m[33m;[39m
+ [90m 26 |[39m [36mimport[39m { [33mOrderDetailScreen[39m } [36mfrom[39m [32m"../screens/OrderDetailScreen"[39m[33m;[39m[0m
+
+Import stack:
+
+ src\navigation\AppNavigator.tsx
+ | import "../screens/InventoryEditScreen"
+
+ App.tsx
+ | import "./src/navigation/AppNavigator"
+
+ index.ts
+ | import "./App"
+
+ 
+ | import "./index.ts"
+
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 83ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 108ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 90ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 87ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 86ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 92ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 160ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 87ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 82ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 83ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console

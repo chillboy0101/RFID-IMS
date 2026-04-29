@@ -1148,41 +1148,16 @@ function ExitMode({ token, stationConfig, isDesktopWeb }: { token: string; stati
       {error ? <ErrorText>{error}</ErrorText> : null}
 
       <Card>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
-          <Text style={[theme.typography.h3, { color: theme.colors.text }]}>Authorized</Text>
-          <Badge label={session ? countdown : `${orders.length}`} tone={session ? "success" : "default"} />
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: orders.length > 0 ? 10 : 0 }}>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={[theme.typography.h3, { color: theme.colors.text }]}>Authorized</Text>
+            {orders.length === 0 ? <MutedText>No active gate authorization.</MutedText> : null}
+          </View>
+          {session ? <Badge label={countdown} tone="success" /> : null}
         </View>
 
         {orders.length === 0 ? (
-          <View style={{ gap: 14 }}>
-            <MutedText>No active gate authorization.</MutedText>
-            {stationConfig.gateLocations.length > 1 ? (
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                {stationConfig.gateLocations.map((preset) => {
-                  const active = gateLocation === preset;
-                  return (
-                    <Pressable
-                      key={preset}
-                      onPress={() => {
-                        setGateLocation(preset);
-                        setSession(null);
-                      }}
-                      style={{
-                        paddingVertical: 8,
-                        paddingHorizontal: 14,
-                        borderRadius: 999,
-                        borderWidth: 1,
-                        borderColor: active ? theme.colors.primary : theme.colors.border,
-                        backgroundColor: theme.colors.surface,
-                      }}
-                    >
-                      <Text style={{ color: active ? theme.colors.text : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>{formatStationLabel(preset)}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ) : null}
-          </View>
+          <View />
         ) : isDesktopWeb ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={{ minWidth: 760 }}>
@@ -1263,37 +1238,42 @@ function ExitMode({ token, stationConfig, isDesktopWeb }: { token: string; stati
         {stationConfig.gateLocations.length > 1 ? (
           <>
             <View style={{ height: 12 }} />
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {stationConfig.gateLocations.map((preset) => {
-                const active = gateLocation === preset;
-                return (
-                  <Pressable
-                    key={preset}
-                    onPress={() => {
-                      setGateLocation(preset);
-                      setSession(null);
-                    }}
-                    style={{
-                      paddingVertical: 8,
-                      paddingHorizontal: 14,
-                      borderRadius: 999,
-                      borderWidth: 1,
-                      borderColor: active ? theme.colors.primary : theme.colors.border,
-                      backgroundColor: theme.colors.surface,
-                    }}
-                  >
-                    <Text style={{ color: active ? theme.colors.text : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>{formatStationLabel(preset)}</Text>
-                  </Pressable>
-                );
-              })}
+            <View style={{ flexDirection: isDesktopWeb ? "row" : "column", alignItems: isDesktopWeb ? "center" : "stretch", gap: 10 }}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, flex: 1 }}>
+                {stationConfig.gateLocations.map((preset) => {
+                  const active = gateLocation === preset;
+                  return (
+                    <Pressable
+                      key={preset}
+                      onPress={() => {
+                        setGateLocation(preset);
+                        setSession(null);
+                      }}
+                      style={{
+                        paddingVertical: 8,
+                        paddingHorizontal: 14,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: active ? theme.colors.primary : theme.colors.border,
+                        backgroundColor: active ? theme.colors.primarySoft : theme.colors.surface,
+                      }}
+                    >
+                      <Text style={{ color: active ? theme.colors.text : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>{formatStationLabel(preset)}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {orders.length > 0 ? (
+                <AppButton title={session ? "Re-arm" : "Arm lane"} onPress={() => void requestSession()} loading={loading} variant="secondary" />
+              ) : null}
             </View>
           </>
         ) : null}
 
-        {orders.length > 0 ? (
+        {orders.length > 0 && stationConfig.gateLocations.length <= 1 ? (
           <>
             <View style={{ height: 12 }} />
-            <AppButton title="Re-arm" onPress={() => void requestSession()} loading={loading} variant="secondary" />
+            <AppButton title={session ? "Re-arm" : "Arm lane"} onPress={() => void requestSession()} loading={loading} variant="secondary" />
           </>
         ) : null}
       </Card>
@@ -1468,10 +1448,8 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
           <Pressable
             onPress={() => void loadTags()}
             style={{
-              minHeight: 36,
-              minWidth: 84,
-              paddingVertical: 7,
-              paddingHorizontal: 12,
+              width: 36,
+              height: 36,
               borderRadius: 999,
               borderWidth: 1,
               borderColor: theme.colors.border,
@@ -1480,7 +1458,7 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
               justifyContent: "center",
             }}
           >
-            <Text style={{ color: theme.colors.text, fontWeight: "700", fontSize: 12 }}>Refresh</Text>
+            <Ionicons name="refresh-outline" size={16} color={theme.colors.text} />
           </Pressable>
         </View>
 
@@ -1488,57 +1466,46 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {(["all", "active", "inactive"] as const).map((status) => {
             const active = statusFilter === status;
+            const count = status === "all" ? tags.length : status === "active" ? activeCount : inactiveCount;
             return (
               <Pressable
                 key={status}
                 onPress={() => setStatusFilter(status)}
                 style={{
                   minHeight: 36,
-                  minWidth: 84,
                   paddingVertical: 7,
-                  paddingHorizontal: 12,
+                  paddingHorizontal: 14,
                   borderRadius: 999,
                   borderWidth: 1,
                   borderColor: active ? theme.colors.primary : theme.colors.border,
-                  backgroundColor: theme.colors.surface,
+                  backgroundColor: active ? theme.colors.primarySoft : theme.colors.surface,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
                 <Text style={{ color: active ? theme.colors.text : theme.colors.textMuted, fontWeight: "700", fontSize: 12, textTransform: "capitalize" }}>
-                  {status}
+                  {`${status} ${count}`}
                 </Text>
               </Pressable>
             );
           })}
-        </View>
-
-        <View style={{ height: 12 }} />
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {[
-            { label: `Total ${tags.length}`, color: theme.colors.textMuted },
-            { label: `Active ${activeCount}`, color: activeCount > 0 ? theme.colors.success : theme.colors.textMuted },
-            { label: `Inactive ${inactiveCount}`, color: inactiveCount > 0 ? theme.colors.warning : theme.colors.textMuted },
-            { label: `Queued ${queuedExitCount}`, color: queuedExitCount > 0 ? theme.colors.warning : theme.colors.textMuted },
-          ].map((stat) => (
-            <View
-              key={stat.label}
-              style={{
-                minHeight: 36,
-                minWidth: 84,
-                paddingVertical: 7,
-                paddingHorizontal: 12,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: theme.colors.border,
-                backgroundColor: theme.colors.surface2,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ color: stat.color, fontWeight: "700", fontSize: 12 }}>{stat.label}</Text>
-            </View>
-          ))}
+          <View
+            style={{
+              minHeight: 36,
+              paddingVertical: 7,
+              paddingHorizontal: 14,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surface2,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ color: queuedExitCount > 0 ? theme.colors.warning : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>
+              {`Queued ${queuedExitCount}`}
+            </Text>
+          </View>
         </View>
       </Card>
 

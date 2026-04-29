@@ -1,0 +1,19 @@
+=1 : The term '=1' is not recognized as the name of a cmThe following packages should be updated for best compatibility with the installed expo version:
+  expo@54.0.31 - expected version: ~54.0.34
+  babel-preset-expo@54.0.9 - expected version: ~54.0.10
+Your project may not work correctly until you install the expected versions of the packages.
+: ObjectNotFound: (=1:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+Error: listen EADDRINUSE: address already in use :::8081
+Error: listen EADDRINUSE: address already in use :::8081
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at C:\Users\wiskal\Documents\RFID-IMS\apps\inventory-eye\node_modules\expo\node_modules\@expo\cli\src\start\server\metro\runServer-fork.ts:135:16
+    at new Promise (<anonymous>)
+    at runServer (C:\Users\wiskal\Documents\RFID-IMS\apps\inventory-eye\node_modules\expo\node_modules\@expo\cli\src\start\server\metro\runServer-fork.ts:126:10)
+    at instantiateMetroAsync (C:\Users\wiskal\Documents\RFID-IMS\apps\inventory-eye\node_modules\expo\node_modules\@expo\cli\src\start\server\metro\instantiateMetro.ts:274:40)
+    at MetroBundlerDevServer.startImplementationAsync (C:\Users\wiskal\Documents\RFID-IMS\apps\inventory-eye\node_modules\expo\node_modules\@expo\cli\src\start\server\metro\MetroBundlerDevServer.ts:1062:69)
+    at MetroBundlerDevServer.startAsync (C:\Users\wiskal\Documents\RFID-IMS\apps\inventory-eye\node_modules\expo\node_modules\@expo\cli\src\start\server\BundlerDevServer.ts:160:18)
+    at DevServerManager.startAsync (C:\Users\wiskal\Documents\RFID-IMS\apps\inventory-eye\node_modules\expo\node_modules\@expo\cli\src\start\server\DevServerManager.ts:184:7)

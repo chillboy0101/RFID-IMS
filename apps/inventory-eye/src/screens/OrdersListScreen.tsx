@@ -1,5 +1,6 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, FlatList, PanResponder, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Animated, FlatList, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import type { OrdersStackParamList } from "../navigation/types";
-import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
+import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, ListRow, MutedText, Screen, theme } from "../ui";
 
 type Order = {
   _id: string;
@@ -15,14 +16,6 @@ type Order = {
   createdAt: string;
   authorizationLocation?: string | null;
   authorizationExpiresAt?: string | null;
-  workflow?: {
-    requestedUnits: number;
-    reservedUnits: number;
-    taggedReservedUnits: number;
-    barcodeFallbackUnits: number;
-    activeAuthorizations: number;
-    dispatchedUnits: number;
-  };
 };
 
 type OrdersResponse = {
@@ -32,6 +25,116 @@ type OrdersResponse = {
 
 type Props = NativeStackScreenProps<OrdersStackParamList, "OrdersList">;
 
+type OrderFilter = "all" | "open" | "picking" | "closed";
+
+const ORDER_CREATED_COLUMN_WIDTH = 214;
+const ORDER_GATE_COLUMN_WIDTH = 150;
+const ORDER_STATUS_COLUMN_WIDTH = 120;
+
+function SearchControl({
+  inputRef,
+  value,
+  onChangeText,
+  placeholder,
+}: {
+  inputRef?: React.RefObject<TextInput | null>;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <View
+      style={{
+        minHeight: 46,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.surface2,
+        borderRadius: theme.radius.sm,
+        paddingHorizontal: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+      }}
+    >
+      <Ionicons name="search" size={16} color={theme.colors.textMuted} />
+      <TextInput
+        ref={inputRef}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={theme.colors.textMuted}
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="search"
+        style={{
+          flex: 1,
+          minHeight: 44,
+          color: theme.colors.text,
+          fontSize: 15,
+          ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null),
+        }}
+      />
+    </View>
+  );
+}
+
+function FilterTabs<T extends string>({
+  tabs,
+  activeValue,
+  onChange,
+}: {
+  tabs: Array<{ key: T; label: string; count: number }>;
+  activeValue: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 18 }}>
+      {tabs.map((tab) => {
+        const active = tab.key === activeValue;
+        return (
+          <Pressable
+            key={tab.key}
+            onPress={() => onChange(tab.key)}
+            style={{
+              paddingTop: 4,
+              paddingBottom: 10,
+              borderBottomWidth: 2,
+              borderBottomColor: active ? theme.colors.primary : "transparent",
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text
+                style={{
+                  color: active ? theme.colors.text : theme.colors.textMuted,
+                  fontWeight: active ? "800" : "700",
+                  fontSize: 14,
+                }}
+              >
+                {tab.label}
+              </Text>
+              <View
+                style={{
+                  minWidth: 28,
+                  height: 26,
+                  paddingHorizontal: 8,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: active ? theme.colors.primary : theme.colors.border,
+                  backgroundColor: active ? theme.colors.primarySoft : theme.colors.surface2,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ color: active ? theme.colors.text : theme.colors.textMuted, fontWeight: "800", fontSize: 12 }}>{tab.count}</Text>
+              </View>
+            </View>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 function toneForStatus(status: string) {
   if (status === "fulfilled") return "success" as const;
   if (status === "cancelled") return "danger" as const;
@@ -40,131 +143,72 @@ function toneForStatus(status: string) {
   return "default" as const;
 }
 
-function nextStepForOrder(order: Order) {
-  if (order.status === "created") return "Start picking";
-  if (order.status === "picking") return "Authorize gate";
-  if (order.status === "authorized") return "Verify exit scans";
-  if (order.status === "fulfilled") return "Completed";
-  if (order.status === "cancelled") return "Cancelled";
-  return order.status;
+function formatStatus(status: string) {
+  if (!status) return "-";
+  return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-function formatOrderProgress(order: Order) {
-  const workflow = order.workflow;
-  if (!workflow) return "Workflow summary unavailable";
-  return `Reserved ${workflow.reservedUnits}/${workflow.requestedUnits} • Gate ${workflow.activeAuthorizations} • Exited ${workflow.dispatchedUnits}`;
+function isOpenStatus(status: string) {
+  return status !== "fulfilled" && status !== "cancelled";
+}
+
+function applyOrderFilter(orders: Order[], filter: OrderFilter) {
+  if (filter === "open") return orders.filter((order) => isOpenStatus(order.status));
+  if (filter === "picking") return orders.filter((order) => order.status === "picking");
+  if (filter === "closed") return orders.filter((order) => order.status === "fulfilled" || order.status === "cancelled");
+  return orders;
 }
 
 export function OrdersListScreen({ navigation }: Props) {
   const { token } = useContext(AuthContext);
   const { width } = useWindowDimensions();
-  const { height } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
-  const isWeb = Platform.OS === "web";
   const insets = useSafeAreaInsets();
+
   const [q, setQ] = useState("");
-  const searchRef = useRef<TextInput>(null);
-  const listRef = useRef<FlatList<Order>>(null);
+  const [filter, setFilter] = useState<OrderFilter>("all");
   const [scanOpen, setScanOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [showFloatingSearch] = useState(true);
-  const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
-  const overlayAnim = useRef(new Animated.Value(0)).current;
-  const overlaySearchRef = useRef<TextInput>(null);
-  const overlaySpace = theme.spacing.md + insets.top + 104;
+  const [compactSearchOpen, setCompactSearchOpen] = useState(false);
 
-  const scrollOffsetRef = useRef(0);
-  const restoreRef = useRef<{ q: string; offset: number } | null>(null);
-
-  const floatingPos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-  const floatingDraggedRef = useRef(false);
-  const floatingStartRef = useRef({ x: 0, y: 0 });
-
-  const buttonSize = 52;
-  const floatingMargin = theme.spacing.md;
-  const floatingTop = theme.spacing.md + insets.top + 16;
-  const floatingBottomLimit = theme.spacing.md + insets.bottom + 168;
-  const maxX = Math.max(0, width - buttonSize - floatingMargin * 2);
-  const maxY = Math.max(0, height - buttonSize - floatingTop - floatingBottomLimit);
-  const floatingPan = useMemo(
-    () => {
-      const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
-      return PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
-        onPanResponderGrant: () => {
-          floatingStartRef.current = {
-            x: (floatingPos.x as any).__getValue?.() ?? 0,
-            y: (floatingPos.y as any).__getValue?.() ?? 0,
-          };
-          floatingPos.extractOffset();
-        },
-        onPanResponderMove: (_, g) => {
-          if (Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2) floatingDraggedRef.current = true;
-
-          const start = floatingStartRef.current;
-          const nextX = clamp(start.x + g.dx, 0, maxX);
-          const nextY = clamp(start.y + g.dy, 0, maxY);
-          floatingPos.setValue({ x: nextX - start.x, y: nextY - start.y });
-        },
-        onPanResponderRelease: () => {
-          floatingPos.flattenOffset();
-          const x = clamp((floatingPos.x as any).__getValue?.() ?? 0, 0, maxX);
-          const y = clamp((floatingPos.y as any).__getValue?.() ?? 0, 0, maxY);
-          const snapX = x < maxX / 2 ? 0 : maxX;
-          Animated.spring(floatingPos, { toValue: { x: snapX, y }, useNativeDriver: false, friction: 7, tension: 90 }).start();
-        },
-      });
-    },
-    [floatingPos, maxX, maxY]
-  );
+  const headerSearchRef = useRef<TextInput>(null);
+  const compactSearchRef = useRef<TextInput>(null);
+  const compactSearchAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!showFloatingSearch) {
-      floatingDraggedRef.current = false;
+    if (isDesktopWeb) {
+      setCompactSearchOpen(false);
+      compactSearchAnim.setValue(0);
       return;
     }
-    if (floatingDraggedRef.current) return;
-    floatingPos.setValue({ x: maxX, y: maxY / 2 });
-  }, [floatingPos, maxX, showFloatingSearch]);
 
-  const openSearchOverlay = useCallback(() => {
-    restoreRef.current = { q, offset: scrollOffsetRef.current };
-    setSearchOverlayOpen(true);
-    overlayAnim.setValue(0);
-    Animated.timing(overlayAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
-    setTimeout(() => overlaySearchRef.current?.focus(), 50);
-  }, [overlayAnim, q]);
-
-  const closeSearchOverlay = useCallback(() => {
-    Animated.timing(overlayAnim, { toValue: 0, duration: 160, useNativeDriver: true }).start(({ finished }) => {
-      if (!finished) return;
-      setSearchOverlayOpen(false);
-      const restore = restoreRef.current;
-      restoreRef.current = null;
-      if (!restore) return;
-      setQ(restore.q);
-      setTimeout(() => {
-        listRef.current?.scrollToOffset({ offset: restore.offset, animated: false });
-      }, 50);
+    Animated.timing(compactSearchAnim, {
+      toValue: compactSearchOpen ? 1 : 0,
+      duration: compactSearchOpen ? 190 : 150,
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished && compactSearchOpen) {
+        setTimeout(() => compactSearchRef.current?.focus(), 40);
+      }
     });
-  }, [overlayAnim]);
+  }, [compactSearchAnim, compactSearchOpen, isDesktopWeb]);
 
-  const filtered = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    if (!t) return orders;
-    return orders.filter((o) => {
-      const id = o._id.toLowerCase();
-      const status = o.status.toLowerCase();
-      const created = new Date(o.createdAt).toLocaleString().toLowerCase();
-      return id.includes(t) || id.slice(-6).includes(t) || status.includes(t) || created.includes(t);
+  const searchResults = useMemo(() => {
+    const trimmed = q.trim().toLowerCase();
+    if (!trimmed) return orders;
+    return orders.filter((order) => {
+      const id = order._id.toLowerCase();
+      const status = order.status.toLowerCase();
+      const created = new Date(order.createdAt).toLocaleString().toLowerCase();
+      return id.includes(trimmed) || id.slice(-6).includes(trimmed) || status.includes(trimmed) || created.includes(trimmed);
     });
   }, [orders, q]);
 
-  const openCount = useMemo(() => filtered.filter((o) => o.status !== "fulfilled" && o.status !== "cancelled").length, [filtered]);
-  const pickingCount = useMemo(() => filtered.filter((o) => o.status === "picking").length, [filtered]);
-  const gateReadyCount = useMemo(() => filtered.filter((o) => o.status === "authorized").length, [filtered]);
+  const openCount = useMemo(() => searchResults.filter((order) => isOpenStatus(order.status)).length, [searchResults]);
+  const pickingCount = useMemo(() => searchResults.filter((order) => order.status === "picking").length, [searchResults]);
+  const closedCount = useMemo(() => searchResults.filter((order) => order.status === "fulfilled" || order.status === "cancelled").length, [searchResults]);
+  const visibleOrders = useMemo(() => applyOrderFilter(searchResults, filter), [filter, searchResults]);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -203,12 +247,152 @@ export function OrdersListScreen({ navigation }: Props) {
     }, [load])
   );
 
+  const filterTabs = useMemo(
+    () => [
+      { key: "all" as const, label: "All orders", count: searchResults.length },
+      { key: "open" as const, label: "Open", count: openCount },
+      { key: "picking" as const, label: "Picking", count: pickingCount },
+      { key: "closed" as const, label: "Closed", count: closedCount },
+    ],
+    [closedCount, openCount, pickingCount, searchResults.length]
+  );
+
+  const compactSearchHeight = compactSearchAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 88],
+  });
+
+  const compactSearchTranslate = compactSearchAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-12, 0],
+  });
+
+  const closeCompactSearch = useCallback(() => {
+    setCompactSearchOpen(false);
+    setQ("");
+  }, []);
+
+  const right = isDesktopWeb ? (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <View style={{ width: width >= 1260 ? 320 : 260 }}>
+        <SearchControl inputRef={headerSearchRef} value={q} onChangeText={setQ} placeholder="Search order ID or status" />
+      </View>
+      <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly />
+      <AppButton title="New" onPress={() => navigation.navigate("OrderCreate")} variant="secondary" iconName="add" iconOnly />
+    </View>
+  ) : (
+    <View style={{ flexDirection: "row", gap: 8 }}>
+      <AppButton
+        title={compactSearchOpen ? "Close search" : "Search"}
+        onPress={() => {
+          if (compactSearchOpen) closeCompactSearch();
+          else setCompactSearchOpen(true);
+        }}
+        variant="secondary"
+        iconName={compactSearchOpen ? "close" : "search"}
+        iconOnly
+      />
+      <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly />
+      <AppButton title="New" onPress={() => navigation.navigate("OrderCreate")} variant="secondary" iconName="add" iconOnly />
+    </View>
+  );
+
+  const renderDesktopRows = () => {
+    if (visibleOrders.length === 0) {
+      return (
+        <View style={{ padding: theme.spacing.md }}>
+          <MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
+        {visibleOrders.map((order, index) => {
+          const tone = toneForStatus(order.status);
+          return (
+            <Pressable
+              key={order._id}
+              onPress={() => navigation.navigate("OrderDetail", { id: order._id })}
+              style={(state) => {
+                const pressed = state.pressed;
+                const hovered = !!(state as any).hovered;
+                return [
+                  {
+                    paddingHorizontal: theme.spacing.md,
+                    paddingVertical: 14,
+                    borderBottomWidth: index === visibleOrders.length - 1 ? 0 : 1,
+                    borderBottomColor: theme.colors.border,
+                    backgroundColor: pressed ? theme.colors.surface2 : hovered ? theme.colors.surface2 : theme.colors.surface,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                    ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null),
+                  },
+                ];
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[theme.typography.h3, { color: theme.colors.text }]} numberOfLines={1}>
+                  {`Order #${order._id.slice(-6)}`}
+                </Text>
+                <Text style={[theme.typography.caption, { color: theme.colors.textMuted, marginTop: 4 }]} numberOfLines={1}>
+                  {`Created ${new Date(order.createdAt).toLocaleDateString()}`}
+                </Text>
+              </View>
+              <View style={{ width: ORDER_CREATED_COLUMN_WIDTH, flexShrink: 0 }}>
+                <Text style={[theme.typography.body, { color: theme.colors.textMuted }]} numberOfLines={1}>
+                  {new Date(order.createdAt).toLocaleString()}
+                </Text>
+              </View>
+              <View style={{ width: ORDER_GATE_COLUMN_WIDTH, flexShrink: 0 }}>
+                <Text style={[theme.typography.body, { color: theme.colors.textMuted }]} numberOfLines={1}>
+                  {order.authorizationLocation ?? "-"}
+                </Text>
+              </View>
+              <View style={{ width: ORDER_STATUS_COLUMN_WIDTH, flexShrink: 0, alignItems: "flex-start" }}>
+                <Badge label={formatStatus(order.status)} tone={tone} />
+              </View>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    );
+  };
+
+  const compactHeader = (
+    <View style={{ gap: 12 }}>
+      <Animated.View
+        style={{
+          height: compactSearchHeight,
+          opacity: compactSearchAnim,
+          overflow: "hidden",
+          transform: [{ translateY: compactSearchTranslate }],
+        }}
+      >
+        <Card>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <SearchControl inputRef={compactSearchRef} value={q} onChangeText={setQ} placeholder="Search orders" />
+            </View>
+            <AppButton title="Close" iconName="close" iconOnly variant="secondary" onPress={closeCompactSearch} />
+          </View>
+        </Card>
+      </Animated.View>
+
+      <Card style={{ paddingBottom: 10 }}>
+        <FilterTabs tabs={filterTabs} activeValue={filter} onChange={setFilter} />
+        {error ? (
+          <View style={{ marginTop: 10 }}>
+            <ErrorText>{error}</ErrorText>
+          </View>
+        ) : null}
+      </Card>
+    </View>
+  );
+
   return (
-    <Screen
-      title="Orders"
-      tabBarPadding={isDesktopWeb}
-      right={<AppButton title="New" onPress={() => navigation.navigate("OrderCreate")} variant="secondary" iconName="add" iconOnly />}
-    >
+    <Screen title="Orders" tabBarPadding={isDesktopWeb} right={right}>
       <BarcodeScanModal
         visible={scanOpen}
         title="Scan barcode"
@@ -216,297 +400,119 @@ export function OrdersListScreen({ navigation }: Props) {
         onScanned={(value) => {
           setQ(value);
           setScanOpen(false);
-          setTimeout(() => {
-            if (searchOverlayOpen) overlaySearchRef.current?.focus();
-            else searchRef.current?.focus();
-          }, 50);
+          if (isDesktopWeb) {
+            setTimeout(() => headerSearchRef.current?.focus(), 40);
+            return;
+          }
+          setCompactSearchOpen(true);
         }}
       />
-      {error ? <ErrorText>{error}</ErrorText> : null}
 
       {isDesktopWeb ? (
-        <View style={{ flex: 1, gap: theme.spacing.md }}>
-          <Card>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <TextField ref={searchRef} value={q} onChangeText={setQ} placeholder="Search: order ID or status" autoCapitalize="none" />
-              </View>
-              <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly />
-              <View style={{ flexDirection: "row", flexWrap: "nowrap", gap: 10, justifyContent: "flex-end", alignItems: "center", flexShrink: 0 }}>
-                <Badge label={`Total: ${filtered.length}`} size="header" />
-                <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} size="header" />
-                <Badge label={`Picking: ${pickingCount}`} tone={pickingCount > 0 ? "warning" : "default"} size="header" />
-              </View>
+        <Card style={{ padding: 0, flex: 1 }}>
+          <View
+            style={{
+              paddingHorizontal: theme.spacing.md,
+              paddingTop: 6,
+              paddingBottom: 2,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.colors.border,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <FilterTabs tabs={filterTabs} activeValue={filter} onChange={setFilter} />
             </View>
-          </Card>
+            <MutedText>{q.trim() ? `Showing ${visibleOrders.length} results` : "Active order board"}</MutedText>
+          </View>
 
-          <Card style={{ padding: 0, flex: 1 }}>
-            <View
-              style={{
-                paddingHorizontal: theme.spacing.md,
-                paddingVertical: 12,
-                borderBottomWidth: 1,
-                borderBottomColor: theme.colors.border,
-                backgroundColor: theme.colors.surface2,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 12,
-              }}
-            >
-              <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 2 }]} numberOfLines={1}>
+          <View
+            style={{
+              paddingHorizontal: theme.spacing.md,
+              paddingVertical: 12,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.colors.border,
+              backgroundColor: theme.colors.surface2,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[theme.typography.label, { color: theme.colors.textMuted }]} numberOfLines={1}>
                 Order
               </Text>
-              <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
+            </View>
+            <View style={{ width: ORDER_CREATED_COLUMN_WIDTH, flexShrink: 0 }}>
+              <Text style={[theme.typography.label, { color: theme.colors.textMuted }]} numberOfLines={1}>
                 Created
               </Text>
-              <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
+            </View>
+            <View style={{ width: ORDER_GATE_COLUMN_WIDTH, flexShrink: 0 }}>
+              <Text style={[theme.typography.label, { color: theme.colors.textMuted }]} numberOfLines={1}>
                 Gate
               </Text>
-              <Text style={[theme.typography.label, { color: theme.colors.textMuted, width: 150, textAlign: "right" }]} numberOfLines={1}>
+            </View>
+            <View style={{ width: ORDER_STATUS_COLUMN_WIDTH, flexShrink: 0 }}>
+              <Text style={[theme.typography.label, { color: theme.colors.textMuted }]} numberOfLines={1}>
                 Status
               </Text>
             </View>
+          </View>
 
-            {isWeb ? (
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: theme.spacing.md, gap: 8 }} keyboardShouldPersistTaps="handled">
-                {filtered.length ? (
-                  filtered.map((item) => {
-                    const tone = toneForStatus(item.status);
-                    return (
-                      <Pressable
-                        key={item._id}
-                        onPress={() => navigation.navigate("OrderDetail", { id: item._id })}
-                        style={(state) => {
-                          const pressed = state.pressed;
-                          const hovered = !!(state as any).hovered;
-                          return [
-                            {
-                              paddingVertical: 12,
-                              paddingHorizontal: theme.spacing.md,
-                              borderRadius: theme.radius.md,
-                              borderWidth: 1,
-                              borderColor: theme.colors.border,
-                              backgroundColor: pressed ? theme.colors.surface2 : hovered ? theme.colors.surface2 : theme.colors.surface,
-                              flexDirection: "row",
-                              alignItems: "center",
-                              gap: 12,
-                              ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null),
-                            },
-                            hovered && !pressed ? ({ transform: [{ translateY: -0.5 }] } as any) : null,
-                            pressed ? ({ transform: [{ translateY: 1 }] } as any) : null,
-                          ];
-                        }}
-                      >
-                        <Text style={[theme.typography.h3, { color: theme.colors.text, flex: 2 }]} numberOfLines={1}>
-                          #{item._id.slice(-6)}
-                        </Text>
-                        <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
-                          {new Date(item.createdAt).toLocaleString()}
-                        </Text>
-                        <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
-                          {item.authorizationLocation ?? "-"}
-                        </Text>
-                        <View style={{ width: 150, alignItems: "flex-end" }}>
-                          <Badge label={item.status} tone={tone} />
-                        </View>
-                      </Pressable>
-                    );
-                  })
-                ) : (
-                  <MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>
-                )}
-              </ScrollView>
-            ) : (
-              <FlatList
-                style={{ flex: 1 }}
-                contentContainerStyle={{ padding: theme.spacing.md, gap: 8, paddingBottom: theme.spacing.lg + insets.bottom + 112 }}
-                data={filtered}
-                keyExtractor={(o) => o._id}
-                ListEmptyComponent={<MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>}
-                renderItem={({ item }) => {
-                  const tone = toneForStatus(item.status);
-                  return (
-                    <Pressable
-                      onPress={() => navigation.navigate("OrderDetail", { id: item._id })}
-                      style={(state) => {
-                        const pressed = state.pressed;
-                        const hovered = !!(state as any).hovered;
-                        return [
-                          {
-                            paddingVertical: 12,
-                            paddingHorizontal: theme.spacing.md,
-                            borderRadius: theme.radius.md,
-                            borderWidth: 1,
-                            borderColor: theme.colors.border,
-                            backgroundColor: pressed ? theme.colors.surface2 : hovered ? theme.colors.surface2 : theme.colors.surface,
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 12,
-                            ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null),
-                          },
-                          hovered && !pressed ? ({ transform: [{ translateY: -0.5 }] } as any) : null,
-                          pressed ? ({ transform: [{ translateY: 1 }] } as any) : null,
-                        ];
-                      }}
-                    >
-                      <Text style={[theme.typography.h3, { color: theme.colors.text, flex: 2 }]} numberOfLines={1}>
-                        #{item._id.slice(-6)}
-                      </Text>
-                      <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
-                        {new Date(item.createdAt).toLocaleString()}
-                      </Text>
-                      <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
-                        {item.authorizationLocation ?? "-"}
-                      </Text>
-                      <View style={{ width: 150, alignItems: "flex-end" }}>
-                        <Badge label={item.status} tone={tone} />
-                      </View>
-                    </Pressable>
-                  );
-                }}
-              />
-            )}
-          </Card>
-        </View>
-      ) : (
-        Platform.OS === "web" ? (
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={{ gap: 12, paddingBottom: theme.spacing.lg + insets.bottom + 156, paddingTop: searchOverlayOpen ? overlaySpace : 0 }}
-            keyboardShouldPersistTaps="handled"
-            onScroll={(e) => {
-              const y = (e as any)?.nativeEvent?.contentOffset?.y ?? 0;
-              scrollOffsetRef.current = y;
-            }}
-            scrollEventThrottle={32}
-          >
-            <Card>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                <View style={{ width: "48%" }}>
-                  <Badge label={`Total: ${filtered.length}`} size="header" responsive={false} fullWidth />
-                </View>
-                <View style={{ width: "48%" }}>
-                  <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} size="header" responsive={false} fullWidth />
-                </View>
-                <View style={{ width: "48%" }}>
-                  <Badge label={`Picking: ${pickingCount}`} tone={pickingCount > 0 ? "warning" : "default"} size="header" responsive={false} fullWidth />
-                </View>
-                <View style={{ width: "48%" }}>
-                  <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly style={{ width: "100%" }} />
-                </View>
-              </View>
-            </Card>
+          {error ? (
+            <View style={{ padding: theme.spacing.md, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+              <ErrorText>{error}</ErrorText>
+            </View>
+          ) : null}
 
-            {filtered.length ? (
-              filtered.map((item) => (
-                <ListRow
-                  key={item._id}
-                  title={`Order #${item._id.slice(-6)}`}
-                  subtitle={`Created: ${new Date(item.createdAt).toLocaleString()}\nGate: ${item.authorizationLocation ?? "-"}`}
-                  right={<Badge label={item.status} tone={item.status === "fulfilled" ? "success" : item.status === "cancelled" ? "danger" : "primary"} />}
-                  onPress={() => navigation.navigate("OrderDetail", { id: item._id })}
-                />
-              ))
-            ) : (
-              <MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>
-            )}
-          </ScrollView>
-        ) : (
-          <FlatList
-            ref={listRef}
-            style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 156, paddingTop: searchOverlayOpen ? overlaySpace : 0 }}
-            data={filtered}
-            keyExtractor={(o) => o._id}
-            onScroll={(e) => {
-              const y = e.nativeEvent.contentOffset.y;
-              scrollOffsetRef.current = y;
-            }}
-            scrollEventThrottle={32}
-            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-            ListHeaderComponent={
-              <Card>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                  <View style={{ width: "48%" }}>
-                    <Badge label={`Total: ${filtered.length}`} size="header" responsive={false} fullWidth />
-                  </View>
-                  <View style={{ width: "48%" }}>
-                    <Badge label={`Open: ${openCount}`} tone={openCount > 0 ? "primary" : "default"} size="header" responsive={false} fullWidth />
-                  </View>
-                  <View style={{ width: "48%" }}>
-                    <Badge label={`Picking: ${pickingCount}`} tone={pickingCount > 0 ? "warning" : "default"} size="header" responsive={false} fullWidth />
-                  </View>
-                  <View style={{ width: "48%" }}>
-                    <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly style={{ width: "100%" }} />
-                  </View>
-                </View>
-              </Card>
-            }
-            ListHeaderComponentStyle={{ marginBottom: 12 }}
-            ListEmptyComponent={<MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>}
-            renderItem={({ item }) => (
-              <ListRow
-                title={`Order #${item._id.slice(-6)}`}
-                subtitle={`Created: ${new Date(item.createdAt).toLocaleString()}\nGate: ${item.authorizationLocation ?? "-"}`}
-                right={<Badge label={item.status} tone={item.status === "fulfilled" ? "success" : item.status === "cancelled" ? "danger" : "primary"} />}
-                onPress={() => navigation.navigate("OrderDetail", { id: item._id })}
-              />
-            )}
-          />
-        )
-      )}
-
-      {!isDesktopWeb && showFloatingSearch && !searchOverlayOpen ? (
-        <Animated.View
-          style={{
-            position: "absolute",
-            left: floatingMargin,
-            top: floatingTop,
-            zIndex: 50,
-            elevation: 50,
-            transform: floatingPos.getTranslateTransform(),
-          }}
-          pointerEvents="box-none"
-          {...floatingPan.panHandlers}
+          {renderDesktopRows()}
+        </Card>
+      ) : Platform.OS === "web" ? (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ gap: 12, paddingBottom: theme.spacing.lg + insets.bottom + 156 }}
+          keyboardShouldPersistTaps="handled"
         >
-          <AppButton title="Search" iconName="search" iconOnly iconSize={28} variant="secondary" onPress={openSearchOverlay} />
-        </Animated.View>
-      ) : null}
+          {compactHeader}
 
-      {searchOverlayOpen ? (
-        <View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 60, elevation: 60 }} pointerEvents="box-none">
-          <Animated.View
-            style={{
-              padding: theme.spacing.md,
-              paddingTop: theme.spacing.md + insets.top,
-              transform: [
-                {
-                  translateY: overlayAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-160, 0],
-                  }),
-                },
-              ],
-              opacity: overlayAnim,
-            }}
-          >
-            <Card>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <TextField
-                    ref={overlaySearchRef}
-                    value={q}
-                    onChangeText={setQ}
-                    placeholder="Search orders"
-                    autoCapitalize="none"
-                  />
-                </View>
-                <AppButton title="Close" iconName="close" iconOnly variant="secondary" onPress={closeSearchOverlay} />
-              </View>
-            </Card>
-          </Animated.View>
-        </View>
-      ) : null}
+          {visibleOrders.length ? (
+            visibleOrders.map((order) => (
+              <ListRow
+                key={order._id}
+                title={`Order #${order._id.slice(-6)}`}
+                subtitle={`Created: ${new Date(order.createdAt).toLocaleString()}\nGate: ${order.authorizationLocation ?? "-"}`}
+                right={<Badge label={formatStatus(order.status)} tone={toneForStatus(order.status)} />}
+                onPress={() => navigation.navigate("OrderDetail", { id: order._id })}
+              />
+            ))
+          ) : (
+            <MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>
+          )}
+        </ScrollView>
+      ) : (
+        <FlatList
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 156 }}
+          data={visibleOrders}
+          keyExtractor={(order) => order._id}
+          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          ListHeaderComponent={compactHeader}
+          ListHeaderComponentStyle={{ marginBottom: 12 }}
+          ListEmptyComponent={<MutedText>{q.trim() ? "No matching orders" : "No orders"}</MutedText>}
+          renderItem={({ item }) => (
+            <ListRow
+              title={`Order #${item._id.slice(-6)}`}
+              subtitle={`Created: ${new Date(item.createdAt).toLocaleString()}\nGate: ${item.authorizationLocation ?? "-"}`}
+              right={<Badge label={formatStatus(item.status)} tone={toneForStatus(item.status)} />}
+              onPress={() => navigation.navigate("OrderDetail", { id: item._id })}
+            />
+          )}
+        />
+      )}
     </Screen>
   );
 }

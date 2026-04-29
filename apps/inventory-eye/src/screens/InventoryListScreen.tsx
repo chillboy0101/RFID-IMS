@@ -1,5 +1,6 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, FlatList, PanResponder, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Animated, FlatList, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import type { InventoryStackParamList } from "../navigation/types";
-import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
+import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, MutedText, Screen, shadow, theme } from "../ui";
 
 type InventoryItem = {
   _id: string;
@@ -18,21 +19,6 @@ type InventoryItem = {
   quantity: number;
   reorderLevel: number;
   rfidTagId?: string;
-  status?: string;
-  flow?: {
-    trackedUnits: number;
-    untrackedUnits: number;
-    awaitingTagUnits: number;
-    taggedUnits: number;
-    reservedUnits: number;
-    pickedUnits: number;
-    dispatchedUnits: number;
-    activeExitAuthorizations: number;
-    barcodeReady: boolean;
-    exitReadyUnits: number;
-    missingExitTrackingUnits: number;
-    nextStep: string;
-  };
 };
 
 type ItemsResponse = {
@@ -42,129 +28,176 @@ type ItemsResponse = {
 
 type Props = NativeStackScreenProps<InventoryStackParamList, "InventoryList">;
 
-function toneForInventoryFlow(item: InventoryItem) {
-  const flow = item.flow;
-  if (!flow) return "default" as const;
-  if (flow.activeExitAuthorizations > 0 || flow.pickedUnits > 0 || flow.reservedUnits > 0) return "warning" as const;
-  if (flow.missingExitTrackingUnits > 0 || flow.untrackedUnits > 0) return "danger" as const;
-  if (flow.exitReadyUnits >= item.quantity && item.quantity > 0) return "success" as const;
-  return "default" as const;
+type InventoryFilter = "all" | "low" | "out";
+
+const INVENTORY_SKU_COLUMN_WIDTH = 176;
+const INVENTORY_LOCATION_COLUMN_WIDTH = 148;
+const INVENTORY_QTY_COLUMN_WIDTH = 72;
+const INVENTORY_STATUS_COLUMN_WIDTH = 120;
+
+function SearchControl({
+  inputRef,
+  value,
+  onChangeText,
+  placeholder,
+}: {
+  inputRef?: React.RefObject<TextInput | null>;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <View
+      style={{
+        minHeight: 46,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.surface2,
+        borderRadius: theme.radius.sm,
+        paddingHorizontal: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+      }}
+    >
+      <Ionicons name="search" size={16} color={theme.colors.textMuted} />
+      <TextInput
+        ref={inputRef}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={theme.colors.textMuted}
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="search"
+        style={{
+          flex: 1,
+          minHeight: 44,
+          color: theme.colors.text,
+          fontSize: 15,
+          ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null),
+        }}
+      />
+    </View>
+  );
 }
 
-function formatInventoryFlow(item: InventoryItem) {
-  const flow = item.flow;
-  if (!flow) return "Flow summary unavailable";
-  return `Ready ${flow.exitReadyUnits}/${item.quantity} • ${flow.nextStep}`;
+function FilterTabs<T extends string>({
+  tabs,
+  activeValue,
+  onChange,
+}: {
+  tabs: Array<{ key: T; label: string; count: number }>;
+  activeValue: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 18 }}>
+      {tabs.map((tab) => {
+        const active = tab.key === activeValue;
+        return (
+          <Pressable
+            key={tab.key}
+            onPress={() => onChange(tab.key)}
+            style={{
+              paddingTop: 4,
+              paddingBottom: 10,
+              borderBottomWidth: 2,
+              borderBottomColor: active ? theme.colors.primary : "transparent",
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text
+                style={{
+                  color: active ? theme.colors.text : theme.colors.textMuted,
+                  fontWeight: active ? "800" : "700",
+                  fontSize: 14,
+                }}
+              >
+                {tab.label}
+              </Text>
+              <View
+                style={{
+                  minWidth: 28,
+                  height: 26,
+                  paddingHorizontal: 8,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: active ? theme.colors.primary : theme.colors.border,
+                  backgroundColor: active ? theme.colors.primarySoft : theme.colors.surface2,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ color: active ? theme.colors.text : theme.colors.textMuted, fontWeight: "800", fontSize: 12 }}>{tab.count}</Text>
+              </View>
+            </View>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
 }
 
-function compactInventoryFlowLabel(item: InventoryItem) {
-  const flow = item.flow;
-  if (!flow) return item.quantity <= item.reorderLevel ? "Low" : "Stock";
-  if (flow.missingExitTrackingUnits > 0 || flow.untrackedUnits > 0) return "Setup";
-  if (flow.activeExitAuthorizations > 0) return "Gate";
-  return `${flow.exitReadyUnits}/${item.quantity}`;
+function inventoryStatus(item: InventoryItem) {
+  if (item.quantity <= 0) return { label: "Out of stock", tone: "danger" as const };
+  if (item.quantity <= item.reorderLevel) return { label: "Low stock", tone: "warning" as const };
+  return { label: "In stock", tone: "success" as const };
+}
+
+function inventoryMeta(item: InventoryItem) {
+  const parts = [`ID: ${item._id.slice(-6)}`, item.barcode ? "Barcode ready" : "No barcode"];
+  if (item.rfidTagId) parts.push("Legacy RFID tag");
+  return parts.join(" | ");
+}
+
+function applyInventoryFilter(items: InventoryItem[], filter: InventoryFilter) {
+  if (filter === "low") return items.filter((item) => item.quantity > 0 && item.quantity <= item.reorderLevel);
+  if (filter === "out") return items.filter((item) => item.quantity <= 0);
+  return items;
 }
 
 export function InventoryListScreen({ navigation }: Props) {
   const { token } = useContext(AuthContext);
   const { width } = useWindowDimensions();
-  const { height } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
-  const isWeb = Platform.OS === "web";
   const insets = useSafeAreaInsets();
+
   const [q, setQ] = useState("");
-  const searchRef = useRef<TextInput>(null);
-  const listRef = useRef<FlatList<InventoryItem>>(null);
+  const [filter, setFilter] = useState<InventoryFilter>("all");
   const [scanOpen, setScanOpen] = useState(false);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [showFloatingSearch] = useState(true);
-  const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
-  const overlayAnim = useRef(new Animated.Value(0)).current;
-  const overlaySearchRef = useRef<TextInput>(null);
-  const overlaySpace = theme.spacing.md + insets.top + 104;
+  const [compactSearchOpen, setCompactSearchOpen] = useState(false);
 
+  const headerSearchRef = useRef<TextInput>(null);
+  const compactSearchRef = useRef<TextInput>(null);
+  const webListRef = useRef<ScrollView>(null);
+  const nativeListRef = useRef<FlatList<InventoryItem>>(null);
   const scrollOffsetRef = useRef(0);
-  const restoreRef = useRef<{ q: string; offset: number } | null>(null);
-
-  const floatingPos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-  const floatingDraggedRef = useRef(false);
-  const floatingStartRef = useRef({ x: 0, y: 0 });
-
-  const buttonSize = 52;
-  const floatingMargin = theme.spacing.md;
-  const floatingTop = theme.spacing.md + insets.top + 16;
-  const floatingBottomLimit = theme.spacing.md + insets.bottom + 168;
-  const maxX = Math.max(0, width - buttonSize - floatingMargin * 2);
-  const maxY = Math.max(0, height - buttonSize - floatingTop - floatingBottomLimit);
-
-  const floatingPan = useMemo(
-    () => {
-      const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
-      return PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
-        onPanResponderGrant: () => {
-          floatingStartRef.current = {
-            x: (floatingPos.x as any).__getValue?.() ?? 0,
-            y: (floatingPos.y as any).__getValue?.() ?? 0,
-          };
-          floatingPos.extractOffset();
-        },
-        onPanResponderMove: (_, g) => {
-          if (Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2) floatingDraggedRef.current = true;
-
-          const start = floatingStartRef.current;
-          const nextX = clamp(start.x + g.dx, 0, maxX);
-          const nextY = clamp(start.y + g.dy, 0, maxY);
-          floatingPos.setValue({ x: nextX - start.x, y: nextY - start.y });
-        },
-        onPanResponderRelease: () => {
-          floatingPos.flattenOffset();
-          const x = clamp((floatingPos.x as any).__getValue?.() ?? 0, 0, maxX);
-          const y = clamp((floatingPos.y as any).__getValue?.() ?? 0, 0, maxY);
-          const snapX = x < maxX / 2 ? 0 : maxX;
-          Animated.spring(floatingPos, { toValue: { x: snapX, y }, useNativeDriver: false, friction: 7, tension: 90 }).start();
-        },
-      });
-    },
-    [floatingPos, maxX, maxY]
-  );
+  const compactSearchAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!showFloatingSearch) {
-      floatingDraggedRef.current = false;
+    if (isDesktopWeb) {
+      setCompactSearchOpen(false);
+      compactSearchAnim.setValue(0);
       return;
     }
-    if (floatingDraggedRef.current) return;
-    floatingPos.setValue({ x: maxX, y: maxY / 2 });
-  }, [floatingPos, maxX, showFloatingSearch]);
 
-  const openSearchOverlay = useCallback(() => {
-    restoreRef.current = { q, offset: scrollOffsetRef.current };
-    setSearchOverlayOpen(true);
-    overlayAnim.setValue(0);
-    Animated.timing(overlayAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
-    setTimeout(() => overlaySearchRef.current?.focus(), 50);
-  }, [overlayAnim, q]);
-
-  const closeSearchOverlay = useCallback(() => {
-    Animated.timing(overlayAnim, { toValue: 0, duration: 160, useNativeDriver: true }).start(({ finished }) => {
-      if (!finished) return;
-      setSearchOverlayOpen(false);
-      const restore = restoreRef.current;
-      restoreRef.current = null;
-      if (!restore) return;
-      setQ(restore.q);
-      setTimeout(() => {
-        listRef.current?.scrollToOffset({ offset: restore.offset, animated: false });
-      }, 50);
+    Animated.timing(compactSearchAnim, {
+      toValue: compactSearchOpen ? 1 : 0,
+      duration: compactSearchOpen ? 190 : 150,
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished && compactSearchOpen) {
+        setTimeout(() => compactSearchRef.current?.focus(), 40);
+      }
     });
-  }, [overlayAnim]);
+  }, [compactSearchAnim, compactSearchOpen, isDesktopWeb]);
 
   const queryUrl = useMemo(() => {
-    const t = q.trim();
-    return t ? `/inventory/items?q=${encodeURIComponent(t)}` : "/inventory/items";
+    const trimmed = q.trim();
+    return trimmed ? `/inventory/items?q=${encodeURIComponent(trimmed)}` : "/inventory/items";
   }, [q]);
 
   const load = useCallback(async () => {
@@ -204,17 +237,229 @@ export function InventoryListScreen({ navigation }: Props) {
     }, [load])
   );
 
-  const lowStockCount = useMemo(() => items.filter((it) => it.quantity <= it.reorderLevel).length, [items]);
-  return (
-    <Screen
-      title="Inventory"
-      tabBarPadding={isDesktopWeb}
-      right={
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <AppButton title="New" onPress={() => navigation.navigate("InventoryCreate")} variant="secondary" iconName="add" iconOnly />
+  const lowStockCount = useMemo(() => items.filter((item) => item.quantity > 0 && item.quantity <= item.reorderLevel).length, [items]);
+  const outOfStockCount = useMemo(() => items.filter((item) => item.quantity <= 0).length, [items]);
+  const visibleItems = useMemo(() => applyInventoryFilter(items, filter), [filter, items]);
+
+  const filterTabs = useMemo(
+    () => [
+      { key: "all" as const, label: "All items", count: items.length },
+      { key: "low" as const, label: "Low stock", count: lowStockCount },
+      { key: "out" as const, label: "Out of stock", count: outOfStockCount },
+    ],
+    [items.length, lowStockCount, outOfStockCount]
+  );
+
+  const compactSearchHeight = compactSearchAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 88],
+  });
+
+  const compactSearchTranslate = compactSearchAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-12, 0],
+  });
+
+  const restoreCompactScroll = useCallback(() => {
+    const offset = scrollOffsetRef.current;
+    if (Platform.OS === "web") {
+      webListRef.current?.scrollTo?.({ y: offset, animated: false });
+      return;
+    }
+    nativeListRef.current?.scrollToOffset?.({ offset, animated: false });
+  }, []);
+
+  const closeCompactSearch = useCallback(() => {
+    setCompactSearchOpen(false);
+    setTimeout(restoreCompactScroll, 40);
+  }, [restoreCompactScroll]);
+
+  const right = isDesktopWeb ? (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <View style={{ width: width >= 1260 ? 320 : 260 }}>
+        <SearchControl inputRef={headerSearchRef} value={q} onChangeText={setQ} placeholder="Search items, SKU, location" />
+      </View>
+      <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly />
+      <AppButton title="New" onPress={() => navigation.navigate("InventoryCreate")} variant="secondary" iconName="add" iconOnly />
+    </View>
+  ) : (
+    <View style={{ flexDirection: "row", gap: 8 }}>
+      <AppButton
+        title={compactSearchOpen ? "Close search" : "Search"}
+        onPress={() => {
+          if (compactSearchOpen) closeCompactSearch();
+          else setCompactSearchOpen(true);
+        }}
+        variant="secondary"
+        iconName={compactSearchOpen ? "close" : "search"}
+        iconOnly
+      />
+      <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly />
+      <AppButton title="New" onPress={() => navigation.navigate("InventoryCreate")} variant="secondary" iconName="add" iconOnly />
+    </View>
+  );
+
+  const renderDesktopRows = () => {
+    if (visibleItems.length === 0) {
+      return (
+        <View style={{ padding: theme.spacing.md }}>
+          <MutedText>{q.trim() ? "No matching items" : "No inventory items"}</MutedText>
         </View>
-      }
-    >
+      );
+    }
+
+    return (
+      <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
+        {visibleItems.map((item, index) => {
+          const status = inventoryStatus(item);
+          return (
+            <Pressable
+              key={item._id}
+              onPress={() => navigation.navigate("InventoryDetail", { id: item._id })}
+              style={(state) => {
+                const pressed = state.pressed;
+                const hovered = !!(state as any).hovered;
+                return [
+                  {
+                    paddingHorizontal: theme.spacing.md,
+                    paddingVertical: 14,
+                    borderBottomWidth: index === visibleItems.length - 1 ? 0 : 1,
+                    borderBottomColor: theme.colors.border,
+                    backgroundColor: pressed ? theme.colors.surface2 : hovered ? theme.colors.surface2 : theme.colors.surface,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                    ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null),
+                  },
+                ];
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[theme.typography.h3, { color: theme.colors.text }]} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                <Text style={[theme.typography.caption, { color: theme.colors.textMuted, marginTop: 4 }]} numberOfLines={1}>
+                  {inventoryMeta(item)}
+                </Text>
+              </View>
+              <View style={{ width: INVENTORY_SKU_COLUMN_WIDTH, flexShrink: 0 }}>
+                <Text style={[theme.typography.body, { color: theme.colors.text }]} numberOfLines={1}>
+                  {item.sku}
+                </Text>
+              </View>
+              <View style={{ width: INVENTORY_LOCATION_COLUMN_WIDTH, flexShrink: 0 }}>
+                <Text style={[theme.typography.body, { color: theme.colors.textMuted }]} numberOfLines={1}>
+                  {item.location ?? "-"}
+                </Text>
+              </View>
+              <View style={{ width: INVENTORY_QTY_COLUMN_WIDTH, flexShrink: 0 }}>
+                <Text
+                  style={{
+                    textAlign: "right",
+                    color: item.quantity <= item.reorderLevel ? theme.colors.warning : theme.colors.text,
+                    fontWeight: "800",
+                  }}
+                >
+                  {item.quantity}
+                </Text>
+              </View>
+              <View style={{ width: INVENTORY_STATUS_COLUMN_WIDTH, flexShrink: 0, alignItems: "flex-start" }}>
+                <Badge label={status.label} tone={status.tone} />
+              </View>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    );
+  };
+
+  const renderCompactInventoryCard = (item: InventoryItem) => {
+    const status = inventoryStatus(item);
+
+    return (
+      <Pressable
+        key={item._id}
+        onPress={() => navigation.navigate("InventoryDetail", { id: item._id })}
+        style={(state) => {
+          const pressed = state.pressed;
+          const hovered = !!(state as any).hovered;
+          return [
+            {
+              backgroundColor: pressed ? theme.colors.surface2 : hovered ? theme.colors.surface2 : theme.colors.surface,
+              borderRadius: theme.radius.md,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              padding: theme.spacing.md,
+              opacity: pressed ? 0.95 : 1,
+              ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null),
+            },
+            shadow(1),
+          ];
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[theme.typography.h3, { color: theme.colors.text }]} numberOfLines={1}>
+              {item.name}
+            </Text>
+          </View>
+          <View style={{ flexShrink: 0, alignItems: "flex-end" }}>
+            <Badge label={status.label} tone={status.tone} />
+          </View>
+        </View>
+
+        <View style={{ marginTop: 10, gap: 4 }}>
+          <Text style={[theme.typography.body, { color: theme.colors.textMuted }]} numberOfLines={1}>
+            {`SKU: ${item.sku}`}
+          </Text>
+          <Text style={[theme.typography.body, { color: theme.colors.textMuted }]} numberOfLines={1}>
+            {`Location: ${item.location ?? "-"}`}
+          </Text>
+        </View>
+
+        <View style={{ marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surface2,
+              borderRadius: 999,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+            }}
+          >
+            <Text
+              style={{
+                color: item.quantity <= item.reorderLevel ? theme.colors.warning : theme.colors.textMuted,
+                fontSize: 12,
+                fontWeight: "800",
+              }}
+            >
+              {`Qty ${item.quantity}`}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
+        </View>
+      </Pressable>
+    );
+  };
+
+  const compactHeader = (
+    <Card style={{ paddingBottom: 10 }}>
+      <View style={{ gap: 8 }}>
+        <FilterTabs tabs={filterTabs} activeValue={filter} onChange={setFilter} />
+        {q.trim() ? <MutedText>{`Searching "${q.trim()}"`}</MutedText> : null}
+        {error ? (
+          <View>
+            <ErrorText>{error}</ErrorText>
+          </View>
+        ) : null}
+      </View>
+    </Card>
+  );
+
+  return (
+    <Screen title="Inventory" tabBarPadding={isDesktopWeb} right={right}>
       <BarcodeScanModal
         visible={scanOpen}
         title="Scan barcode"
@@ -222,356 +467,138 @@ export function InventoryListScreen({ navigation }: Props) {
         onScanned={(value) => {
           setQ(value);
           setScanOpen(false);
-          setTimeout(() => searchRef.current?.focus(), 50);
+          if (isDesktopWeb) {
+            setTimeout(() => headerSearchRef.current?.focus(), 40);
+            return;
+          }
+          setCompactSearchOpen(true);
         }}
       />
+
       {isDesktopWeb ? (
-        <View style={{ flex: 1, gap: theme.spacing.md }}>
-          <Card>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <TextField
-                  ref={searchRef}
-                  value={q}
-                  onChangeText={setQ}
-                  placeholder="Search: name, SKU, barcode, location, RFID tag"
-                  autoCapitalize="none"
-                  returnKeyType="search"
-                  onSubmitEditing={() => setQ((prev) => prev.trim())}
-                />
-              </View>
-
-              <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly />
-
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 10, flexShrink: 0 }}>
-                <Badge label={`Total: ${items.length}`} tone="default" size="header" />
-                <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} size="header" />
-              </View>
-            </View>
-
-            {error ? (
-              <View style={{ marginTop: 10 }}>
-                <ErrorText>{error}</ErrorText>
-              </View>
-            ) : null}
-
-          </Card>
-
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Card style={{ padding: 0, flex: 1 }}>
-              <View
-                style={{
-                  paddingHorizontal: theme.spacing.md,
-                  paddingVertical: 12,
-                  borderBottomWidth: 1,
-                  borderBottomColor: theme.colors.border,
-                  backgroundColor: theme.colors.surface2,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 12,
-                }}
-              >
-                <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 4 }]} numberOfLines={1}>
-                  Item
-                </Text>
-                <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 2 }]} numberOfLines={1}>
-                  SKU
-                </Text>
-                <Text style={[theme.typography.label, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
-                  Location
-                </Text>
-                <Text style={[theme.typography.label, { color: theme.colors.textMuted, width: 90, textAlign: "right" }]} numberOfLines={1}>
-                  Qty
-                </Text>
-                <Text style={[theme.typography.label, { color: theme.colors.textMuted, width: 120, textAlign: "right" }]} numberOfLines={1}>
-                  Status
-                </Text>
-              </View>
-
-              {isWeb ? (
-                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: theme.spacing.md, gap: 8 }} keyboardShouldPersistTaps="handled">
-                  {items.length ? (
-                    items.map((item) => (
-                      <Pressable
-                        key={item._id}
-                        onPress={() => navigation.navigate("InventoryDetail", { id: item._id })}
-                        style={(state) => {
-                          const pressed = state.pressed;
-                          const hovered = !!(state as any).hovered;
-                          return [
-                            {
-                              paddingVertical: 12,
-                              paddingHorizontal: theme.spacing.md,
-                              borderRadius: theme.radius.md,
-                              borderWidth: 1,
-                              borderColor: theme.colors.border,
-                              backgroundColor: pressed ? theme.colors.surface2 : hovered ? theme.colors.surface2 : theme.colors.surface,
-                              flexDirection: "row",
-                              alignItems: "center",
-                              gap: 12,
-                              ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null),
-                            },
-                            hovered && !pressed ? ({ transform: [{ translateY: -0.5 }] } as any) : null,
-                            pressed ? ({ transform: [{ translateY: 1 }] } as any) : null,
-                          ];
-                        }}
-                      >
-                        <View style={{ flex: 4, minWidth: 0 }}>
-                          <Text style={[theme.typography.h3, { color: theme.colors.text }]} numberOfLines={1}>
-                            {item.name}
-                          </Text>
-                          <Text style={[theme.typography.caption, { color: theme.colors.textMuted, marginTop: 4 }]} numberOfLines={1}>
-                            ID: {item._id.slice(-6)} {item.barcode ? "• Barcode ready" : "• No barcode"} {item.rfidTagId ? "• Legacy RFID tag" : ""}
-                          </Text>
-                        </View>
-
-                        <Text style={[theme.typography.body, { color: theme.colors.text, flex: 2 }]} numberOfLines={1}>
-                          {item.sku}
-                        </Text>
-
-                        <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
-                          {item.location ?? "-"}
-                        </Text>
-
-                        <Text
-                          style={{
-                            color: item.quantity <= item.reorderLevel ? theme.colors.warning : theme.colors.text,
-                            fontWeight: "800",
-                            width: 90,
-                            textAlign: "right",
-                          }}
-                          numberOfLines={1}
-                        >
-                          {item.quantity}
-                        </Text>
-
-                        <View style={{ width: 120, alignItems: "flex-end" }}>
-                          <Badge label={item.quantity <= item.reorderLevel ? "Low stock" : "In stock"} tone={item.quantity <= item.reorderLevel ? "warning" : "default"} />
-                        </View>
-                      </Pressable>
-                    ))
-                  ) : (
-                    <MutedText>{q.trim() ? "No matching items" : "No inventory items"}</MutedText>
-                  )}
-                </ScrollView>
-              ) : (
-                <FlatList
-                  style={{ flex: 1 }}
-                  contentContainerStyle={{ padding: theme.spacing.md, gap: 8 }}
-                  data={items}
-                  keyExtractor={(it) => it._id}
-                  ListEmptyComponent={<MutedText>{q.trim() ? "No matching items" : "No inventory items"}</MutedText>}
-                  renderItem={({ item }) => (
-                    <Pressable
-                      onPress={() => navigation.navigate("InventoryDetail", { id: item._id })}
-                      style={(state) => {
-                        const pressed = state.pressed;
-                        const hovered = !!(state as any).hovered;
-                        return [
-                          {
-                            paddingVertical: 12,
-                            paddingHorizontal: theme.spacing.md,
-                            borderRadius: theme.radius.md,
-                            borderWidth: 1,
-                            borderColor: theme.colors.border,
-                            backgroundColor: pressed ? theme.colors.surface2 : hovered ? theme.colors.surface2 : theme.colors.surface,
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 12,
-                            ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : null),
-                          },
-                          hovered && !pressed ? ({ transform: [{ translateY: -0.5 }] } as any) : null,
-                          pressed ? ({ transform: [{ translateY: 1 }] } as any) : null,
-                        ];
-                      }}
-                    >
-                      <View style={{ flex: 4, minWidth: 0 }}>
-                        <Text style={[theme.typography.h3, { color: theme.colors.text }]} numberOfLines={1}>
-                          {item.name}
-                        </Text>
-                        <Text style={[theme.typography.caption, { color: theme.colors.textMuted, marginTop: 4 }]} numberOfLines={1}>
-                          ID: {item._id.slice(-6)} {item.barcode ? "• Barcode ready" : "• No barcode"} {item.rfidTagId ? "• Legacy RFID tag" : ""}
-                        </Text>
-                      </View>
-
-                      <Text style={[theme.typography.body, { color: theme.colors.text, flex: 2 }]} numberOfLines={1}>
-                        {item.sku}
-                      </Text>
-
-                      <Text style={[theme.typography.body, { color: theme.colors.textMuted, flex: 3 }]} numberOfLines={1}>
-                        {item.location ?? "-"}
-                      </Text>
-
-                      <Text
-                        style={{
-                          color: item.quantity <= item.reorderLevel ? theme.colors.warning : theme.colors.text,
-                          fontWeight: "800",
-                          width: 90,
-                          textAlign: "right",
-                        }}
-                        numberOfLines={1}
-                      >
-                        {item.quantity}
-                      </Text>
-
-                      <View style={{ width: 120, alignItems: "flex-end" }}>
-                        <Badge label={item.quantity <= item.reorderLevel ? "Low stock" : "In stock"} tone={item.quantity <= item.reorderLevel ? "warning" : "default"} />
-                      </View>
-                    </Pressable>
-                  )}
-                />
-              )}
-            </Card>
-          </View>
-        </View>
-      ) : (
-        Platform.OS === "web" ? (
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={{ gap: 12, paddingBottom: theme.spacing.lg + insets.bottom + 156, paddingTop: searchOverlayOpen ? overlaySpace : 0 }}
-            keyboardShouldPersistTaps="handled"
-            onScroll={(e) => {
-              const y = (e as any)?.nativeEvent?.contentOffset?.y ?? 0;
-              scrollOffsetRef.current = y;
+        <Card style={{ padding: 0, flex: 1 }}>
+          <View
+            style={{
+              paddingHorizontal: theme.spacing.md,
+              paddingTop: 6,
+              paddingBottom: 2,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.colors.border,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
             }}
-            scrollEventThrottle={32}
           >
-            <Card>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                <View style={{ width: "48%" }}>
-                  <Badge label={`Total: ${items.length}`} tone="default" size="header" responsive={false} fullWidth />
-                </View>
-                <View style={{ width: "48%" }}>
-                  <Badge
-                    label={`Low stock: ${lowStockCount}`}
-                    tone={lowStockCount > 0 ? "warning" : "default"}
-                    size="header"
-                    responsive={false}
-                    fullWidth
-                  />
-                </View>
-                <View style={{ width: "48%" }}>
-                  <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly style={{ width: "100%" }} />
-                </View>
-              </View>
-              {error ? (
-                <View style={{ marginTop: 10 }}>
-                  <ErrorText>{error}</ErrorText>
-                </View>
-              ) : null}
-            </Card>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <FilterTabs tabs={filterTabs} activeValue={filter} onChange={setFilter} />
+            </View>
+            <MutedText>{q.trim() ? `Showing ${visibleItems.length} results` : "Live inventory"}</MutedText>
+          </View>
 
-            {items.length ? (
-              items.map((item) => (
-                <ListRow
-                  key={item._id}
-                  title={item.name}
-                  subtitle={`SKU: ${item.sku}\nLocation: ${item.location ?? "-"}`}
-                  meta={`Qty: ${item.quantity} (reorder ${item.reorderLevel})`}
-                  topRight={<Badge label={item.quantity <= item.reorderLevel ? "Low stock" : `Qty ${item.quantity}`} tone={item.quantity <= item.reorderLevel ? "warning" : "default"} />}
-                  onPress={() => navigation.navigate("InventoryDetail", { id: item._id })}
-                />
-              ))
-            ) : (
-              <MutedText>{q.trim() ? "No matching items" : "No inventory items"}</MutedText>
-            )}
-          </ScrollView>
-        ) : (
-          <FlatList
-            ref={listRef}
-            style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 156, paddingTop: searchOverlayOpen ? overlaySpace : 0 }}
-            data={items}
-            keyExtractor={(it) => it._id}
-            onScroll={(e) => {
-              const y = e.nativeEvent.contentOffset.y;
-              scrollOffsetRef.current = y;
+          <View
+            style={{
+              paddingHorizontal: theme.spacing.md,
+              paddingVertical: 12,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.colors.border,
+              backgroundColor: theme.colors.surface2,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
             }}
-            scrollEventThrottle={32}
-            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-            ListHeaderComponent={
-              <Card>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                  <View style={{ width: "48%" }}>
-                    <Badge label={`Total: ${items.length}`} tone="default" size="header" responsive={false} fullWidth />
-                  </View>
-                  <View style={{ width: "48%" }}>
-                    <Badge label={`Low stock: ${lowStockCount}`} tone={lowStockCount > 0 ? "warning" : "default"} size="header" responsive={false} fullWidth />
-                  </View>
-                  <View style={{ width: "48%" }}>
-                    <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly style={{ width: "100%" }} />
-                  </View>
-                </View>
-                {error ? (
-                  <View style={{ marginTop: 10 }}>
-                    <ErrorText>{error}</ErrorText>
-                  </View>
-                ) : null}
-              </Card>
-            }
-            ListHeaderComponentStyle={{ marginBottom: 12 }}
-            ListEmptyComponent={<MutedText>{q.trim() ? "No matching items" : "No inventory items"}</MutedText>}
-            renderItem={({ item }) => (
-              <ListRow
-                title={item.name}
-                subtitle={`SKU: ${item.sku}\nLocation: ${item.location ?? "-"}`}
-                meta={`Qty: ${item.quantity} (reorder ${item.reorderLevel})`}
-                topRight={<Badge label={item.quantity <= item.reorderLevel ? "Low stock" : `Qty ${item.quantity}`} tone={item.quantity <= item.reorderLevel ? "warning" : "default"} />}
-                onPress={() => navigation.navigate("InventoryDetail", { id: item._id })}
-              />
-            )}
-          />
-        )
+          >
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[theme.typography.label, { color: theme.colors.textMuted }]} numberOfLines={1}>
+                Item
+              </Text>
+            </View>
+            <View style={{ width: INVENTORY_SKU_COLUMN_WIDTH, flexShrink: 0 }}>
+              <Text style={[theme.typography.label, { color: theme.colors.textMuted }]} numberOfLines={1}>
+                SKU
+              </Text>
+            </View>
+            <View style={{ width: INVENTORY_LOCATION_COLUMN_WIDTH, flexShrink: 0 }}>
+              <Text style={[theme.typography.label, { color: theme.colors.textMuted }]} numberOfLines={1}>
+                Location
+              </Text>
+            </View>
+            <View style={{ width: INVENTORY_QTY_COLUMN_WIDTH, flexShrink: 0 }}>
+              <Text style={[theme.typography.label, { color: theme.colors.textMuted, textAlign: "right" }]} numberOfLines={1}>
+                Qty
+              </Text>
+            </View>
+            <View style={{ width: INVENTORY_STATUS_COLUMN_WIDTH, flexShrink: 0 }}>
+              <Text style={[theme.typography.label, { color: theme.colors.textMuted }]} numberOfLines={1}>
+                Status
+              </Text>
+            </View>
+          </View>
+
+          {error ? (
+            <View style={{ padding: theme.spacing.md, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+              <ErrorText>{error}</ErrorText>
+            </View>
+          ) : null}
+
+          {renderDesktopRows()}
+        </Card>
+      ) : Platform.OS === "web" ? (
+        <ScrollView
+          ref={webListRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ gap: 12, paddingBottom: theme.spacing.lg + insets.bottom + 156 }}
+          keyboardShouldPersistTaps="handled"
+          onScroll={(event) => {
+            scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
+        >
+          {compactHeader}
+
+          {visibleItems.length ? (
+            visibleItems.map((item) => renderCompactInventoryCard(item))
+          ) : (
+            <MutedText>{q.trim() ? "No matching items" : "No inventory items"}</MutedText>
+          )}
+        </ScrollView>
+      ) : (
+        <FlatList
+          ref={nativeListRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: theme.spacing.lg + insets.bottom + 156 }}
+          data={visibleItems}
+          keyExtractor={(item) => item._id}
+          onScroll={(event) => {
+            scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
+          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          ListHeaderComponent={compactHeader}
+          ListHeaderComponentStyle={{ marginBottom: 12 }}
+          ListEmptyComponent={<MutedText>{q.trim() ? "No matching items" : "No inventory items"}</MutedText>}
+          renderItem={({ item }) => renderCompactInventoryCard(item)}
+        />
       )}
 
-      {!isDesktopWeb && showFloatingSearch && !searchOverlayOpen ? (
-        <Animated.View
-          style={{
-            position: "absolute",
-            left: floatingMargin,
-            top: floatingTop,
-            zIndex: 50,
-            elevation: 50,
-            transform: floatingPos.getTranslateTransform(),
-          }}
-          pointerEvents="box-none"
-          {...floatingPan.panHandlers}
-        >
-          <AppButton title="Search" iconName="search" iconOnly iconSize={28} variant="secondary" onPress={openSearchOverlay} />
-        </Animated.View>
-      ) : null}
-
-      {searchOverlayOpen ? (
-        <View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 60, elevation: 60 }} pointerEvents="box-none">
+      {!isDesktopWeb ? (
+        <View pointerEvents="box-none" style={{ position: "absolute", top: 0, left: 0, right: 0 }}>
           <Animated.View
+            pointerEvents={compactSearchOpen ? "auto" : "none"}
             style={{
-              padding: theme.spacing.md,
-              paddingTop: theme.spacing.md + insets.top,
-              transform: [
-                {
-                  translateY: overlayAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-160, 0],
-                  }),
-                },
-              ],
-              opacity: overlayAnim,
+              paddingHorizontal: theme.spacing.md,
+              height: compactSearchHeight,
+              opacity: compactSearchAnim,
+              overflow: "hidden",
+              transform: [{ translateY: compactSearchTranslate }],
             }}
           >
             <Card>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <TextField
-                    ref={overlaySearchRef}
-                    value={q}
-                    onChangeText={setQ}
-                    placeholder="Search inventory"
-                    autoCapitalize="none"
-                    returnKeyType="search"
-                    onSubmitEditing={() => setQ((prev) => prev.trim())}
-                  />
+                <View style={{ flex: 1 }}>
+                  <SearchControl inputRef={compactSearchRef} value={q} onChangeText={setQ} placeholder="Search inventory" />
                 </View>
-                <AppButton title="Close" iconName="close" iconOnly variant="secondary" onPress={closeSearchOverlay} />
+                <AppButton title="Close" iconName="close" iconOnly variant="secondary" onPress={closeCompactSearch} />
               </View>
             </Card>
           </Animated.View>
