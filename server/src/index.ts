@@ -209,7 +209,7 @@ app.get("/", (req: Request, res: Response) => {
   res.setHeader("cache-control", "no-store");
   res.setHeader(
     "content-security-policy",
-    "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
   );
   res.type("html").send(
     renderApiHome({

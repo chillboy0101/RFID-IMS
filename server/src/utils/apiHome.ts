@@ -17,77 +17,38 @@ function escapeHtml(value: string): string {
 }
 
 function formatDuration(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const days = Math.floor(totalSeconds / 86_400);
-  const hours = Math.floor((totalSeconds % 86_400) / 3_600);
-  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  const days = Math.floor(seconds / 86_400);
+  const hours = Math.floor((seconds % 86_400) / 3_600);
+  const minutes = Math.floor((seconds % 3_600) / 60);
+  const secs = seconds % 60;
 
-  if (days > 0) return `${days}d ${hours}h`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${Math.max(1, minutes)}m`;
+  if (days > 0) return `${days}d ${hours}h ${minutes}m ${secs}s`;
+  if (hours > 0) return `${hours}h ${minutes}m ${secs}s`;
+  return `${minutes}m ${secs}s`;
 }
 
-export function renderApiHome(options: ApiHomeOptions): string {
-  const dbConnected = options.dbReadyState === 1;
-  const dbStateLabels: Record<number, string> = {
+function dbStateLabel(readyState: number): string {
+  const labels: Record<number, string> = {
     0: "Disconnected",
     1: "Connected",
     2: "Connecting",
     3: "Disconnecting",
   };
-  const dbState = dbStateLabels[options.dbReadyState] ?? "Unknown";
-  const env = options.isProd ? "Production" : "Development";
+  return labels[readyState] ?? "Unknown";
+}
+
+function endpointLink(label: string, path: string): string {
+  return `<a class="endpoint" href="${escapeHtml(path)}"><span>${escapeHtml(label)}</span><code>${escapeHtml(path)}</code></a>`;
+}
+
+export function renderApiHome(options: ApiHomeOptions): string {
+  const dbConnected = options.dbReadyState === 1;
+  const dbState = dbStateLabel(options.dbReadyState);
+  const environment = options.isProd ? "Production" : "Development";
   const uptime = formatDuration(options.uptimeMs);
-
-  const endpointGroups = [
-    {
-      title: "System",
-      links: [
-        { label: "Health", path: "/health" },
-        { label: "Metrics", path: "/metrics" },
-        { label: "Auth", path: "/auth" },
-      ],
-    },
-    {
-      title: "Warehouse",
-      links: [
-        { label: "Inventory", path: "/inventory" },
-        { label: "Orders", path: "/orders" },
-        { label: "Dashboard", path: "/dashboard" },
-        { label: "Audit", path: "/audit" },
-      ],
-    },
-    {
-      title: "Hardware",
-      links: [
-        { label: "RFID hub", path: "/rfid" },
-        { label: "Readers", path: "/rfid/receiving-events" },
-        { label: "Gates", path: "/rfid/gate-events" },
-      ],
-    },
-  ];
-
-  const endpointMarkup = endpointGroups
-    .map(
-      (group) => `
-        <section class="endpoint-card">
-          <h2>${escapeHtml(group.title)}</h2>
-          <div class="endpoint-list">
-            ${group.links
-              .map(
-                (link) => `
-                  <a href="${escapeHtml(link.path)}">
-                    <span>${escapeHtml(link.label)}</span>
-                    <code>${escapeHtml(link.path)}</code>
-                  </a>
-                `
-              )
-              .join("")}
-          </div>
-        </section>
-      `
-    )
-    .join("");
+  const statusLabel = dbConnected ? "Operational" : "Degraded";
+  const statusTone = dbConnected ? "ok" : "warn";
 
   return `<!doctype html>
 <html lang="en">
@@ -98,14 +59,18 @@ export function renderApiHome(options: ApiHomeOptions): string {
     <style>
       :root {
         color-scheme: light;
-        --bg: #f6f8fb;
+        --bg: #f7f9fc;
+        --card: #ffffff;
         --ink: #071225;
-        --muted: #536176;
+        --muted: #5f6f84;
         --line: #dce4ee;
-        --soft: #eef3f8;
-        --ok: #16a765;
-        --warn: #e57b00;
-        --shadow: 0 18px 45px rgba(15, 23, 42, 0.12);
+        --soft: #f0f4f8;
+        --green: #10a37f;
+        --green-soft: #e7f8f2;
+        --amber: #d97706;
+        --amber-soft: #fff4de;
+        --yellow: #ffdc38;
+        --shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
       }
 
       * {
@@ -115,10 +80,7 @@ export function renderApiHome(options: ApiHomeOptions): string {
       body {
         margin: 0;
         min-height: 100vh;
-        background:
-          radial-gradient(circle at 16% 12%, rgba(15, 159, 143, 0.14), transparent 28%),
-          radial-gradient(circle at 84% 6%, rgba(255, 220, 56, 0.2), transparent 24%),
-          linear-gradient(180deg, #ffffff 0%, var(--bg) 48%, #edf3f8 100%);
+        background: var(--bg);
         color: var(--ink);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
@@ -129,20 +91,9 @@ export function renderApiHome(options: ApiHomeOptions): string {
       }
 
       .shell {
-        width: min(1180px, calc(100% - 32px));
+        width: min(1080px, calc(100% - 32px));
         margin: 0 auto;
-        padding: 36px 0 32px;
-      }
-
-      .topbar,
-      .hero,
-      .endpoint-card,
-      .startup-panel,
-      .signal-card {
-        border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.86);
-        box-shadow: var(--shadow);
-        backdrop-filter: blur(14px);
+        padding: 40px 0;
       }
 
       .topbar {
@@ -150,8 +101,7 @@ export function renderApiHome(options: ApiHomeOptions): string {
         align-items: center;
         justify-content: space-between;
         gap: 16px;
-        border-radius: 22px;
-        padding: 14px 16px;
+        margin-bottom: 18px;
       }
 
       .brand {
@@ -163,243 +113,217 @@ export function renderApiHome(options: ApiHomeOptions): string {
 
       .mark {
         display: grid;
-        width: 44px;
-        height: 44px;
+        width: 42px;
+        height: 42px;
         place-items: center;
+        border: 1px solid var(--line);
         border-radius: 14px;
-        background: #071225;
-        color: #ffffff;
+        background: var(--card);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+        font-weight: 900;
+        letter-spacing: -0.05em;
+      }
+
+      .brand-title {
         font-size: 18px;
         font-weight: 900;
         letter-spacing: -0.04em;
       }
 
-      .brand strong {
-        display: block;
-        font-size: 15px;
-        line-height: 1.2;
-      }
-
-      .brand span {
-        display: block;
+      .brand-subtitle {
         margin-top: 2px;
+        overflow: hidden;
         color: var(--muted);
         font-size: 13px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
-      .status-pill {
+      .pill {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        min-height: 36px;
-        padding: 0 13px;
-        border: 1px solid #bfe7d3;
+        min-height: 38px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
         border-radius: 999px;
-        background: #e8f8f0;
-        color: #087044;
+        background: var(--card);
+        color: var(--muted);
         font-size: 13px;
         font-weight: 800;
         white-space: nowrap;
+      }
+
+      .pill.ok {
+        border-color: #bdebdc;
+        background: var(--green-soft);
+        color: #057456;
+      }
+
+      .pill.warn {
+        border-color: #f7d7a2;
+        background: var(--amber-soft);
+        color: var(--amber);
       }
 
       .pulse {
         position: relative;
         width: 9px;
         height: 9px;
-        border-radius: 99px;
-        background: var(--ok);
+        border-radius: 999px;
+        background: currentColor;
       }
 
       .pulse::after {
         content: "";
         position: absolute;
         inset: -6px;
+        border: 2px solid currentColor;
         border-radius: inherit;
-        border: 2px solid rgba(22, 167, 101, 0.24);
-        animation: ping 1.8s ease-out infinite;
+        opacity: 0.24;
+        animation: pulse 1.8s ease-out infinite;
       }
 
-      @keyframes ping {
-        0% {
-          transform: scale(0.72);
-          opacity: 1;
+      @keyframes pulse {
+        from {
+          transform: scale(0.7);
+          opacity: 0.42;
         }
-        100% {
-          transform: scale(1.5);
+        to {
+          transform: scale(1.65);
           opacity: 0;
         }
       }
 
-      .hero-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.9fr);
-        gap: 20px;
-        margin-top: 22px;
-      }
-
       .hero {
-        border-radius: 28px;
-        padding: 34px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 280px;
+        gap: 1px;
         overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: var(--line);
+        box-shadow: var(--shadow);
       }
 
-      .eyebrow {
-        display: inline-flex;
-        border: 1px solid #bfe3df;
-        border-radius: 999px;
-        background: #ecfbf8;
-        color: #087568;
-        padding: 8px 12px;
-        font-size: 12px;
-        font-weight: 900;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
+      .hero-main,
+      .hero-side,
+      .card {
+        background: var(--card);
+      }
+
+      .hero-main {
+        padding: 34px;
       }
 
       h1 {
-        max-width: 760px;
-        margin: 18px 0 12px;
-        font-size: clamp(36px, 6vw, 72px);
-        line-height: 0.94;
-        letter-spacing: -0.06em;
-      }
-
-      .hero p {
-        max-width: 720px;
         margin: 0;
+        max-width: 720px;
+        font-size: clamp(36px, 6vw, 64px);
+        line-height: 0.96;
+        letter-spacing: -0.065em;
+      }
+
+      .lead {
+        max-width: 620px;
+        margin: 16px 0 0;
         color: var(--muted);
-        font-size: 17px;
-        line-height: 1.6;
+        font-size: 16px;
+        line-height: 1.65;
       }
 
-      .signals {
+      .hero-side {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 12px;
-        margin-top: 28px;
+        align-content: center;
+        gap: 10px;
+        padding: 28px;
       }
 
-      .signal-card {
-        border-radius: 18px;
-        padding: 16px;
-        box-shadow: none;
-      }
-
-      .signal-card span {
-        display: block;
+      .timer-label {
         color: var(--muted);
         font-size: 12px;
-        font-weight: 800;
+        font-weight: 900;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
       }
 
-      .signal-card strong {
-        display: block;
-        margin-top: 8px;
+      .timer {
+        font-variant-numeric: tabular-nums;
+        font-size: 34px;
+        font-weight: 900;
+        letter-spacing: -0.05em;
+      }
+
+      .timer-note {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 16px;
+      }
+
+      .card {
+        min-height: 112px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
+      }
+
+      .label {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .value {
+        margin-top: 12px;
         overflow: hidden;
-        font-size: 18px;
+        font-size: 21px;
+        font-weight: 900;
+        letter-spacing: -0.04em;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
-      .startup-panel {
-        border-radius: 28px;
-        padding: 24px;
-      }
-
-      .startup-panel h2,
-      .endpoint-card h2 {
-        margin: 0;
-        font-size: 16px;
-        letter-spacing: -0.02em;
-      }
-
-      .startup-list {
-        display: grid;
-        gap: 12px;
-        margin-top: 22px;
-      }
-
-      .startup-row {
-        display: grid;
-        grid-template-columns: 20px 1fr auto;
-        align-items: center;
-        gap: 12px;
-        padding: 13px;
-        border: 1px solid var(--line);
-        border-radius: 16px;
-        background: var(--soft);
-      }
-
-      .dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: var(--ok);
-        box-shadow: 0 0 0 5px rgba(22, 167, 101, 0.12);
-      }
-
-      .dot.warn {
-        background: var(--warn);
-        box-shadow: 0 0 0 5px rgba(229, 123, 0, 0.14);
-      }
-
-      .startup-row strong {
-        display: block;
-        font-size: 14px;
-      }
-
-      .startup-row small {
-        color: var(--muted);
-        font-size: 12px;
-      }
-
-      .startup-row code {
-        color: var(--muted);
-        font-size: 12px;
-      }
-
-      .endpoint-grid {
+      .endpoints {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
-        margin-top: 20px;
-      }
-
-      .endpoint-card {
-        border-radius: 24px;
-        padding: 20px;
-      }
-
-      .endpoint-list {
-        display: grid;
-        gap: 9px;
+        gap: 12px;
         margin-top: 16px;
       }
 
-      .endpoint-list a {
+      .endpoint {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 14px;
-        min-height: 48px;
-        padding: 10px 12px;
+        gap: 12px;
+        min-height: 56px;
+        padding: 0 16px;
         border: 1px solid var(--line);
-        border-radius: 15px;
-        background: #f8fafc;
+        border-radius: 18px;
+        background: var(--card);
+        box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
       }
 
-      .endpoint-list a:hover {
-        border-color: #a9d8d2;
-        background: #eefbf8;
+      .endpoint:hover {
+        border-color: #bddbd5;
+        background: #fbfefc;
       }
 
-      .endpoint-list span {
-        font-weight: 800;
+      .endpoint span {
+        font-size: 14px;
+        font-weight: 900;
       }
 
-      .endpoint-list code {
+      .endpoint code {
         color: var(--muted);
         font-size: 12px;
       }
@@ -409,7 +333,7 @@ export function renderApiHome(options: ApiHomeOptions): string {
         align-items: center;
         justify-content: space-between;
         gap: 16px;
-        margin-top: 20px;
+        margin-top: 18px;
         color: var(--muted);
         font-size: 13px;
       }
@@ -419,10 +343,10 @@ export function renderApiHome(options: ApiHomeOptions): string {
         font-weight: 800;
       }
 
-      @media (max-width: 860px) {
+      @media (max-width: 820px) {
         .shell {
-          width: min(100% - 22px, 680px);
-          padding-top: 18px;
+          width: min(100% - 22px, 620px);
+          padding: 20px 0 28px;
         }
 
         .topbar,
@@ -431,118 +355,107 @@ export function renderApiHome(options: ApiHomeOptions): string {
           flex-direction: column;
         }
 
-        .hero-grid,
-        .signals,
-        .endpoint-grid {
+        .hero,
+        .grid,
+        .endpoints {
           grid-template-columns: 1fr;
         }
 
-        .hero,
-        .startup-panel,
-        .endpoint-card {
-          border-radius: 22px;
-        }
-
-        .hero {
+        .hero-main,
+        .hero-side {
           padding: 24px;
-        }
-
-        .startup-row {
-          grid-template-columns: 18px 1fr;
-        }
-
-        .startup-row code {
-          grid-column: 2;
         }
       }
     </style>
   </head>
   <body>
     <main class="shell">
-      <nav class="topbar" aria-label="Service summary">
+      <header class="topbar">
         <div class="brand">
           <div class="mark">vdl</div>
           <div>
-            <strong>VDL Fulfilment Ops</strong>
-            <span>${escapeHtml(options.origin)}</span>
+            <div class="brand-title">Fulfilment Ops API</div>
+            <div class="brand-subtitle">${escapeHtml(options.origin)}</div>
           </div>
         </div>
-        <div class="status-pill"><span class="pulse"></span> API online</div>
-      </nav>
+        <div class="pill ${statusTone}"><span class="pulse"></span>${escapeHtml(statusLabel)}</div>
+      </header>
 
-      <section class="hero-grid">
-        <div class="hero">
-          <div class="eyebrow">Inventory Eye API</div>
-          <h1>Warehouse service layer is running.</h1>
-          <p>
-            RFID intake, inventory control, order fulfilment, gate verification, auditing,
-            and tenant operations are available from this backend.
-          </p>
-
-          <div class="signals">
-            <div class="signal-card">
-              <span>Environment</span>
-              <strong>${escapeHtml(env)}</strong>
-            </div>
-            <div class="signal-card">
-              <span>Database</span>
-              <strong>${escapeHtml(dbState)}</strong>
-            </div>
-            <div class="signal-card">
-              <span>Uptime</span>
-              <strong>${escapeHtml(uptime)}</strong>
-            </div>
-          </div>
+      <section class="hero">
+        <div class="hero-main">
+          <h1>Backend service is online.</h1>
+          <p class="lead">A minimal status surface for the RFID warehouse API, hardware events, inventory, orders, users, and audit operations.</p>
         </div>
-
-        <aside class="startup-panel">
-          <h2>Service startup</h2>
-          <div class="startup-list">
-            <div class="startup-row">
-              <span class="dot"></span>
-              <div>
-                <strong>HTTP gateway</strong>
-                <small>Express request pipeline active</small>
-              </div>
-              <code>v${escapeHtml(options.version)}</code>
-            </div>
-            <div class="startup-row">
-              <span class="dot${dbConnected ? "" : " warn"}"></span>
-              <div>
-                <strong>MongoDB</strong>
-                <small>${escapeHtml(dbConnected ? "Connected and accepting operations" : dbState)}</small>
-              </div>
-              <code>/health</code>
-            </div>
-            <div class="startup-row">
-              <span class="dot"></span>
-              <div>
-                <strong>RFID gateway</strong>
-                <small>Reader and gate event routes mounted</small>
-              </div>
-              <code>/rfid</code>
-            </div>
-            <div class="startup-row">
-              <span class="dot"></span>
-              <div>
-                <strong>Audit trail</strong>
-                <small>Protected API activity logging enabled</small>
-              </div>
-              <code>/audit</code>
-            </div>
-          </div>
+        <aside class="hero-side">
+          <div class="timer-label">Live uptime</div>
+          <div id="uptime" class="timer" data-uptime-ms="${Math.max(0, Math.floor(options.uptimeMs))}">${escapeHtml(uptime)}</div>
+          <div class="timer-note">Counting from the current process start.</div>
         </aside>
       </section>
 
-      <section class="endpoint-grid" aria-label="Endpoint groups">
-        ${endpointMarkup}
+      <section class="grid" aria-label="Service facts">
+        <div class="card">
+          <div class="label">Database</div>
+          <div class="value">${escapeHtml(dbState)}</div>
+        </div>
+        <div class="card">
+          <div class="label">Environment</div>
+          <div class="value">${escapeHtml(environment)}</div>
+        </div>
+        <div class="card">
+          <div class="label">Requests</div>
+          <div class="value">${escapeHtml(String(options.requestCount))}</div>
+        </div>
+        <div class="card">
+          <div class="label">Version</div>
+          <div class="value">v${escapeHtml(options.version)}</div>
+        </div>
+      </section>
+
+      <section class="endpoints" aria-label="Primary endpoints">
+        ${endpointLink("Health", "/health")}
+        ${endpointLink("RFID", "/rfid")}
+        ${endpointLink("Inventory", "/inventory")}
+        ${endpointLink("Orders", "/orders")}
+        ${endpointLink("Audit", "/audit")}
+        ${endpointLink("Status JSON", "/status.json")}
       </section>
 
       <footer class="footer">
-        <span>Machine-readable service status remains available at <code>/health</code>.</span>
-        <span>Requests served since boot: ${escapeHtml(String(options.requestCount))}</span>
+        <span>Machine-readable checks stay on <code>/health</code>.</span>
+        <span>VDL Fulfilment Ops</span>
       </footer>
     </main>
+
+    <script>
+      (function () {
+        var node = document.getElementById("uptime");
+        if (!node) return;
+        var initial = Number(node.getAttribute("data-uptime-ms") || "0");
+        var startedAt = Date.now() - initial;
+
+        function pad(value) {
+          return String(value).padStart(2, "0");
+        }
+
+        function label(ms) {
+          var total = Math.max(0, Math.floor(ms / 1000));
+          var days = Math.floor(total / 86400);
+          var hours = Math.floor((total % 86400) / 3600);
+          var minutes = Math.floor((total % 3600) / 60);
+          var seconds = total % 60;
+          if (days > 0) return days + "d " + pad(hours) + ":" + pad(minutes) + ":" + pad(seconds);
+          return pad(hours) + ":" + pad(minutes) + ":" + pad(seconds);
+        }
+
+        function tick() {
+          node.textContent = label(Date.now() - startedAt);
+        }
+
+        tick();
+        setInterval(tick, 1000);
+      })();
+    </script>
   </body>
 </html>`;
 }
