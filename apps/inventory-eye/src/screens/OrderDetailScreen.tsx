@@ -255,8 +255,7 @@ export function OrderDetailScreen({ navigation, route }: Props) {
 
       <Card>
         <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>RFID fulfillment stages</Text>
-        <MutedText>This order should move through reserve, gate authorization, and verified exit in that order.</MutedText>
-        <View style={{ marginTop: 12, gap: 10 }}>
+        <View style={{ gap: 10 }}>
           {stageSummary.map((stage) => (
             <ListRow key={stage.label} title={stage.label} subtitle={stage.value} right={<Badge label={stage.value} tone={stage.tone} />} />
           ))}

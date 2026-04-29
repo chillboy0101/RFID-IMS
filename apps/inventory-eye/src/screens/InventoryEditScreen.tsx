@@ -328,15 +328,6 @@ export function InventoryEditScreen({ navigation, route }: Props) {
       />
       {error ? <ErrorText>{error}</ErrorText> : null}
 
-      <Card>
-        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>{id ? "Operational note" : "Create the SKU first"}</Text>
-        <MutedText>
-          {id
-            ? "Use this form for product master data and stock corrections. Use RFID Hub for per-unit receiving, tag assignment, gate authorization, and exit verification."
-            : "This form creates the product master record. After the item exists, receive the physical units and bind their RFID tags in RFID Hub so the warehouse flow stays traceable."}
-        </MutedText>
-      </Card>
-
       {isDesktopWeb ? (
         <>
           <View style={{ flexDirection: "row", gap: theme.spacing.md, alignItems: "flex-start" }}>
@@ -412,9 +403,10 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                 <TextField label="Custom status" value={status} onChangeText={setStatus} placeholder="active" autoCapitalize="none" />
                 <View style={{ height: 12 }} />
                 <Text style={[theme.typography.label, { color: theme.colors.text, marginBottom: 8 }]}>RFID handoff</Text>
-                <MutedText>
-                  Create and edit the SKU here. Use RFID Hub when the physical units arrive so receiving, tag binding, authorization, and exit verification stay on the same workflow.
-                </MutedText>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  <Badge label="SKU master" tone="default" />
+                  <Badge label="RFID in Hub" tone="primary" />
+                </View>
                 {rfidTagId ? (
                   <View style={{ marginTop: 10 }}>
                     <Badge label={`Legacy RFID tag: ${rfidTagId}`} tone="warning" />
@@ -711,9 +703,10 @@ export function InventoryEditScreen({ navigation, route }: Props) {
             <TextField label="Custom status" value={status} onChangeText={setStatus} placeholder="active" autoCapitalize="none" />
             <View style={{ height: 12 }} />
             <Text style={[theme.typography.label, { color: theme.colors.text, marginBottom: 8 }]}>RFID handoff</Text>
-            <MutedText>
-              This form owns the SKU master record. Use RFID Hub when the physical units arrive or when tags need to change.
-            </MutedText>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              <Badge label="SKU master" tone="default" />
+              <Badge label="RFID in Hub" tone="primary" />
+            </View>
             {rfidTagId ? (
               <View style={{ marginTop: 10 }}>
                 <Badge label={`Legacy RFID tag: ${rfidTagId}`} tone="warning" />

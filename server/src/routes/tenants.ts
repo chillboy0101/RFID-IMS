@@ -1,16 +1,30 @@
 import express from "express";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 import { requireAuth, requireRole, type AuthRequest } from "../middleware/auth.js";
+import { setAuditContext } from "../middleware/audit.js";
 import { requireTenant, type TenantRequest } from "../middleware/tenant.js";
 import { AuthSessionModel } from "../models/AuthSession.js";
 import { TenantModel } from "../models/Tenant.js";
-import { TenantAuditLogModel } from "../models/TenantAuditLog.js";
 import { TenantMembershipModel } from "../models/TenantMembership.js";
 import { UserModel, userRoles, type UserRole } from "../models/User.js";
+import { resolveAppBaseUrl } from "../utils/appUrl.js";
+import { buildProvisionedAccountEmail, sendEmail } from "../utils/email.js";
 
 const router = express.Router();
+
+function createTemporaryPassword(): string {
+  return `VDL-${crypto.randomBytes(6).toString("base64url")}`;
+}
+
+type CreatedTenantUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+};
 
 router.use(requireAuth);
 
@@ -150,6 +164,19 @@ router.post("/:id/sessions/:jti/revoke", requireTenant, requireRole("admin"), as
     await session.save();
   }
 
+  setAuditContext(res, {
+    type: "tenants.session.revoke",
+    category: "tenants",
+    entityType: "session",
+    entityId: cleanJti,
+    summary: "Revoked tenant session",
+    targetUserId: String(session.userId),
+    metadata: {
+      tenantName: tenant.name,
+      tenantSlug: tenant.slug,
+    },
+  });
+
   res.json({ ok: true });
 });
 
@@ -243,24 +270,26 @@ router.post("/:id/members", requireTenant, requireRole("admin"), async (req: Ten
     { upsert: true, new: true }
   ).exec();
 
-  if (!existing) {
-    await TenantAuditLogModel.create({
-      tenantId: tenant._id,
-      actorUserId: auth.id,
-      type: "membership_add",
-      targetUserId: user._id,
-      toRole: membership.role,
-    });
-  } else if (String(existing.role) !== String(membership.role)) {
-    await TenantAuditLogModel.create({
-      tenantId: tenant._id,
-      actorUserId: auth.id,
-      type: "membership_role_change",
-      targetUserId: user._id,
-      fromRole: existing.role,
-      toRole: membership.role,
-    });
-  }
+  const membershipChanged = !existing || String(existing.role) !== String(membership.role);
+  setAuditContext(res, {
+    type: !existing ? "tenants.membership.add" : membershipChanged ? "tenants.membership.role_change" : "tenants.membership.upsert",
+    category: "tenants",
+    entityType: "tenant_membership",
+    entityId: `${tenant._id.toString()}:${user._id.toString()}`,
+    entityLabel: `${user.name} (${user.email})`,
+    summary: !existing
+      ? `Added ${user.name} to ${tenant.name}`
+      : membershipChanged
+        ? `Changed ${user.name} membership role`
+        : `Updated ${user.name} membership`,
+    targetUserId: user._id.toString(),
+    fromRole: existing?.role,
+    toRole: membership.role,
+    metadata: {
+      tenantName: tenant.name,
+      tenantSlug: tenant.slug,
+    },
+  });
 
   res.status(201).json({
     ok: true,
@@ -293,20 +322,18 @@ router.post("/:id/users", requireTenant, requireRole("admin"), async (req: Tenan
     return;
   }
 
-  const { name, email, password, role, makeSuperAdmin } = req.body as {
+  const { name, email, role, makeSuperAdmin } = req.body as {
     name?: string;
     email?: string;
-    password?: string;
     role?: UserRole;
     makeSuperAdmin?: boolean;
   };
   const cleanEmail = String(email ?? "").toLowerCase().trim();
   const cleanName = String(name ?? "").trim();
-  const cleanPassword = String(password ?? "");
   const memberRole = role && userRoles.includes(role) ? role : ("inventory_staff" as UserRole);
 
-  if (!cleanName || !cleanEmail || !cleanPassword) {
-    res.status(400).json({ ok: false, error: "name, email and password are required" });
+  if (!cleanName || !cleanEmail) {
+    res.status(400).json({ ok: false, error: "name and email are required" });
     return;
   }
 
@@ -321,33 +348,107 @@ router.post("/:id/users", requireTenant, requireRole("admin"), async (req: Tenan
   const actorEmail = String((actor as any)?.email ?? "").toLowerCase().trim();
   const canMakeSuperAdmin = Boolean(makeSuperAdmin) && actorEmail && actorEmail === superAdminEmail;
 
-  const passwordHash = await bcrypt.hash(cleanPassword, 12);
-  const user = await UserModel.create({
-    name: cleanName,
+  const temporaryPassword = createTemporaryPassword();
+  const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+
+  const session = await mongoose.startSession();
+  let userId: string | null = null;
+  let createdUser: CreatedTenantUser | null = null;
+
+  try {
+    await session.withTransaction(async () => {
+      const userDocs = await UserModel.create(
+        [
+          {
+            name: cleanName,
+            email: cleanEmail,
+            passwordHash,
+            emailVerified: true,
+            mustChangePassword: true,
+            ...(canMakeSuperAdmin ? { role: "admin" } : null),
+          },
+        ],
+        { session }
+      );
+
+      const user = userDocs[0]!;
+      userId = user._id.toString();
+      createdUser = {
+        id: userId,
+        name: user.name,
+        email: user.email,
+        role: user.role as UserRole,
+      };
+
+      await TenantMembershipModel.findOneAndUpdate(
+        { tenantId: tenant._id, userId: user._id },
+        { $set: { role: memberRole } },
+        { upsert: true, new: true, session }
+      ).exec();
+    });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Failed to create user" });
+    return;
+  } finally {
+    await session.endSession();
+  }
+
+  if (!createdUser || !userId) {
+    res.status(500).json({ ok: false, error: "Failed to create user" });
+    return;
+  }
+  const provisionedUser = createdUser as CreatedTenantUser;
+
+  const appBaseUrl = resolveAppBaseUrl(req) ?? "http://localhost:8081";
+  const loginUrl = `${appBaseUrl}/login`;
+  const emailMessage = buildProvisionedAccountEmail({
     email: cleanEmail,
-    passwordHash,
-    mustChangePassword: true,
-    ...(canMakeSuperAdmin ? { role: "admin" } : null),
+    loginUrl,
+    roleLabel: canMakeSuperAdmin ? "super_admin" : memberRole,
+    temporaryPassword,
+    tenantName: tenant.name,
+  });
+  const emailSent = await sendEmail({
+    to: cleanEmail,
+    subject: emailMessage.subject,
+    html: emailMessage.html,
+    text: emailMessage.text,
   });
 
-  await TenantMembershipModel.findOneAndUpdate(
-    { tenantId: tenant._id, userId: user._id },
-    { $set: { role: memberRole } },
-    { upsert: true, new: true }
-  ).exec();
+  if (!emailSent) {
+    await Promise.all([
+      TenantMembershipModel.deleteMany({ tenantId: tenant._id, userId }).exec(),
+      UserModel.deleteOne({ _id: userId }).exec(),
+    ]);
+    res.status(502).json({
+      ok: false,
+      error: "User account was not created because the temporary password email could not be delivered.",
+    });
+    return;
+  }
 
-  await TenantAuditLogModel.create({
-    tenantId: tenant._id,
-    actorUserId: auth.id,
-    type: "membership_add",
-    targetUserId: user._id,
+  setAuditContext(res, {
+    type: "tenants.user.create",
+    category: "tenants",
+    entityType: "user",
+    entityId: provisionedUser.id,
+    entityLabel: `${provisionedUser.name} (${provisionedUser.email})`,
+    summary: `Created ${provisionedUser.name} in ${tenant.name}`,
+    targetUserId: provisionedUser.id,
     toRole: memberRole,
+    metadata: {
+      tenantName: tenant.name,
+      tenantSlug: tenant.slug,
+      membershipRole: memberRole,
+      notification: "email",
+    },
   });
 
   res.status(201).json({
     ok: true,
-    user: { id: user._id.toString(), name: user.name, email: user.email, role: user.role },
-    membership: { tenantId: tenant._id.toString(), userId: user._id.toString(), role: memberRole },
+    user: provisionedUser,
+    membership: { tenantId: tenant._id.toString(), userId: provisionedUser.id, role: memberRole },
+    notification: { email: cleanEmail, delivered: true },
   });
 });
 
@@ -421,12 +522,20 @@ router.delete("/:id/members/:userId", requireTenant, requireRole("admin"), async
     return;
   }
 
-  await TenantAuditLogModel.create({
-    tenantId: tenant._id,
-    actorUserId: auth.id,
-    type: "membership_remove",
+  const targetUser = await UserModel.findById(userId).select({ name: 1, email: 1 }).exec();
+  setAuditContext(res, {
+    type: "tenants.membership.remove",
+    category: "tenants",
+    entityType: "tenant_membership",
+    entityId: `${tenant._id.toString()}:${userId}`,
+    entityLabel: targetUser ? `${targetUser.name} (${targetUser.email})` : userId,
+    summary: targetUser ? `Removed ${targetUser.name} from ${tenant.name}` : "Removed tenant membership",
     targetUserId: userId,
     fromRole: membership.role,
+    metadata: {
+      tenantName: tenant.name,
+      tenantSlug: tenant.slug,
+    },
   });
 
   res.json({ ok: true });

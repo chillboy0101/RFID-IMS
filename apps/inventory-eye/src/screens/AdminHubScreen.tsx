@@ -20,6 +20,11 @@ export function AdminHubScreen({ navigation }: Props) {
         onPress={() => navigation.navigate("Integrations")}
       />
       <ListRow
+        title="Audit Trail"
+        subtitle="Track user, admin, and hardware actions across the branch"
+        onPress={() => navigation.navigate("Audit")}
+      />
+      <ListRow
         title="All Feedback"
         subtitle="Review and manage user feedback"
         onPress={() => navigation.navigate("Feedback")}

@@ -48,12 +48,11 @@ POST /rfid/gate-events
 
 ### Reader Payload
 
-Use `tagId` for RFID reads whenever possible. `barcode` is optional fallback for mixed workflows.
+Preferred autonomous payload: send a single `value` and let the server resolve whether it is an RFID tag or a barcode. `tagId` and `barcode` are still supported when the reader middleware already knows the identity type.
 
 ```json
 {
-  "tagId": "E20034120123456789012345",
-  "barcode": "",
+  "value": "E20034120123456789012345",
   "location": "EXIT_MAIN",
   "source": "fx9600-exit-main",
   "observedAt": "2026-04-28T23:45:00.000Z"
@@ -64,7 +63,7 @@ Optional fields are preserved in the raw RFID event payload, so middleware-speci
 
 ```json
 {
-  "tagId": "E20034120123456789012345",
+  "value": "E20034120123456789012345",
   "location": "EXIT_MAIN",
   "source": "fx9600-exit-main",
   "observedAt": "2026-04-28T23:45:00.000Z",
@@ -81,6 +80,7 @@ Optional fields are preserved in the raw RFID event payload, so middleware-speci
 ```json
 {
   "ok": true,
+  "mode": "tagId",
   "decision": "ALLOW",
   "authorized": true,
   "authorizationId": "68101234567890abcdef1234",
@@ -106,6 +106,7 @@ If the tag is not authorized to leave, the same endpoint returns:
 ```json
 {
   "ok": true,
+  "mode": "tagId",
   "decision": "DENY",
   "authorized": false,
   "remainingAuthorizations": 0,
@@ -186,7 +187,17 @@ X-Tenant-ID: <tenant-id>
 Content-Type: application/json
 ```
 
-Payload using RFID:
+Preferred autonomous payload:
+
+```json
+{
+  "token": "exit_abcdef0123456789abcdef01",
+  "value": "E20034120123456789012345",
+  "observedAt": "2026-04-28T23:46:30.000Z"
+}
+```
+
+Explicit RFID payload:
 
 ```json
 {
@@ -196,7 +207,7 @@ Payload using RFID:
 }
 ```
 
-Payload using barcode fallback:
+Explicit barcode fallback payload:
 
 ```json
 {
@@ -211,6 +222,7 @@ Response:
 ```json
 {
   "ok": true,
+  "mode": "tagId",
   "authorized": true,
   "decision": "ALLOW",
   "remainingAuthorizations": 2,

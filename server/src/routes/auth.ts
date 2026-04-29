@@ -125,99 +125,18 @@ router.get("/", async (_req, res) => {
   res.json({
     ok: true,
     endpoints: {
-      register: "POST /auth/register",
       login: "POST /auth/login",
       me: "GET /auth/me (Bearer token)",
+      forgotPassword: "POST /auth/forgot-password",
     },
   });
 });
 
-router.post("/register", async (req, res) => {
-  const { name, email, password } = req.body as {
-    name?: string;
-    email?: string;
-    password?: string;
-  };
-
-  if (!name || !email || !password) {
-    res.status(400).json({ ok: false, error: "Missing required fields" });
-    return;
-  }
-
-  const cleanEmail = email.toLowerCase().trim();
-  const existing = await UserModel.findOne({ email: cleanEmail }).exec();
-  if (existing) {
-    res.status(409).json({ ok: false, error: "Email already in use" });
-    return;
-  }
-
-  const passwordHash = await bcrypt.hash(password, 12);
-
-  const session = await mongoose.startSession();
-  try {
-    let userId: string | null = null;
-    let verificationEmail:
-      | { to: string; subject: string; html: string; text: string }
-      | null = null;
-
-    await session.withTransaction(async () => {
-      const user = await UserModel.create(
-        [
-          {
-            name: name.trim(),
-            email: cleanEmail,
-            passwordHash,
-            emailVerified: false,
-          },
-        ],
-        { session }
-      );
-
-      userId = user[0]!._id.toString();
-
-      // Create verification token
-      const token = crypto.randomBytes(32).toString("hex");
-      const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRES_MINUTES * 60 * 1000);
-
-      // Import VerificationTokenModel here to avoid circular dependency issues
-      const { VerificationTokenModel } = await import("../models/VerificationToken.js");
-      await VerificationTokenModel.create(
-        [
-          {
-            userId: user[0]!._id,
-            email: cleanEmail,
-            token,
-            expiresAt,
-          },
-        ],
-        { session }
-      );
-
-      const baseUrl = resolveAppBaseUrl(req) ?? `http://localhost:${process.env.PORT ?? 4000}`;
-      const { subject, html, text } = buildVerificationEmail(token, baseUrl, EMAIL_VERIFICATION_EXPIRES_MINUTES);
-      verificationEmail = { to: cleanEmail, subject, html, text };
-    });
-
-    if (!userId) {
-      res.status(500).json({ ok: false, error: "Failed to create user" });
-      return;
-    }
-
-    const emailSent = verificationEmail ? await sendEmail(verificationEmail) : false;
-
-    res.status(201).json({
-      ok: true,
-      message: emailSent
-        ? "Account created. Please check your email to verify your account before logging in."
-        : "Account created, but we could not send the verification email just now. Please use resend verification from the login flow.",
-      email: cleanEmail,
-      emailSent,
-    });
-  } catch (e) {
-    res.status(400).json({ ok: false, error: e instanceof Error ? e.message : "Registration failed" });
-  } finally {
-    session.endSession();
-  }
+router.post("/register", async (_req, res) => {
+  res.status(403).json({
+    ok: false,
+    error: "Self-service account creation is disabled. Contact your administrator to create your account.",
+  });
 });
 
 router.post("/login", async (req, res) => {

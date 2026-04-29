@@ -6,9 +6,8 @@ import { useFocusEffect } from "@react-navigation/native";
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import type { MoreStackParamList } from "../navigation/types";
+import { formatTaskSessionRoute, taskSessionKindLabels, type TaskSessionKind } from "../progress/workflow";
 import { GLOBAL_AUTO_REFRESH_MS, AppButton, Badge, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
-
-type TaskSessionKind = "inventory_update" | "order_fulfillment" | "other";
 
 type Session = {
   _id: string;
@@ -16,6 +15,7 @@ type Session = {
   startedAt: string;
   endedAt?: string | null;
   createdAt?: string;
+  meta?: Record<string, unknown> | null;
 };
 
 type SummaryResponse = {
@@ -30,11 +30,20 @@ type Props = NativeStackScreenProps<MoreStackParamList, "Progress">;
 
 const kinds: TaskSessionKind[] = ["inventory_update", "order_fulfillment", "other"];
 
-const kindLabels: Record<TaskSessionKind, string> = {
-  inventory_update: "Inventory updates",
-  order_fulfillment: "Order fulfillment",
-  other: "Other",
-};
+function formatSessionLabel(session: Session): string {
+  return taskSessionKindLabels[session.kind] ?? session.kind;
+}
+
+function formatSessionMode(session: Session): string {
+  return session.meta?.mode === "automatic" ? "Automatic" : "Manual";
+}
+
+function buildSessionSubtitle(session: Session): string {
+  const routeLabel = formatTaskSessionRoute(session.meta ?? null);
+  const modeLabel = formatSessionMode(session);
+  const routeLine = routeLabel ? `${modeLabel}  |  ${routeLabel}` : modeLabel;
+  return `Start: ${new Date(session.startedAt).toLocaleString()}\nEnd: ${session.endedAt ? new Date(session.endedAt).toLocaleString() : "-"}\n${routeLine}`;
+}
 
 export function ProgressScreen({ navigation }: Props) {
   const { token } = useContext(AuthContext);
@@ -54,7 +63,6 @@ export function ProgressScreen({ navigation }: Props) {
   }, [navigation]);
 
   const [days, setDays] = useState("7");
-  const [kind, setKind] = useState<TaskSessionKind>("inventory_update");
   const [historyKind, setHistoryKind] = useState<TaskSessionKind | "">("");
 
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -63,18 +71,30 @@ export function ProgressScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState(false);
-  const [starting, setStarting] = useState(false);
   const loadInFlightRef = useRef(false);
 
   const openSession = useMemo(() => sessions.find((s) => !s.endedAt) ?? null, [sessions]);
+  const openSessionRouteLabel = useMemo(() => formatTaskSessionRoute(openSession?.meta ?? null), [openSession]);
 
   const filteredSessions = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return sessions.filter((s) => {
-      if (historyKind && s.kind !== historyKind) return false;
+    return sessions.filter((session) => {
+      if (historyKind && session.kind !== historyKind) return false;
       if (!t) return true;
-      const blob = `${s._id} ${s.kind} ${new Date(s.startedAt).toLocaleString()} ${s.endedAt ? new Date(s.endedAt).toLocaleString() : ""}`.toLowerCase();
-      return blob.includes(t) || s._id.slice(-6).toLowerCase().includes(t);
+
+      const blob = [
+        session._id,
+        session.kind,
+        formatSessionLabel(session),
+        formatSessionMode(session),
+        formatTaskSessionRoute(session.meta ?? null) ?? "",
+        new Date(session.startedAt).toLocaleString(),
+        session.endedAt ? new Date(session.endedAt).toLocaleString() : "",
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return blob.includes(t) || session._id.slice(-6).toLowerCase().includes(t);
     });
   }, [historyKind, q, sessions]);
 
@@ -82,12 +102,12 @@ export function ProgressScreen({ navigation }: Props) {
     if (!token) return;
     setError(null);
 
-    const [meRes, summaryRes] = await Promise.all([
+    const [sessionsRes, summaryRes] = await Promise.all([
       apiRequest<{ ok: true; sessions: Session[] }>("/progress/sessions/me", { method: "GET", token }),
       apiRequest<SummaryResponse>(`/progress/summary?days=${encodeURIComponent(days.trim() || "7")}`, { method: "GET", token }),
     ]);
 
-    setSessions(meRes.sessions);
+    setSessions(sessionsRes.sessions);
     setSummary(summaryRes);
   }, [days, token]);
 
@@ -132,41 +152,24 @@ export function ProgressScreen({ navigation }: Props) {
     return () => clearTimeout(id);
   }, [days, loadSafe]);
 
-  async function startSession() {
-    if (!token || starting) return;
-
-    setStarting(true);
-    setError(null);
-
-    try {
-      await apiRequest<{ ok: true; session: Session }>("/progress/sessions/start", {
-        method: "POST",
-        token,
-        body: JSON.stringify({ kind }),
-      });
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to start");
-    } finally {
-      setStarting(false);
+  const renderHistoryRows = () => {
+    if (loading) {
+      return <MutedText>Loading...</MutedText>;
     }
-  }
 
-  async function stopSession(id: string) {
-    if (!token) return;
-
-    setError(null);
-
-    try {
-      await apiRequest<{ ok: true; session: Session }>(`/progress/sessions/${id}/stop`, {
-        method: "POST",
-        token,
-      });
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to stop");
+    if (!filteredSessions.length) {
+      return <MutedText>{q.trim() ? "No matching sessions" : "No sessions"}</MutedText>;
     }
-  }
+
+    return filteredSessions.map((item) => (
+      <ListRow
+        key={item._id}
+        title={formatSessionLabel(item)}
+        subtitle={buildSessionSubtitle(item)}
+        right={item.endedAt ? <Badge label="Done" tone="success" /> : <Badge label="Open" tone="warning" />}
+      />
+    ));
+  };
 
   return (
     <Screen
@@ -182,10 +185,12 @@ export function ProgressScreen({ navigation }: Props) {
           <Card>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               <View style={{ flex: 1 }}>
-                <Text style={[theme.typography.h3, { color: theme.colors.text }]}>Today’s work</Text>
-                <MutedText style={{ marginTop: 6 }}>Start a timer for your current task and see your recent activity.</MutedText>
+                <Text style={[theme.typography.h3, { color: theme.colors.text }]}>Automatic tracking</Text>
+                <MutedText style={{ marginTop: 6 }}>
+                  Progress follows the workflow you are using in the app. Inventory, fulfilment, and support work are tracked in the background.
+                </MutedText>
               </View>
-              {openSession ? <Badge label="Running" tone="warning" size="header" /> : <Badge label="Not running" tone="default" size="header" />}
+              {openSession ? <Badge label="Tracking" tone="success" size="header" /> : <Badge label="Idle" tone="default" size="header" />}
             </View>
 
             <View style={{ height: 12 }} />
@@ -210,34 +215,15 @@ export function ProgressScreen({ navigation }: Props) {
             </View>
 
             <View style={{ height: 14 }} />
-            <Text style={{ color: theme.colors.textMuted, marginBottom: 8 }}>What are you working on?</Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-              {kinds.map((k) => (
-                <AppButton key={k} title={kindLabels[k]} onPress={() => setKind(k)} variant={k === kind ? "primary" : "secondary"} />
-              ))}
-            </View>
-
-            <View style={{ height: 12 }} />
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-              <AppButton title="Start" onPress={startSession} disabled={starting || !!openSession} loading={starting} />
-              <AppButton
-                title="Stop"
-                onPress={() => (openSession ? stopSession(openSession._id) : undefined)}
-                variant="danger"
-                disabled={!openSession}
-              />
-            </View>
-
-            <View style={{ height: 10 }} />
-            <View style={{ minHeight: 72, justifyContent: openSession ? "flex-start" : "center" }}>
+            <View style={{ minHeight: 84, justifyContent: openSession ? "flex-start" : "center" }}>
               {openSession ? (
                 <ListRow
-                  title={`Current: ${kindLabels[openSession.kind]}`}
-                  subtitle={new Date(openSession.startedAt).toLocaleString()}
+                  title={`Current: ${formatSessionLabel(openSession)}`}
+                  subtitle={`${formatSessionMode(openSession)}${openSessionRouteLabel ? `  |  ${openSessionRouteLabel}` : ""}\nStarted: ${new Date(openSession.startedAt).toLocaleString()}`}
                   right={null}
                 />
               ) : (
-                <MutedText>No open timer</MutedText>
+                <MutedText>No active workflow right now. A session starts automatically when you move through the app and pauses when you go idle or leave the app.</MutedText>
               )}
             </View>
           </Card>
@@ -246,58 +232,27 @@ export function ProgressScreen({ navigation }: Props) {
             <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>History</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
               <AppButton title="All" onPress={() => setHistoryKind("")} variant={!historyKind ? "primary" : "secondary"} />
-              {kinds.map((k) => (
+              {kinds.map((kind) => (
                 <AppButton
-                  key={k}
-                  title={kindLabels[k]}
-                  onPress={() => setHistoryKind(k)}
-                  variant={historyKind === k ? "primary" : "secondary"}
+                  key={kind}
+                  title={taskSessionKindLabels[kind]}
+                  onPress={() => setHistoryKind(kind)}
+                  variant={historyKind === kind ? "primary" : "secondary"}
                 />
               ))}
             </View>
-            <TextField value={q} onChangeText={setQ} placeholder="Search: kind or date" autoCapitalize="none" />
+            <TextField value={q} onChangeText={setQ} placeholder="Search: workflow, route, or date" autoCapitalize="none" />
             <View style={{ height: 12 }} />
-            {isWeb ? (
-              <View style={{ gap: 10, minHeight: 140, justifyContent: loading ? "center" : "flex-start" }}>
-                {loading ? (
-                  <MutedText>Loading...</MutedText>
-                ) : filteredSessions.length ? (
-                  filteredSessions.map((item) => (
-                    <ListRow
-                      key={item._id}
-                      title={item.kind}
-                      subtitle={`Start: ${new Date(item.startedAt).toLocaleString()}\nEnd: ${item.endedAt ? new Date(item.endedAt).toLocaleString() : "-"}`}
-                      right={item.endedAt ? <Badge label="Done" tone="success" /> : <Badge label="Open" tone="warning" />}
-                    />
-                  ))
-                ) : (
-                  <MutedText>{q.trim() ? "No matching sessions" : "No sessions"}</MutedText>
-                )}
-              </View>
-            ) : (
-              <FlatList
-                scrollEnabled={false}
-                data={filteredSessions}
-                keyExtractor={(s) => s._id}
-                ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-                ListEmptyComponent={
-                  loading ? <MutedText>Loading...</MutedText> : <MutedText>{q.trim() ? "No matching sessions" : "No sessions"}</MutedText>
-                }
-                renderItem={({ item }) => (
-                  <ListRow
-                    title={item.kind}
-                    subtitle={`Start: ${new Date(item.startedAt).toLocaleString()}\nEnd: ${item.endedAt ? new Date(item.endedAt).toLocaleString() : "-"}`}
-                    right={item.endedAt ? <Badge label="Done" tone="success" /> : <Badge label="Open" tone="warning" />}
-                  />
-                )}
-              />
-            )}
+            <View style={{ gap: 10, minHeight: 140, justifyContent: loading ? "center" : "flex-start" }}>{renderHistoryRows()}</View>
           </Card>
         </View>
       ) : (
         <>
           <Card>
-            <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Today’s work</Text>
+            <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Automatic tracking</Text>
+            <MutedText style={{ marginBottom: 12 }}>
+              Progress follows the workflow you are using in the app. Sessions pause when you go idle or leave the app.
+            </MutedText>
             <TextField label="Window days" value={days} onChangeText={setDays} keyboardType="numeric" />
             <View style={{ height: 12 }} />
 
@@ -313,30 +268,14 @@ export function ProgressScreen({ navigation }: Props) {
             </View>
 
             <View style={{ height: 14 }} />
-            <Text style={{ color: theme.colors.textMuted, marginBottom: 8 }}>What are you working on?</Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-              {kinds.map((k) => (
-                <AppButton key={k} title={kindLabels[k]} onPress={() => setKind(k)} variant={k === kind ? "primary" : "secondary"} />
-              ))}
-            </View>
-
-            <View style={{ height: 12 }} />
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-              <AppButton title="Start" onPress={startSession} disabled={starting || !!openSession} loading={starting} />
-              <AppButton
-                title="Stop"
-                onPress={() => (openSession ? stopSession(openSession._id) : undefined)}
-                variant="danger"
-                disabled={!openSession}
-              />
-              {openSession ? <Badge label="Running" tone="warning" /> : <Badge label="Not running" tone="default" />}
-            </View>
-
-            <View style={{ height: 10 }} />
             {openSession ? (
-              <ListRow title={`Current: ${kindLabels[openSession.kind]}`} subtitle={new Date(openSession.startedAt).toLocaleString()} right={null} />
+              <ListRow
+                title={`Current: ${formatSessionLabel(openSession)}`}
+                subtitle={`${formatSessionMode(openSession)}${openSessionRouteLabel ? `  |  ${openSessionRouteLabel}` : ""}\nStarted: ${new Date(openSession.startedAt).toLocaleString()}`}
+                right={<Badge label="Tracking" tone="success" />}
+              />
             ) : (
-              <MutedText>No open timer</MutedText>
+              <MutedText>No active workflow right now.</MutedText>
             )}
           </Card>
 
@@ -344,47 +283,30 @@ export function ProgressScreen({ navigation }: Props) {
             <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>History</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
               <AppButton title="All" onPress={() => setHistoryKind("")} variant={!historyKind ? "primary" : "secondary"} />
-              {kinds.map((k) => (
+              {kinds.map((kind) => (
                 <AppButton
-                  key={k}
-                  title={kindLabels[k]}
-                  onPress={() => setHistoryKind(k)}
-                  variant={historyKind === k ? "primary" : "secondary"}
+                  key={kind}
+                  title={taskSessionKindLabels[kind]}
+                  onPress={() => setHistoryKind(kind)}
+                  variant={historyKind === kind ? "primary" : "secondary"}
                 />
               ))}
             </View>
-            <TextField value={q} onChangeText={setQ} placeholder="Search: kind or date" autoCapitalize="none" />
+            <TextField value={q} onChangeText={setQ} placeholder="Search: workflow, route, or date" autoCapitalize="none" />
             <View style={{ height: 12 }} />
             {isWeb ? (
-              <View style={{ gap: 10 }}>
-                {loading ? (
-                  <MutedText>Loading...</MutedText>
-                ) : filteredSessions.length ? (
-                  filteredSessions.map((item) => (
-                    <ListRow
-                      key={item._id}
-                      title={item.kind}
-                      subtitle={`Start: ${new Date(item.startedAt).toLocaleString()}\nEnd: ${item.endedAt ? new Date(item.endedAt).toLocaleString() : "-"}`}
-                      right={item.endedAt ? <Badge label="Done" tone="success" /> : <Badge label="Open" tone="warning" />}
-                    />
-                  ))
-                ) : (
-                  <MutedText>{q.trim() ? "No matching sessions" : "No sessions"}</MutedText>
-                )}
-              </View>
+              <View style={{ gap: 10 }}>{renderHistoryRows()}</View>
             ) : (
               <FlatList
                 scrollEnabled={false}
                 data={filteredSessions}
-                keyExtractor={(s) => s._id}
+                keyExtractor={(session) => session._id}
                 ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-                ListEmptyComponent={
-                  loading ? <MutedText>Loading...</MutedText> : <MutedText>{q.trim() ? "No matching sessions" : "No sessions"}</MutedText>
-                }
+                ListEmptyComponent={loading ? <MutedText>Loading...</MutedText> : <MutedText>{q.trim() ? "No matching sessions" : "No sessions"}</MutedText>}
                 renderItem={({ item }) => (
                   <ListRow
-                    title={item.kind}
-                    subtitle={`Start: ${new Date(item.startedAt).toLocaleString()}\nEnd: ${item.endedAt ? new Date(item.endedAt).toLocaleString() : "-"}`}
+                    title={formatSessionLabel(item)}
+                    subtitle={buildSessionSubtitle(item)}
                     right={item.endedAt ? <Badge label="Done" tone="success" /> : <Badge label="Open" tone="warning" />}
                   />
                 )}

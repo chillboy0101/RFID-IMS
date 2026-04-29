@@ -137,6 +137,14 @@ type RecoveryOtpEmailInput = {
   expiresMinutes: number;
 };
 
+type ProvisionedAccountEmailInput = {
+  email: string;
+  loginUrl: string;
+  roleLabel: string;
+  temporaryPassword: string;
+  tenantName?: string | null;
+};
+
 export function buildResetPasswordEmail(token: string, baseUrl: string, expiresMinutes: number): { subject: string; html: string; text: string } {
   const resetUrl = `${baseUrl}/reset-password?token=${token}`;
   const subject = "Reset your RFID-IMS password";
@@ -367,6 +375,82 @@ ${verifyUrl}
 If you didn't create an account, you can safely ignore this email.
 
 This is an automated message from RFID Inventory Management System.
+`;
+
+  return { subject, html, text };
+}
+
+export function buildProvisionedAccountEmail(input: ProvisionedAccountEmailInput): { subject: string; html: string; text: string } {
+  const subject = "Your VDL Fulfilment Ops account is ready";
+  const escapedEmail = escapeHtml(input.email);
+  const escapedRole = escapeHtml(input.roleLabel);
+  const escapedPassword = escapeHtml(input.temporaryPassword);
+  const escapedLoginUrl = escapeHtml(input.loginUrl);
+  const escapedTenant = input.tenantName ? escapeHtml(input.tenantName) : null;
+  const branchLine = escapedTenant ? `<div class="detail-row"><span class="detail-label">Branch:</span> ${escapedTenant}</div>` : "";
+  const textBranchLine = input.tenantName ? `Branch: ${input.tenantName}\n` : "";
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #f4f4f5; margin: 0; padding: 20px; }
+    .container { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .header { background: #0B0F17; padding: 24px; text-align: center; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 20px; font-weight: 600; }
+    .content { padding: 32px 24px; }
+    .content p { color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 16px; }
+    .detail-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 18px 0; }
+    .detail-row { margin-bottom: 10px; color: #0f172a; font-size: 14px; line-height: 1.5; word-break: break-word; }
+    .detail-row:last-child { margin-bottom: 0; }
+    .detail-label { font-weight: 700; color: #475569; }
+    .password-box { background: #0B0F17; color: #ffffff; border-radius: 10px; padding: 16px; margin: 20px 0; text-align: center; font-size: 22px; font-weight: 800; letter-spacing: 2px; }
+    .button { display: inline-block; background: #0B0F17; color: #ffffff !important; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 15px; margin: 16px 0; }
+    .footer { padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; }
+    .footer p { color: #9ca3af; font-size: 13px; margin: 0; }
+    .token-box { background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; margin: 16px 0; word-break: break-all; font-family: monospace; font-size: 13px; color: #374151; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>VDL Fulfilment Ops</h1>
+    </div>
+    <div class="content">
+      <p>Hello,</p>
+      <p>An administrator created your VDL Fulfilment Ops account. Sign in with the temporary password below, then set a new password before continuing.</p>
+      <div class="detail-box">
+        <div class="detail-row"><span class="detail-label">Email:</span> ${escapedEmail}</div>
+        <div class="detail-row"><span class="detail-label">Access:</span> ${escapedRole}</div>
+        ${branchLine}
+      </div>
+      <div class="password-box">${escapedPassword}</div>
+      <p style="text-align: center;"><a href="${input.loginUrl}" class="button">Open Sign In</a></p>
+      <p>Or copy and paste this link into your browser:</p>
+      <div class="token-box">${escapedLoginUrl}</div>
+    </div>
+    <div class="footer">
+      <p>This is an automated message from RFID Inventory Management System.</p>
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+  const text = `VDL Fulfilment Ops - Account Ready
+
+Hello,
+
+An administrator created your VDL Fulfilment Ops account. Sign in with the temporary password below, then set a new password before continuing.
+
+Email: ${input.email}
+Access: ${input.roleLabel}
+${textBranchLine}Temporary password: ${input.temporaryPassword}
+
+Sign in: ${input.loginUrl}
 `;
 
   return { subject, html, text };

@@ -2,6 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 
 import { requireAuth, requireRole, type AuthRequest } from "../middleware/auth.js";
+import { setAuditContext } from "../middleware/audit.js";
 import { AuthSessionModel } from "../models/AuthSession.js";
 import { FeedbackModel } from "../models/Feedback.js";
 import { InventoryItemModel } from "../models/InventoryItem.js";
@@ -12,7 +13,6 @@ import { ReorderRequestModel } from "../models/ReorderRequest.js";
 import { RfidEventModel } from "../models/RfidEvent.js";
 import { TaskSessionModel } from "../models/TaskSession.js";
 import { TenantModel } from "../models/Tenant.js";
-import { TenantAuditLogModel } from "../models/TenantAuditLog.js";
 import { TenantMembershipModel } from "../models/TenantMembership.js";
 import { UserModel, userRoles, type UserRole, type UserDocument } from "../models/User.js";
 import { VendorModel } from "../models/Vendor.js";
@@ -260,6 +260,15 @@ router.post("/sessions/:jti/revoke", requireRole("admin"), async (req: AuthReque
     await session.save();
   }
 
+  setAuditContext(res, {
+    type: "admin.session.revoke",
+    category: "admin",
+    entityType: "session",
+    entityId: jti,
+    summary: "Revoked user session",
+    targetUserId: String(session.userId),
+  });
+
   res.json({ ok: true });
 });
 
@@ -356,6 +365,17 @@ router.patch("/users/:id/role", requireRole("admin"), async (req: AuthRequest, r
     return;
   }
 
+  setAuditContext(res, {
+    type: "admin.user.role_change",
+    category: "admin",
+    entityType: "user",
+    entityId: user._id.toString(),
+    entityLabel: `${user.name} (${user.email})`,
+    summary: `Changed role for ${user.name}`,
+    targetUserId: user._id.toString(),
+    toRole: user.role,
+  });
+
   res.json({
     ok: true,
     user: {
@@ -388,6 +408,16 @@ router.post("/users/:id/verify-email", requireRole("admin"), async (req: AuthReq
 
   user.emailVerified = true;
   await user.save();
+
+  setAuditContext(res, {
+    type: "admin.user.verify_email",
+    category: "admin",
+    entityType: "user",
+    entityId: user._id.toString(),
+    entityLabel: `${user.name} (${user.email})`,
+    summary: `Verified email for ${user.name}`,
+    targetUserId: user._id.toString(),
+  });
 
   res.json({
     ok: true,
@@ -442,13 +472,11 @@ router.delete("/users/:id", requireRole("admin"), async (req: AuthRequest, res) 
 
   const userId = user._id;
 
-  const [memberships, invitesCreated, invitesUsed, auditActor, auditTarget, orders, reorders, feedback, sessions, logs] =
+  const [memberships, invitesCreated, invitesUsed, orders, reorders, feedback, sessions, logs] =
     await Promise.all([
       TenantMembershipModel.deleteMany({ userId }).exec(),
       InviteModel.deleteMany({ createdByUserId: userId }).exec(),
       InviteModel.deleteMany({ usedByUserId: userId }).exec(),
-      TenantAuditLogModel.deleteMany({ actorUserId: userId }).exec(),
-      TenantAuditLogModel.deleteMany({ targetUserId: userId }).exec(),
       OrderModel.deleteMany({ createdByUserId: userId }).exec(),
       ReorderRequestModel.deleteMany({ requestedByUserId: userId }).exec(),
       FeedbackModel.deleteMany({ userId }).exec(),
@@ -458,6 +486,16 @@ router.delete("/users/:id", requireRole("admin"), async (req: AuthRequest, res) 
 
   await UserModel.deleteOne({ _id: userId }).exec();
 
+  setAuditContext(res, {
+    type: "admin.user.delete",
+    category: "admin",
+    entityType: "user",
+    entityId: userId.toString(),
+    entityLabel: user.email,
+    summary: `Deleted ${user.email}`,
+    targetUserId: userId.toString(),
+  });
+
   res.json({
     ok: true,
     deleted: {
@@ -465,8 +503,6 @@ router.delete("/users/:id", requireRole("admin"), async (req: AuthRequest, res) 
       memberships: (memberships as any).deletedCount ?? 0,
       invitesCreated: (invitesCreated as any).deletedCount ?? 0,
       invitesUsed: (invitesUsed as any).deletedCount ?? 0,
-      auditActor: (auditActor as any).deletedCount ?? 0,
-      auditTarget: (auditTarget as any).deletedCount ?? 0,
       orders: (orders as any).deletedCount ?? 0,
       reorders: (reorders as any).deletedCount ?? 0,
       feedback: (feedback as any).deletedCount ?? 0,

@@ -18,6 +18,8 @@ import vendorsRouter from "./routes/vendors.js";
 import reordersRouter from "./routes/reorders.js";
 import integrationsRouter from "./routes/integrations.js";
 import tenantsRouter from "./routes/tenants.js";
+import auditRouter from "./routes/audit.js";
+import { auditRequestLogger, captureAuditResponse } from "./middleware/audit.js";
 import { resolveAppBaseUrl } from "./utils/appUrl.js";
 
 dotenv.config();
@@ -129,6 +131,7 @@ function rateLimit(opts: { windowMs: number; max: number; keyPrefix: string }) {
 }
 
 app.use(express.json({ limit: "1mb" }));
+app.use(captureAuditResponse);
 
 const corsOrigin = process.env.CORS_ORIGIN;
 const corsAllowed = corsOrigin ? corsOrigin.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
@@ -159,7 +162,8 @@ app.use((req, res, next) => {
     req.path.startsWith("/rfid") ||
     req.path.startsWith("/vendors") ||
     req.path.startsWith("/reorders") ||
-    req.path.startsWith("/integrations");
+    req.path.startsWith("/integrations") ||
+    req.path.startsWith("/audit");
 
   if (isApiRequest) {
     res.setHeader("cache-control", "no-store");
@@ -168,6 +172,7 @@ app.use((req, res, next) => {
 });
 
 app.use(rateLimit({ windowMs: 60_000, max: 300, keyPrefix: "global" }));
+app.use(auditRequestLogger);
 
 app.use("/auth", rateLimit({ windowMs: 60_000, max: 30, keyPrefix: "auth" }));
 
@@ -279,6 +284,7 @@ app.use("/rfid", rfidRouter);
 app.use("/vendors", vendorsRouter);
 app.use("/reorders", reordersRouter);
 app.use("/integrations", integrationsRouter);
+app.use("/audit", auditRouter);
 app.use("/tenants", tenantsRouter);
 
 app.use((err: unknown, req: ReqWithId, res: Response, _next: express.NextFunction) => {

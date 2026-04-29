@@ -201,10 +201,6 @@ export function LoginScreen({ navigation }: Props) {
                 Forgot Password?
               </Text>
             </Pressable>
-
-            <View style={{ height: 10 }} />
-
-            <AppButton title="Create an account" onPress={() => navigation.navigate("Register")} variant="secondary" />
           </Card>
         </Form>
       </View>

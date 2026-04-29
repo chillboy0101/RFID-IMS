@@ -2,12 +2,64 @@ import express from "express";
 import mongoose from "mongoose";
 
 import { requireAuth, requireRole, type AuthRequest } from "../middleware/auth.js";
+import { setAuditContext } from "../middleware/audit.js";
 import { requireTenant, type TenantRequest } from "../middleware/tenant.js";
 import { InventoryLogModel } from "../models/InventoryLog.js";
 import { OrderModel } from "../models/Order.js";
 import { TaskSessionModel, taskSessionKinds, type TaskSessionKind } from "../models/TaskSession.js";
 
 const router = express.Router();
+
+const taskSessionKindLabels: Record<TaskSessionKind, string> = {
+  inventory_update: "Inventory updates",
+  order_fulfillment: "Order fulfillment",
+  other: "Other",
+};
+
+function openSessionFilter(tenantId: string, userId: string) {
+  return {
+    tenantId,
+    userId,
+    $or: [{ endedAt: { $exists: false } }, { endedAt: null }],
+  };
+}
+
+function formatTaskSessionKind(kind: TaskSessionKind): string {
+  return taskSessionKindLabels[kind] ?? kind;
+}
+
+function normalizeProgressMeta(meta: unknown): Record<string, unknown> | undefined {
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return undefined;
+  return { ...(meta as Record<string, unknown>) };
+}
+
+function applyProgressAuditContext(
+  res: express.Response,
+  session: mongoose.HydratedDocument<any>,
+  summary: string,
+  metadata?: Record<string, unknown>
+): void {
+  const kind = String(session.kind) as TaskSessionKind;
+  const kindLabel = formatTaskSessionKind(kind);
+  const sessionMeta = normalizeProgressMeta(session.meta) ?? {};
+  const routeLabel =
+    typeof sessionMeta.routeLabel === "string" && sessionMeta.routeLabel.trim() ? sessionMeta.routeLabel.trim() : undefined;
+
+  setAuditContext(res, {
+    type: String(metadata?.auditType ?? "progress.session.start"),
+    category: "progress",
+    entityType: "task_session",
+    entityId: session._id.toString(),
+    entityLabel: routeLabel || kindLabel,
+    summary,
+    metadata: {
+      kind,
+      kindLabel,
+      ...sessionMeta,
+      ...(metadata ?? {}),
+    },
+  });
+}
 
 router.use(requireAuth);
 router.use(requireTenant);
@@ -18,6 +70,7 @@ router.get("/", async (_req, res) => {
     endpoints: {
       startSession: "POST /progress/sessions/start",
       stopSession: "POST /progress/sessions/:id/stop",
+      autoSync: "POST /progress/sessions/auto-sync",
       mySessions: "GET /progress/sessions/me",
       summary: "GET /progress/summary?days=7",
       allSessions: "GET /progress/sessions/all (admin)",
@@ -40,6 +93,12 @@ router.post("/sessions/start", async (req: TenantRequest, res) => {
     return;
   }
 
+  const existingOpenSession = await TaskSessionModel.findOne(openSessionFilter(tenantId, auth.id)).sort({ startedAt: -1 }).exec();
+  if (existingOpenSession) {
+    res.status(409).json({ ok: false, error: "A work session is already running" });
+    return;
+  }
+
   const doc = await TaskSessionModel.create({
     tenantId,
     userId: auth.id,
@@ -47,6 +106,8 @@ router.post("/sessions/start", async (req: TenantRequest, res) => {
     startedAt: new Date(),
     meta,
   });
+
+  applyProgressAuditContext(res, doc, `Started ${formatTaskSessionKind(kind).toLowerCase()} session`, { mode: "manual" });
 
   res.status(201).json({ ok: true, session: doc });
 });
@@ -84,7 +145,133 @@ router.post("/sessions/:id/stop", async (req: TenantRequest, res) => {
   session.endedAt = new Date();
   await session.save();
 
+  applyProgressAuditContext(res, session, `Stopped ${formatTaskSessionKind(session.kind as TaskSessionKind).toLowerCase()} session`, {
+    auditType: "progress.session.stop",
+  });
+
   res.json({ ok: true, session });
+});
+
+router.post("/sessions/auto-sync", async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const {
+    kind,
+    routeName,
+    routeLabel,
+    reason,
+  } = req.body as {
+    kind?: TaskSessionKind | null;
+    reason?: string;
+    routeName?: string;
+    routeLabel?: string;
+  };
+
+  if (kind !== null && kind !== undefined && !taskSessionKinds.includes(kind)) {
+    res.status(400).json({ ok: false, error: "Invalid kind" });
+    return;
+  }
+
+  const openSessions = await TaskSessionModel.find(openSessionFilter(tenantId, auth.id)).sort({ startedAt: -1 }).exec();
+  const [latestOpenSession, ...extraOpenSessions] = openSessions;
+  const now = new Date();
+
+  for (const extraSession of extraOpenSessions) {
+    if (!extraSession.endedAt) {
+      extraSession.endedAt = now;
+      await extraSession.save();
+    }
+  }
+
+  if (kind === null || kind === undefined) {
+    if (!latestOpenSession) {
+      setAuditContext(res, { skip: true });
+      res.json({ ok: true, action: "none" });
+      return;
+    }
+
+    latestOpenSession.endedAt = now;
+    latestOpenSession.meta = {
+      ...(normalizeProgressMeta(latestOpenSession.meta) ?? {}),
+      mode: "automatic",
+      stopReason: reason ?? "hidden",
+    };
+    await latestOpenSession.save();
+
+    applyProgressAuditContext(
+      res,
+      latestOpenSession,
+      `Paused automatic ${formatTaskSessionKind(latestOpenSession.kind as TaskSessionKind).toLowerCase()} tracking`,
+      {
+        auditType: "progress.session.stop",
+        mode: "automatic",
+        stopReason: reason ?? "hidden",
+      }
+    );
+
+    res.json({ ok: true, action: "stopped", session: latestOpenSession });
+    return;
+  }
+
+  const automaticMeta = {
+    mode: "automatic",
+    routeName: typeof routeName === "string" && routeName.trim() ? routeName.trim() : undefined,
+    routeLabel: typeof routeLabel === "string" && routeLabel.trim() ? routeLabel.trim() : undefined,
+    syncReason: typeof reason === "string" && reason.trim() ? reason.trim() : "route",
+  };
+
+  if (latestOpenSession && latestOpenSession.kind === kind) {
+    latestOpenSession.meta = {
+      ...(normalizeProgressMeta(latestOpenSession.meta) ?? {}),
+      ...automaticMeta,
+    };
+    await latestOpenSession.save();
+    setAuditContext(res, { skip: true });
+    res.json({ ok: true, action: "continued", session: latestOpenSession });
+    return;
+  }
+
+  if (latestOpenSession && !latestOpenSession.endedAt) {
+    latestOpenSession.endedAt = now;
+    latestOpenSession.meta = {
+      ...(normalizeProgressMeta(latestOpenSession.meta) ?? {}),
+      mode: "automatic",
+      stopReason: "workflow_switch",
+    };
+    await latestOpenSession.save();
+  }
+
+  const nextSession = await TaskSessionModel.create({
+    tenantId,
+    userId: auth.id,
+    kind,
+    startedAt: now,
+    meta: automaticMeta,
+  });
+
+  applyProgressAuditContext(
+    res,
+    nextSession,
+    latestOpenSession
+      ? `Switched automatic work tracking to ${formatTaskSessionKind(kind).toLowerCase()}`
+      : `Started automatic ${formatTaskSessionKind(kind).toLowerCase()} tracking`,
+    {
+      auditType: latestOpenSession ? "progress.session.switch" : "progress.session.start",
+      mode: "automatic",
+      previousSessionId: latestOpenSession?._id?.toString(),
+    }
+  );
+
+  res.status(latestOpenSession ? 200 : 201).json({
+    ok: true,
+    action: latestOpenSession ? "switched" : "started",
+    session: nextSession,
+  });
 });
 
 router.get("/sessions/me", async (req: TenantRequest, res) => {
@@ -139,10 +326,10 @@ router.get("/summary", async (req: TenantRequest, res) => {
 
     if (!endedAt) {
       openSessions += 1;
-      continue;
     }
 
-    const secs = Math.max(0, Math.floor((endedAt.getTime() - startedAt.getTime()) / 1000));
+    const effectiveEnd = endedAt instanceof Date ? endedAt : now;
+    const secs = Math.max(0, Math.floor((effectiveEnd.getTime() - startedAt.getTime()) / 1000));
     totalSeconds += secs;
   }
 

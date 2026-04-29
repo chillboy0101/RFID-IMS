@@ -1,6 +1,5 @@
 export type AuthStackParamList = {
   Login: undefined;
-  Register: undefined;
   VerifyEmail: { token?: string } | undefined;
   ForgotPassword: undefined;
   ResetPassword: { token?: string };
@@ -49,6 +48,7 @@ export type MoreStackParamList = {
   SupplyChain: undefined;
   PeopleData: undefined;
   AdminHub: undefined;
+  Audit: undefined;
   RfidHub: undefined;
   RfidScanner: undefined;
   GateKeys: undefined;

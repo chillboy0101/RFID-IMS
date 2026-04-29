@@ -38,7 +38,6 @@ type AuthContextValue = {
   apiLastCheckedAt: number | null;
   apiLastError: string | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (name: string, email: string, password: string, inviteCode?: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshMe: () => Promise<AuthUser | null>;
   refreshTenants: (roleOverride?: UserRole) => Promise<void>;
@@ -60,7 +59,6 @@ export const AuthContext = createContext<AuthContextValue>({
   apiLastCheckedAt: null,
   apiLastError: null,
   signIn: async () => undefined,
-  signUp: async () => undefined,
   signOut: async () => undefined,
   refreshMe: async () => null,
   refreshTenants: async () => undefined,
@@ -300,19 +298,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     await refreshTenants(res.user.role);
   }, [refreshTenants]);
 
-  const signUp = useCallback(async (name: string, email: string, password: string, inviteCode?: string) => {
-    const res = await apiRequest<{ ok: true; token: string; user: AuthUser }>("/auth/register", {
-      method: "POST",
-      timeoutMs: 25000,
-      body: JSON.stringify({ name, email, password, inviteCode: inviteCode ? inviteCode.trim() : undefined }),
-    });
-
-    await setToken(res.token);
-    setTokenState(res.token);
-    setUser(res.user);
-    await refreshTenants(res.user.role);
-  }, [refreshTenants]);
-
   const signOut = useCallback(async () => {
     setAuthLastError(null);
     await clearToken();
@@ -343,7 +328,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       apiLastCheckedAt,
       apiLastError,
       signIn,
-      signUp,
       signOut,
       refreshMe,
       refreshTenants,
@@ -364,7 +348,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       apiLastCheckedAt,
       apiLastError,
       signIn,
-      signUp,
       signOut,
       refreshMe,
       refreshTenants,

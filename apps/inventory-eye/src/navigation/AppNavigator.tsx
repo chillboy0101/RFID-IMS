@@ -1,7 +1,7 @@
-import React, { useContext, useState } from "react";
+import React, { useCallback, useContext, useState } from "react";
 import { Image, Modal, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, useNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator, type BottomTabBarProps } from "@react-navigation/bottom-tabs";
 
@@ -11,7 +11,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../auth/AuthContext";
 import { hasWebAuthBypassToken } from "../auth/authBypass";
 import { LoginScreen } from "../screens/LoginScreen";
-import { RegisterScreen } from "../screens/RegisterScreen";
 import { VerifyEmailScreen } from "../screens/VerifyEmailScreen";
 import { ForgotPasswordScreen } from "../screens/ForgotPasswordScreen";
 import { ResetPasswordScreen } from "../screens/ResetPasswordScreen";
@@ -50,6 +49,8 @@ import { SupplyChainScreen } from "../screens/SupplyChainScreen";
 import { PeopleDataScreen } from "../screens/PeopleDataScreen";
 import { AdminHubScreen } from "../screens/AdminHubScreen";
 import { GateKeysScreen } from "../screens/GateKeysScreen";
+import { AuditScreen } from "../screens/AuditScreen";
+import { AutomaticProgressTracker } from "../progress/AutomaticProgressTracker";
 
 import { AppButton, Badge, FullScreenLoader, shadow, theme, useTheme } from "../ui";
 
@@ -469,7 +470,6 @@ function AuthNavigator() {
   return (
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
       <AuthStack.Screen name="Login" component={LoginScreen} options={{ title: "Login" }} />
-      <AuthStack.Screen name="Register" component={RegisterScreen} options={{ title: "Register" }} />
       <AuthStack.Screen name="VerifyEmail" component={VerifyEmailScreen} options={{ title: "Verify Email" }} />
       <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: "Forgot Password" }} />
       <AuthStack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ title: "Reset Password" }} />
@@ -524,6 +524,7 @@ function MoreNavigator() {
       <MoreStack.Screen name="SupplyChain" component={SupplyChainScreen} />
       <MoreStack.Screen name="PeopleData" component={PeopleDataScreen} />
       <MoreStack.Screen name="AdminHub" component={AdminHubScreen} />
+      <MoreStack.Screen name="Audit" component={AuditScreen} />
       <MoreStack.Screen name="GateKeys" component={GateKeysScreen} />
       <MoreStack.Screen name="Integrations" component={IntegrationsScreen} />
     </MoreStack.Navigator>
@@ -591,10 +592,17 @@ function AppTabs() {
 export function AppNavigator() {
   const { loading, token, user, tenants, tenantsLoaded, tenantChosenThisSession, activeTenantId } = useContext(AuthContext);
   const isAuthBypassRoute = Platform.OS === "web" && typeof window !== "undefined" ? hasWebAuthBypassToken() : false;
+  const navigationRef = useNavigationContainerRef();
+  const [currentRouteName, setCurrentRouteName] = useState<string | null>(null);
 
   if (loading) {
     return <FullScreenLoader />;
   }
+
+  const captureCurrentRoute = useCallback(() => {
+    const route = navigationRef.getCurrentRoute();
+    setCurrentRouteName(route?.name ?? null);
+  }, [navigationRef]);
 
   const linking = {
     prefixes:
@@ -604,7 +612,6 @@ export function AppNavigator() {
     config: {
       screens: {
         Login: "login",
-        Register: "register",
         VerifyEmail: "verify-email",
         ForgotPassword: "forgot-password",
         ResetPassword: "reset-password",
@@ -645,6 +652,7 @@ export function AppNavigator() {
             Reorders: "more/reorders",
             ReordersCreate: "more/reorders/new",
             RfidScanner: "more/rfid",
+            Audit: "more/audit",
             Integrations: "more/integrations",
           },
         },
@@ -659,22 +667,31 @@ export function AppNavigator() {
     (tenants.length === 0 || !activeTenantId);
 
   const mustChangePassword = Boolean(token && user?.mustChangePassword);
+  const progressTrackingEnabled = Boolean(token && !isAuthBypassRoute && tenantsLoaded && activeTenantId && !mustChangePassword);
 
   return (
-    <NavigationContainer linking={Platform.OS === "web" ? (linking as any) : undefined}>
-      {token && !isAuthBypassRoute ? (
-        mustChangePassword ? (
-          <ForcePasswordChangeScreen />
-        ) : !tenantsLoaded ? (
-          <FullScreenLoader />
-        ) : needsTenantSelection ? (
-          <BranchSelectGateScreen />
+    <>
+      <AutomaticProgressTracker enabled={progressTrackingEnabled} currentRouteName={currentRouteName} />
+      <NavigationContainer
+        ref={navigationRef}
+        onReady={captureCurrentRoute}
+        onStateChange={captureCurrentRoute}
+        linking={Platform.OS === "web" ? (linking as any) : undefined}
+      >
+        {token && !isAuthBypassRoute ? (
+          mustChangePassword ? (
+            <ForcePasswordChangeScreen />
+          ) : !tenantsLoaded ? (
+            <FullScreenLoader />
+          ) : needsTenantSelection ? (
+            <BranchSelectGateScreen />
+          ) : (
+            <AppTabs />
+          )
         ) : (
-          <AppTabs />
-        )
-      ) : (
-        <AuthNavigator />
-      )}
-    </NavigationContainer>
+          <AuthNavigator />
+        )}
+      </NavigationContainer>
+    </>
   );
 }

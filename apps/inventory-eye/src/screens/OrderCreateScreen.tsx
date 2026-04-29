@@ -305,16 +305,6 @@ export function OrderCreateScreen({ navigation }: Props) {
           <View style={{ flexDirection: "row", gap: theme.spacing.md, alignItems: "stretch", flex: 1 }}>
             <View style={{ flex: 1, minWidth: 0, gap: theme.spacing.md }}>
             <Card>
-              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Order flow</Text>
-              <MutedText>Create the order here, then let the fulfillment team reserve units, authorize the gate, and finish the exit in RFID Hub.</MutedText>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
-                <Badge label="1. Create order" />
-                <Badge label="2. Pick + authorize" tone="primary" />
-                <Badge label="3. Exit verify in RFID Hub" tone="warning" />
-              </View>
-            </Card>
-
-            <Card>
               <TextField
                 ref={searchRef}
                 value={query}
@@ -522,11 +512,6 @@ export function OrderCreateScreen({ navigation }: Props) {
           alwaysBounceVertical
         >
           <Card>
-            <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Order flow</Text>
-            <MutedText>Create the order, then move to picking, gate authorization, and RFID exit verification.</MutedText>
-          </Card>
-
-          <Card>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               <View style={{ flex: 1 }}>
                 <Badge label={`Selected: ${cart.length}`} tone={cart.length ? "primary" : "default"} size="header" responsive={false} fullWidth />
@@ -538,7 +523,6 @@ export function OrderCreateScreen({ navigation }: Props) {
                 <AppButton title="Scan" onPress={() => setScanOpen(true)} variant="secondary" style={{ width: "100%" }} />
               </View>
             </View>
-            <MutedText style={{ marginTop: 8 }}>Use the search button to add inventory items.</MutedText>
           </Card>
 
           <Card>

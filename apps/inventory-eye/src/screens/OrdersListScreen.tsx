@@ -227,16 +227,6 @@ export function OrdersListScreen({ navigation }: Props) {
       {isDesktopWeb ? (
         <View style={{ flex: 1, gap: theme.spacing.md }}>
           <Card>
-            <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Fulfillment flow</Text>
-            <MutedText>Create the order here, reserve units during picking, authorize a short gate window, then let RFID exit scans close the order automatically.</MutedText>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
-              <Badge label="1. Create order" />
-              <Badge label="2. Reserve + authorize" tone="primary" />
-              <Badge label="3. Exit verify" tone="warning" />
-            </View>
-          </Card>
-
-          <Card>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <TextField ref={searchRef} value={q} onChangeText={setQ} placeholder="Search: order ID or status" autoCapitalize="none" />
@@ -249,7 +239,6 @@ export function OrdersListScreen({ navigation }: Props) {
                 <Badge label={`Gate ready: ${gateReadyCount}`} tone={gateReadyCount > 0 ? "warning" : "default"} size="header" />
               </View>
             </View>
-            <MutedText style={{ marginTop: 8 }}>Tip: click a row to open the order detail page.</MutedText>
           </Card>
 
           <Card style={{ padding: 0, flex: 1 }}>
@@ -399,11 +388,6 @@ export function OrdersListScreen({ navigation }: Props) {
             scrollEventThrottle={32}
           >
             <Card>
-              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Fulfillment flow</Text>
-              <MutedText>Create the order, reserve the units, authorize the gate, then verify the leaving items in RFID Hub.</MutedText>
-            </Card>
-
-            <Card>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                 <View style={{ width: "48%" }}>
                   <Badge label={`Total: ${filtered.length}`} size="header" responsive={false} fullWidth />
@@ -449,9 +433,6 @@ export function OrdersListScreen({ navigation }: Props) {
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
             ListHeaderComponent={
               <Card>
-                <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Fulfillment flow</Text>
-                <MutedText>Create the order, reserve the units, authorize the gate, then verify the leaving items in RFID Hub.</MutedText>
-                <View style={{ height: 12 }} />
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                   <View style={{ width: "48%" }}>
                     <Badge label={`Total: ${filtered.length}`} size="header" responsive={false} fullWidth />

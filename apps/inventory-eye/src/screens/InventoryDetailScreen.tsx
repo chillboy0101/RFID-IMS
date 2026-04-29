@@ -307,12 +307,11 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
               </View>
             </Card>
 
-            <Card>
-              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Warehouse flow</Text>
-              <MutedText>SKU master data lives here. Receiving, unit tagging, gate authorization, and exit verification happen in RFID Hub.</MutedText>
-              {flow ? (
-                <View style={{ marginTop: 12, gap: 10 }}>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              <Card>
+                <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>RFID status</Text>
+                {flow ? (
+                  <View style={{ marginTop: 12, gap: 10 }}>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                     <Badge label={`Exit ready ${flow.exitReadyUnits}/${item?.quantity ?? 0}`} tone={flow.missingExitTrackingUnits > 0 ? "warning" : "success"} />
                     <Badge label={`Tagged ${flow.taggedUnits}`} tone={flow.taggedUnits > 0 ? "success" : "default"} />
                     <Badge label={`Awaiting tags ${flow.awaitingTagUnits + flow.untrackedUnits}`} tone={flow.awaitingTagUnits + flow.untrackedUnits > 0 ? "warning" : "default"} />
@@ -464,12 +463,11 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
             </View>
           </Card>
 
-          <Card>
-            <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Warehouse flow</Text>
-            <MutedText>Use this page for SKU data. Use RFID Hub when the physical units arrive, when tags change, and when orders move through the gate.</MutedText>
-            {flow ? (
-              <View style={{ marginTop: 12, gap: 10 }}>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            <Card>
+              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>RFID status</Text>
+              {flow ? (
+                <View style={{ marginTop: 12, gap: 10 }}>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   <Badge label={`Exit ready ${flow.exitReadyUnits}/${item?.quantity ?? 0}`} tone={flow.missingExitTrackingUnits > 0 ? "warning" : "success"} />
                   <Badge label={`Tagged ${flow.taggedUnits}`} tone={flow.taggedUnits > 0 ? "success" : "default"} />
                   <Badge label={`Awaiting tags ${flow.awaitingTagUnits + flow.untrackedUnits}`} tone={flow.awaitingTagUnits + flow.untrackedUnits > 0 ? "warning" : "default"} />

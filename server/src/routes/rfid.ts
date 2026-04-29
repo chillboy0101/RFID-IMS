@@ -24,11 +24,12 @@ function normalizeLocation(value: unknown, fallback = "EXIT_MAIN") {
 }
 
 function normalizeScan(body: Record<string, unknown>) {
+  const value = typeof body.value === "string" ? body.value.trim() : "";
   const tagId = typeof body.tagId === "string" ? body.tagId.trim() : "";
   const barcode = typeof body.barcode === "string" ? body.barcode.trim() : "";
   const source = typeof body.source === "string" && body.source.trim() ? body.source.trim() : "rfid";
   const observedAt = typeof body.observedAt === "string" && body.observedAt.trim() ? new Date(body.observedAt) : new Date();
-  return { tagId, barcode, source, observedAt };
+  return { value, tagId, barcode, source, observedAt };
 }
 
 async function resolveItem(tenantId: string, identifiers: { itemId?: unknown; tagId?: string; barcode?: string }) {
@@ -49,6 +50,64 @@ async function resolveItem(tenantId: string, identifiers: { itemId?: unknown; ta
   }
 
   return null;
+}
+
+async function resolveScanIdentity(opts: {
+  tenantId: string;
+  location: string;
+  observedAt: Date;
+  value?: string;
+  tagId?: string;
+  barcode?: string;
+}) {
+  const explicitTagId = opts.tagId?.trim() ?? "";
+  const explicitBarcode = opts.barcode?.trim() ?? "";
+  if (explicitTagId || explicitBarcode) {
+    return {
+      tagId: explicitTagId,
+      barcode: explicitBarcode,
+      mode: explicitTagId ? ("tagId" as const) : ("barcode" as const),
+    };
+  }
+
+  const rawValue = opts.value?.trim() ?? "";
+  if (!rawValue) {
+    return { tagId: "", barcode: "", mode: "tagId" as const };
+  }
+
+  const activeAuthorization = await ExitAuthorizationModel.findOne({
+    tenantId: opts.tenantId,
+    location: opts.location,
+    status: "active",
+    expiresAt: { $gt: opts.observedAt },
+    $or: [{ tagId: rawValue }, { barcode: rawValue }],
+  })
+    .sort({ expiresAt: 1, createdAt: 1 })
+    .lean()
+    .exec();
+
+  if (activeAuthorization?.tagId === rawValue) {
+    return { tagId: rawValue, barcode: "", mode: "tagId" as const };
+  }
+
+  if (activeAuthorization?.barcode === rawValue) {
+    return { tagId: "", barcode: rawValue, mode: "barcode" as const };
+  }
+
+  const [tagRecord, barcodeItem] = await Promise.all([
+    RfidTagModel.findOne({ tenantId: opts.tenantId, tagId: rawValue }).lean().exec(),
+    InventoryItemModel.findOne({ tenantId: opts.tenantId, barcode: rawValue }).select({ _id: 1 }).lean().exec(),
+  ]);
+
+  if (tagRecord && !barcodeItem) {
+    return { tagId: rawValue, barcode: "", mode: "tagId" as const };
+  }
+
+  if (!tagRecord && barcodeItem) {
+    return { tagId: "", barcode: rawValue, mode: "barcode" as const };
+  }
+
+  return { tagId: rawValue, barcode: "", mode: "tagId" as const };
 }
 
 async function createSecurityAlert(opts: {
@@ -153,6 +212,7 @@ router.get("/meta", async (_req, res) => {
           "X-Source": "Optional reader/source label",
         },
         payload: {
+          value: "string (single autonomous scan value; server auto-detects RFID vs barcode)",
           tagId: "string (recommended for RFID reads)",
           barcode: "string (optional barcode fallback)",
           location: "string, default EXIT_MAIN",
@@ -161,16 +221,17 @@ router.get("/meta", async (_req, res) => {
           itemId: "Mongo ObjectId, optional manual override",
         },
       },
-      operatorExitSession: {
-        requestSession: "POST /rfid/exit-sessions",
-        verifyScan: "POST /rfid/exit-sessions/verify",
-        auth: "Bearer JWT + X-Tenant-ID",
-        verifyPayload: {
-          token: "short-lived exit session token",
-          tagId: "string (preferred)",
-          barcode: "string (fallback)",
-          observedAt: "ISO timestamp, optional",
-        },
+        operatorExitSession: {
+          requestSession: "POST /rfid/exit-sessions",
+          verifyScan: "POST /rfid/exit-sessions/verify",
+          auth: "Bearer JWT + X-Tenant-ID",
+          verifyPayload: {
+            value: "string (single autonomous scan value; server auto-detects RFID vs barcode)",
+            token: "short-lived exit session token",
+            tagId: "string (preferred)",
+            barcode: "string (fallback)",
+            observedAt: "ISO timestamp, optional",
+          },
       },
       tagRegistry: {
         list: "GET /rfid/tags",
@@ -187,10 +248,19 @@ router.get("/meta", async (_req, res) => {
 router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: GateRequest, res) => {
   const tenantId = req.tenantId as string;
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const { tagId, barcode, source, observedAt } = normalizeScan(body);
+  const { value, tagId: rawTagId, barcode: rawBarcode, source, observedAt } = normalizeScan(body);
+  const location = normalizeLocation(body.location);
+  const { tagId, barcode, mode } = await resolveScanIdentity({
+    tenantId,
+    location,
+    observedAt,
+    value,
+    tagId: rawTagId,
+    barcode: rawBarcode,
+  });
 
   if (!tagId && !barcode) {
-    res.status(400).json({ ok: false, error: "tagId or barcode is required" });
+    res.status(400).json({ ok: false, error: "value, tagId, or barcode is required" });
     return;
   }
 
@@ -202,10 +272,9 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
     return;
   }
 
-  const location = normalizeLocation(body.location);
   const event = await RfidEventModel.create({
     tenantId,
-    tagId: tagId || barcode,
+    tagId: tagId || barcode || value,
     eventType: "scan",
     itemId: item?._id,
     location,
@@ -231,6 +300,7 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
 
   res.json({
     ok: true,
+    mode,
     decision: result.decision,
     authorized: result.authorized,
     authorizationId: result.authorizationId,
@@ -425,14 +495,10 @@ router.post("/exit-sessions/verify", requireRole("manager", "admin"), async (req
 
   const body = (req.body ?? {}) as Record<string, unknown>;
   const rawToken = typeof body.token === "string" ? body.token.trim() : "";
-  const { tagId, barcode, observedAt } = normalizeScan(body);
+  const { value, tagId: rawTagId, barcode: rawBarcode, observedAt } = normalizeScan(body);
 
   if (!rawToken) {
     res.status(400).json({ ok: false, error: "token is required" });
-    return;
-  }
-  if (!tagId && !barcode) {
-    res.status(400).json({ ok: false, error: "tagId or barcode is required" });
     return;
   }
 
@@ -449,10 +515,24 @@ router.post("/exit-sessions/verify", requireRole("manager", "admin"), async (req
     return;
   }
 
+  const { tagId, barcode, mode } = await resolveScanIdentity({
+    tenantId,
+    location: session.location,
+    observedAt,
+    value,
+    tagId: rawTagId,
+    barcode: rawBarcode,
+  });
+
+  if (!tagId && !barcode) {
+    res.status(400).json({ ok: false, error: "value, tagId, or barcode is required" });
+    return;
+  }
+
   const fallbackItem = await resolveItem(tenantId, { tagId, barcode });
   const event = await RfidEventModel.create({
     tenantId,
-    tagId: tagId || barcode,
+    tagId: tagId || barcode || value,
     eventType: "scan",
     itemId: fallbackItem?._id,
     location: session.location,
@@ -489,6 +569,7 @@ router.post("/exit-sessions/verify", requireRole("manager", "admin"), async (req
 
   res.json({
     ok: true,
+    mode,
     authorized: result.authorized,
     decision: result.decision,
     item: result.item,

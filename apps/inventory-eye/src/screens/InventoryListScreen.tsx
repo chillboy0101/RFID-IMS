@@ -240,16 +240,6 @@ export function InventoryListScreen({ navigation }: Props) {
       {isDesktopWeb ? (
         <View style={{ flex: 1, gap: theme.spacing.md }}>
           <Card>
-            <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Warehouse flow</Text>
-            <MutedText>Create the SKU here, receive and bind physical units in RFID Hub, then let order authorization and gate exit scans move stock out cleanly.</MutedText>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
-              <Badge label="1. Create SKU" />
-              <Badge label="2. Receive + tag in RFID Hub" tone="primary" />
-              <Badge label="3. Authorize + verify exit" tone="warning" />
-            </View>
-          </Card>
-
-          <Card>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <TextField
@@ -279,7 +269,6 @@ export function InventoryListScreen({ navigation }: Props) {
               </View>
             ) : null}
 
-            <MutedText style={{ marginTop: 10 }}>Tip: click a row to open the item detail page.</MutedText>
           </Card>
 
           <View style={{ flex: 1, minWidth: 0 }}>
@@ -479,11 +468,6 @@ export function InventoryListScreen({ navigation }: Props) {
             scrollEventThrottle={32}
           >
             <Card>
-              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Warehouse flow</Text>
-              <MutedText>Create the SKU here, then move to RFID Hub for receiving, tag binding, and gate-controlled exit.</MutedText>
-            </Card>
-
-            <Card>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                 <View style={{ width: "48%" }}>
                   <Badge label={`Total: ${items.length}`} tone="default" size="header" responsive={false} fullWidth />
@@ -549,9 +533,6 @@ export function InventoryListScreen({ navigation }: Props) {
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
             ListHeaderComponent={
               <Card>
-                <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Warehouse flow</Text>
-                <MutedText>Create the SKU here, then move to RFID Hub for receiving, tag binding, and gate-controlled exit.</MutedText>
-                <View style={{ height: 12 }} />
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                   <View style={{ width: "48%" }}>
                     <Badge label={`Total: ${items.length}`} tone="default" size="header" responsive={false} fullWidth />

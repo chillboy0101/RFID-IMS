@@ -196,12 +196,12 @@ export function AdminBranchesScreen({ navigation }: Props) {
   const [adminTab, setAdminTab] = useState<"members" | "add" | "sessions" | "users">("members");
   const [createUserName, setCreateUserName] = useState("");
   const [createUserEmail, setCreateUserEmail] = useState("");
-  const [createUserPassword, setCreateUserPassword] = useState("");
   const [createUserRole, setCreateUserRole] = useState<UserRole>("inventory_staff");
   const [createUserMakeSuperAdmin, setCreateUserMakeSuperAdmin] = useState(false);
   const [sessions, setSessions] = useState<TenantSessionRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const list = useMemo(() => (Array.isArray(tenants) ? (tenants as TenantInfo[]) : []), [tenants]);
 
@@ -272,38 +272,41 @@ export function AdminBranchesScreen({ navigation }: Props) {
 
     const cleanName = createUserName.trim();
     const cleanEmail = createUserEmail.trim().toLowerCase();
-    const cleanPassword = createUserPassword;
-    if (!cleanName || !cleanEmail || !cleanPassword) {
-      setError("Name, email and password are required");
+    if (!cleanName || !cleanEmail) {
+      setError("Name and email are required");
       return;
     }
 
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
-      await apiRequest<{ ok: true }>(`/tenants/${activeTenantId}/users`, {
+      const res = await apiRequest<{ ok: true; notification?: { email?: string; delivered?: boolean } }>(`/tenants/${activeTenantId}/users`, {
         method: "POST",
         token,
         body: JSON.stringify({
           name: cleanName,
           email: cleanEmail,
-          password: cleanPassword,
           role: createUserRole,
           makeSuperAdmin: isSuperAdmin ? createUserMakeSuperAdmin : false,
         }),
       });
       setCreateUserName("");
       setCreateUserEmail("");
-      setCreateUserPassword("");
       setCreateUserRole("inventory_staff");
       setCreateUserMakeSuperAdmin(false);
+      setNotice(
+        res.notification?.delivered
+          ? `Account created. A temporary password was emailed to ${res.notification.email ?? cleanEmail}.`
+          : `Account created for ${cleanEmail}.`
+      );
       await loadMembers(activeTenantId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create user");
     } finally {
       setBusy(false);
     }
-  }, [activeTenantId, createUserEmail, createUserMakeSuperAdmin, createUserName, createUserPassword, createUserRole, isBranchAdmin, isSuperAdmin, loadMembers, token]);
+  }, [activeTenantId, createUserEmail, createUserMakeSuperAdmin, createUserName, createUserRole, isBranchAdmin, isSuperAdmin, loadMembers, token]);
 
   const confirmAction = useCallback(async (title: string, message: string): Promise<boolean> => {
     if (Platform.OS === "web") {
@@ -644,6 +647,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
     >
       <View style={{ gap: theme.spacing.md }}>
         {error ? <ErrorText>{error}</ErrorText> : null}
+        {notice ? <MutedText style={{ color: theme.colors.success }}>{notice}</MutedText> : null}
 
         <Card>
           <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Branches</Text>
@@ -701,7 +705,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
                   {adminTab === "add" ? (
                     <>
                       <View style={{ height: theme.spacing.md }} />
-                      <MutedText>Add user to the active branch by email.</MutedText>
+                      <MutedText>Add an existing user to the active branch by email.</MutedText>
                       <View style={{ height: 12 }} />
                       <TextField value={email} onChangeText={setEmail} placeholder="user@email.com" autoCapitalize="none" keyboardType="email-address" />
                       <View style={{ height: 10 }} />
@@ -722,7 +726,11 @@ export function AdminBranchesScreen({ navigation }: Props) {
                       <AppButton title="Add user" onPress={addMember} disabled={busy} loading={busy} variant="secondary" />
 
                       <View style={{ height: theme.spacing.lg }} />
-                      <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Create user</Text>
+                      <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Create new user</Text>
+                      <MutedText>
+                        We will email a temporary password automatically. The user will be required to change it on first sign-in.
+                      </MutedText>
+                      <View style={{ height: 12 }} />
                       <TextField value={createUserName} onChangeText={setCreateUserName} placeholder="Full name" autoCapitalize="words" />
                       <View style={{ height: 10 }} />
                       <TextField
@@ -732,8 +740,6 @@ export function AdminBranchesScreen({ navigation }: Props) {
                         autoCapitalize="none"
                         keyboardType="email-address"
                       />
-                      <View style={{ height: 10 }} />
-                      <TextField value={createUserPassword} onChangeText={setCreateUserPassword} placeholder="Temporary password" secureTextEntry />
                       <View style={{ height: 10 }} />
                       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                         {roles.map((r) => (
@@ -755,7 +761,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
                         ) : null}
                       </View>
                       <View style={{ height: 12 }} />
-                      <AppButton title="Create user" onPress={createUserInActiveBranch} disabled={busy} loading={busy} variant="secondary" />
+                      <AppButton title="Create user and send email" onPress={createUserInActiveBranch} disabled={busy} loading={busy} variant="secondary" />
                     </>
                   ) : null}
 

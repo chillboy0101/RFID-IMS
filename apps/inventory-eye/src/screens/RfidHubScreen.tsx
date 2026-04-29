@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
-import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
+import { AppButton, Badge, Card, ErrorText, ListRow, MutedText, Screen, theme } from "../ui";
 
 type Mode = "assign" | "authorize" | "exit" | "tags";
 
@@ -240,60 +240,156 @@ function ResultFlash({ visible, success, title, subtitle }: { visible: boolean; 
   );
 }
 
-function ScannerInput({
-  label,
-  value,
-  onChangeText,
-  onSubmit,
-  placeholder,
-  inputRef,
-}: {
-  label: string;
+type StationCapture = {
   value: string;
-  onChangeText: (value: string) => void;
-  onSubmit: (value: string) => void;
-  placeholder: string;
-  inputRef?: React.RefObject<TextInput | null>;
+  label: string;
+  at: Date;
+};
+
+function PassiveScanDock({
+  title,
+  subtitle,
+  accentColor,
+  enabled,
+  busy,
+  lastCapture,
+  statusLabel,
+  onScan,
+}: {
+  title: string;
+  subtitle: string;
+  accentColor: string;
+  enabled: boolean;
+  busy: boolean;
+  lastCapture: StationCapture | null;
+  statusLabel?: string;
+  onScan: (value: string) => void;
 }) {
+  const inputRef = useRef<TextInput>(null);
+  const [buffer, setBuffer] = useState("");
+
+  const focusInput = useCallback(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const flushScan = useCallback(
+    (rawValue?: string) => {
+      const nextValue = (rawValue ?? buffer).trim();
+      if (!enabled || busy || !nextValue) return;
+      setBuffer("");
+      onScan(nextValue);
+    },
+    [buffer, busy, enabled, onScan]
+  );
+
+  useEffect(() => {
+    if (!enabled) return;
+    const boot = setTimeout(focusInput, 80);
+    const interval = setInterval(focusInput, 1200);
+    return () => {
+      clearTimeout(boot);
+      clearInterval(interval);
+    };
+  }, [enabled, focusInput, title]);
+
+  useEffect(() => {
+    if (!enabled || busy) return;
+    const nextValue = buffer.trim();
+    if (!nextValue) return;
+    const timer = setTimeout(() => flushScan(nextValue), 140);
+    return () => clearTimeout(timer);
+  }, [buffer, busy, enabled, flushScan]);
+
   return (
-    <TextField
-      ref={inputRef}
-      label={label}
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      autoCapitalize="none"
-      returnKeyType="done"
-      onSubmitEditing={() => {
-        const trimmed = value.trim();
-        if (trimmed) onSubmit(trimmed);
-      }}
-    />
+    <Pressable onPress={focusInput}>
+      <Card>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+          <View style={{ flex: 1, gap: 6 }}>
+            <Text style={[theme.typography.h3, { color: theme.colors.text }]}>{title}</Text>
+            <MutedText>{subtitle}</MutedText>
+          </View>
+          <Badge label={busy ? "Processing" : enabled ? statusLabel ?? "Live" : "Paused"} tone={busy ? "warning" : enabled ? "success" : "default"} />
+        </View>
+
+        <View
+          style={{
+            marginTop: 14,
+            borderWidth: 1,
+            borderColor: accentColor,
+            borderStyle: "dashed",
+            borderRadius: theme.radius.lg,
+            padding: 18,
+            backgroundColor: accentColor + "10",
+            gap: 10,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 999,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: accentColor,
+              }}
+            >
+              <Ionicons name="radio-outline" size={18} color="#fff" />
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={{ color: theme.colors.text, fontWeight: "800" }}>{busy ? "Scanner busy" : "Scanner armed"}</Text>
+              <MutedText>{lastCapture ? `${lastCapture.label}: ${lastCapture.value}` : "Waiting for the next hardware scan."}</MutedText>
+            </View>
+          </View>
+          <MutedText>{lastCapture ? `Last capture ${lastCapture.at.toLocaleTimeString()}` : "Tap anywhere on this panel if the reader focus needs to be re-armed."}</MutedText>
+        </View>
+
+        <TextInput
+          ref={inputRef}
+          value={buffer}
+          onChangeText={setBuffer}
+          onSubmitEditing={() => flushScan()}
+          autoCapitalize="none"
+          autoCorrect={false}
+          blurOnSubmit={false}
+          caretHidden
+          contextMenuHidden
+          showSoftInputOnFocus={false}
+          style={{ position: "absolute", width: 1, height: 1, opacity: 0 }}
+        />
+      </Card>
+    </Pressable>
   );
 }
 
 function ReceiveMode({ token }: { token: string }) {
-  const inputRef = useRef<TextInput>(null);
-  const [barcode, setBarcode] = useState("");
-  const [found, setFound] = useState<InventoryItem | null>(null);
-  const [tagInput, setTagInput] = useState("");
+  const [activeItem, setActiveItem] = useState<InventoryItem | null>(null);
   const [location, setLocation] = useState("RECEIVING_STAGING");
-  const [scanOpen, setScanOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [receivedCount, setReceivedCount] = useState(0);
+  const [lastCapture, setLastCapture] = useState<StationCapture | null>(null);
+  const [lastLinkedTag, setLastLinkedTag] = useState<string | null>(null);
   const [flashVisible, setFlashVisible] = useState(false);
+
+  const clearSku = useCallback(() => {
+    setActiveItem(null);
+    setMessage(null);
+    setLastLinkedTag(null);
+  }, []);
 
   const lookupItem = useCallback(
     async (value: string) => {
       setError(null);
-      setMessage(null);
       try {
         const res = await apiRequest<{ ok: true; item: InventoryItem }>(`/inventory/lookup?barcode=${encodeURIComponent(value)}`, { method: "GET", token });
-        setFound(res.item);
+        setActiveItem(res.item);
+        setLastCapture({ value, label: "SKU barcode", at: new Date() });
+        setMessage(`${res.item.name} armed for receiving`);
         successFeedback();
       } catch (e) {
-        setFound(null);
+        setActiveItem(null);
         setError(e instanceof Error ? e.message : "Item not found");
         errorFeedback();
       }
@@ -303,27 +399,27 @@ function ReceiveMode({ token }: { token: string }) {
 
   const assignTag = useCallback(
     async (value: string) => {
-      if (!found?._id || saving) return;
+      if (!activeItem?._id || saving) return;
       setSaving(true);
       setError(null);
-      setMessage(null);
       try {
         await apiRequest("/inventory/receiving/units", {
           method: "POST",
           token,
           body: JSON.stringify({
-            itemId: found._id,
+            itemId: activeItem._id,
             tagId: value,
             location,
             quantity: 1,
           }),
         });
-        setTagInput("");
-        setMessage(`${found.name} received and linked to ${value}`);
+        setLastLinkedTag(value);
+        setLastCapture({ value, label: "RFID tag", at: new Date() });
+        setReceivedCount((count) => count + 1);
+        setMessage(`${activeItem.name} linked to ${value}`);
         successFeedback();
         setFlashVisible(true);
-        setTimeout(() => setFlashVisible(false), 1500);
-        setTimeout(() => inputRef.current?.focus(), 50);
+        setTimeout(() => setFlashVisible(false), 1400);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to assign tag");
         errorFeedback();
@@ -331,7 +427,19 @@ function ReceiveMode({ token }: { token: string }) {
         setSaving(false);
       }
     },
-    [found?._id, found?.name, location, saving, token]
+    [activeItem?._id, activeItem?.name, location, saving, token]
+  );
+
+  const handleScan = useCallback(
+    async (value: string) => {
+      if (!value.trim() || saving) return;
+      if (!activeItem) {
+        await lookupItem(value);
+        return;
+      }
+      await assignTag(value);
+    },
+    [activeItem, assignTag, lookupItem, saving]
   );
 
   return (
@@ -339,41 +447,52 @@ function ReceiveMode({ token }: { token: string }) {
       {error ? <ErrorText>{error}</ErrorText> : null}
       {message ? <Badge label={message} tone="success" /> : null}
 
-      <Card>
-        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>1. Identify the incoming SKU</Text>
-        <MutedText>Create the product master in Inventory first, then use this screen when physical units actually arrive.</MutedText>
-        <View style={{ height: 12 }} />
-        <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-end" }}>
-          <View style={{ flex: 1 }}>
-            <TextField
-              label="Item barcode"
-              value={barcode}
-              onChangeText={setBarcode}
-              placeholder="Scan or type barcode"
-              autoCapitalize="none"
-              returnKeyType="search"
-              onSubmitEditing={() => void lookupItem(barcode.trim())}
-            />
-          </View>
-          <AppButton title="Lookup" onPress={() => void lookupItem(barcode.trim())} variant="secondary" />
-          <AppButton title="Camera" onPress={() => setScanOpen(true)} variant="secondary" />
-        </View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <Badge label={activeItem ? `SKU ${activeItem.sku}` : "Awaiting SKU"} tone={activeItem ? "primary" : "default"} />
+        <Badge label={`Location ${location}`} tone="default" />
+        <Badge label={`Linked ${receivedCount}`} tone={receivedCount > 0 ? "success" : "default"} />
+      </View>
 
-        {found ? (
-          <View style={{ marginTop: 12, gap: 6 }}>
-            <Badge label="Item ready for receiving" tone="success" />
-            <MutedText>{found.name}</MutedText>
-            <MutedText>SKU: {found.sku}</MutedText>
-            <MutedText>Current quantity: {found.quantity}</MutedText>
+      <PassiveScanDock
+        title={activeItem ? "Receive lane armed" : "SKU capture armed"}
+        subtitle={
+          activeItem
+            ? `${activeItem.name} is locked for this station. Each RFID scan receives one unit into ${location}.`
+            : "Scan the incoming barcode once to lock the SKU, then keep scanning RFID tags without touching the screen."
+        }
+        accentColor="#0D9488"
+        enabled
+        busy={saving}
+        lastCapture={lastCapture}
+        statusLabel={activeItem ? "Receiving" : "Waiting"}
+        onScan={(value) => void handleScan(value)}
+      />
+
+      {activeItem ? (
+        <Card>
+          <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <View style={{ flex: 1, gap: 6 }}>
+              <Text style={[theme.typography.h3, { color: theme.colors.text }]}>{activeItem.name}</Text>
+              <MutedText>SKU: {activeItem.sku}</MutedText>
+              <MutedText>Current quantity: {activeItem.quantity}</MutedText>
+              <MutedText>Stage location: {location}</MutedText>
+            </View>
+            <Badge label="Locked" tone="primary" />
           </View>
-        ) : (
-          <MutedText style={{ marginTop: 12 }}>Scan the item barcode to load the SKU before you assign a tag.</MutedText>
-        )}
-      </Card>
+
+          <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {lastLinkedTag ? <Badge label={`Last tag ${lastLinkedTag}`} tone="success" /> : null}
+            <Badge label={`Session count ${receivedCount}`} tone={receivedCount > 0 ? "success" : "default"} />
+          </View>
+
+          <View style={{ height: 12 }} />
+          <AppButton title="Change active SKU" onPress={clearSku} variant="secondary" />
+        </Card>
+      ) : null}
 
       <Card>
-        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>2. Scan the RFID tag and stage the unit</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Station location</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {LOCATION_PRESETS.map((preset) => (
             <Pressable
               key={preset}
@@ -391,30 +510,7 @@ function ReceiveMode({ token }: { token: string }) {
             </Pressable>
           ))}
         </View>
-
-        <ScannerInput
-          inputRef={inputRef}
-          label="RFID tag"
-          value={tagInput}
-          onChangeText={setTagInput}
-          onSubmit={(value) => void assignTag(value)}
-          placeholder="Tap here, then scan the RFID tag"
-        />
-
-        <View style={{ height: 12 }} />
-        <AppButton title="Receive and link tag" onPress={() => void assignTag(tagInput.trim())} disabled={!found?._id || !tagInput.trim() || saving} loading={saving} />
       </Card>
-
-      <BarcodeScanModal
-        visible={scanOpen}
-        title="Scan item barcode"
-        onClose={() => setScanOpen(false)}
-        onScanned={(value) => {
-          setScanOpen(false);
-          setBarcode(value);
-          void lookupItem(value);
-        }}
-      />
 
       <ResultFlash visible={flashVisible} success title="TAG ASSIGNED" subtitle={message ?? undefined} />
     </View>
@@ -527,20 +623,24 @@ function AuthorizationMode({ token, onSwitchMode }: { token: string; onSwitchMod
 
   const selectedOrder = useMemo(() => orders.find((order) => order._id === selectedId) ?? detail, [detail, orders, selectedId]);
 
-  return (
-    <View style={{ gap: 14 }}>
-      {error ? <ErrorText>{error}</ErrorText> : null}
-      {message ? <Badge label={message} tone="success" /> : null}
+    return (
+      <View style={{ gap: 14 }}>
+        {error ? <ErrorText>{error}</ErrorText> : null}
+        {message ? <Badge label={message} tone="success" /> : null}
 
-      <Card>
-        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>1. Choose the fulfillment order</Text>
-        <MutedText>Reserve the units, then authorize a short gate window for the exact order that is leaving.</MutedText>
-        <View style={{ height: 12 }} />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <Badge label={`Open ${orders.length}`} tone={orders.length > 0 ? "primary" : "default"} />
+          <Badge label={`Gate ${gateLocation}`} tone="default" />
+          <Badge label={`Window ${windowMinutes} min`} tone="warning" />
+        </View>
 
-        {loading ? (
-          <ActivityIndicator color={theme.colors.primary} />
-        ) : orders.length === 0 ? (
-          <MutedText>No open orders right now.</MutedText>
+        <Card>
+          <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Order queue</Text>
+
+          {loading ? (
+            <ActivityIndicator color={theme.colors.primary} />
+          ) : orders.length === 0 ? (
+            <MutedText>No open orders right now.</MutedText>
         ) : (
           <View style={{ gap: 8 }}>
             {orders.map((order) => (
@@ -567,15 +667,15 @@ function AuthorizationMode({ token, onSwitchMode }: { token: string; onSwitchMod
         )}
       </Card>
 
-      {selectedOrder && workflow ? (
-        <>
-          <Card>
-            <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>2. Reserve and authorize</Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-              <Badge label={`Requested ${workflow.requestedUnits}`} />
-              <Badge label={`Reserved ${workflow.reservedUnits}`} tone={workflow.reservedUnits >= workflow.requestedUnits ? "primary" : "warning"} />
-              <Badge label={`Tagged ${workflow.taggedReservedUnits}`} tone={workflow.taggedReservedUnits > 0 ? "success" : "default"} />
-              <Badge label={`Gate ready ${workflow.activeAuthorizations}`} tone={workflow.activeAuthorizations > 0 ? "warning" : "default"} />
+        {selectedOrder && workflow ? (
+          <>
+            <Card>
+              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Gate control</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+                <Badge label={`Requested ${workflow.requestedUnits}`} />
+                <Badge label={`Reserved ${workflow.reservedUnits}`} tone={workflow.reservedUnits >= workflow.requestedUnits ? "primary" : "warning"} />
+                <Badge label={`Tagged ${workflow.taggedReservedUnits}`} tone={workflow.taggedReservedUnits > 0 ? "success" : "default"} />
+                <Badge label={`Gate ready ${workflow.activeAuthorizations}`} tone={workflow.activeAuthorizations > 0 ? "warning" : "default"} />
               <Badge label={`Exited ${workflow.dispatchedUnits}`} tone={workflow.dispatchedUnits > 0 ? "success" : "default"} />
             </View>
 
@@ -661,14 +761,11 @@ function AuthorizationMode({ token, onSwitchMode }: { token: string; onSwitchMod
 }
 
 function ExitMode({ token }: { token: string }) {
-  const inputRef = useRef<TextInput>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [gateLocation, setGateLocation] = useState("EXIT_MAIN");
   const [session, setSession] = useState<ExitSession | null>(null);
   const [countdown, setCountdown] = useState("-");
-  const [scanValue, setScanValue] = useState("");
-  const [scanMode, setScanMode] = useState<"tagId" | "barcode">("tagId");
   const [scanLog, setScanLog] = useState<ExitScanLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -677,23 +774,31 @@ function ExitMode({ token }: { token: string }) {
   const [flashTitle, setFlashTitle] = useState("AUTHORIZED");
   const [flashSubtitle, setFlashSubtitle] = useState<string | undefined>(undefined);
   const [flashSuccess, setFlashSuccess] = useState(true);
+  const [lastCapture, setLastCapture] = useState<StationCapture | null>(null);
 
   const loadOrders = useCallback(async () => {
     try {
       const res = await apiRequest<{ ok: true; orders: Order[] }>("/orders?status=authorized", { method: "GET", token });
       setOrders(res.orders);
-      if (!selectedOrderId && res.orders[0]) {
-        setSelectedOrderId(res.orders[0]._id);
-        setGateLocation(res.orders[0].authorizationLocation || "EXIT_MAIN");
-      }
     } catch {
       // ignore
     }
-  }, [selectedOrderId, token]);
+  }, [token]);
 
   useEffect(() => {
     void loadOrders();
   }, [loadOrders]);
+
+  useEffect(() => {
+    if (selectedOrderId && orders.some((order) => order._id === selectedOrderId)) return;
+    if (!orders[0]) {
+      setSelectedOrderId("");
+      setSession(null);
+      return;
+    }
+    setSelectedOrderId(orders[0]._id);
+    setGateLocation(orders[0].authorizationLocation || "EXIT_MAIN");
+  }, [orders, selectedOrderId]);
 
   useEffect(() => {
     if (!session) {
@@ -712,30 +817,50 @@ function ExitMode({ token }: { token: string }) {
     return () => clearInterval(timer);
   }, [session]);
 
-  async function requestSession() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiRequest<{ ok: true; session: ExitSession }>("/rfid/exit-sessions", {
-        method: "POST",
-        token,
-        body: JSON.stringify({
-          orderId: selectedOrderId || undefined,
-          location: gateLocation,
-          minutes: 5,
-        }),
-      });
-      setSession(res.session);
-      setScanLog([]);
-      successFeedback();
-      setTimeout(() => inputRef.current?.focus(), 50);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to request exit token");
-      errorFeedback();
-    } finally {
-      setLoading(false);
-    }
-  }
+  const requestSession = useCallback(
+    async (orderIdOverride?: string, silent = false) => {
+      const orderId = orderIdOverride ?? selectedOrderId;
+      if (!orderId || loading) return;
+      setLoading(true);
+      if (!silent) setError(null);
+      try {
+        const res = await apiRequest<{ ok: true; session: ExitSession }>("/rfid/exit-sessions", {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            orderId,
+            location: gateLocation,
+            minutes: 5,
+          }),
+        });
+        setSession(res.session);
+        if (!silent) {
+          setScanLog([]);
+          successFeedback();
+        }
+      } catch (e) {
+        if (!silent) {
+          setError(e instanceof Error ? e.message : "Failed to request exit token");
+          errorFeedback();
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [gateLocation, loading, selectedOrderId, token]
+  );
+
+  const desiredOrderId = selectedOrderId || orders[0]?._id || "";
+  const sessionStillValid =
+    !!session &&
+    session.location === gateLocation &&
+    (session.orderId || "") === desiredOrderId &&
+    new Date(session.expiresAt).getTime() - Date.now() > 15000;
+
+  useEffect(() => {
+    if (!desiredOrderId || loading || verifying || sessionStillValid) return;
+    void requestSession(desiredOrderId, true);
+  }, [desiredOrderId, loading, requestSession, sessionStillValid, verifying]);
 
   async function verifyScan(value: string) {
     if (!session || verifying) return;
@@ -744,6 +869,7 @@ function ExitMode({ token }: { token: string }) {
     try {
       const res = await apiRequest<{
         ok: true;
+        mode?: "tagId" | "barcode";
         authorized: boolean;
         decision: string;
         item?: { name?: string };
@@ -753,21 +879,28 @@ function ExitMode({ token }: { token: string }) {
         token,
         body: JSON.stringify({
           token: session.token,
-          [scanMode]: value,
+          value,
         }),
       });
+
+      const resolvedMode = res.mode === "barcode" ? "barcode" : "tagId";
 
       setScanLog((prev) => [
         {
           value,
-          mode: scanMode,
+          mode: resolvedMode,
           authorized: res.authorized,
           decision: res.decision,
           itemName: res.item?.name,
           when: new Date(),
         },
-        ...prev,
+        ...prev.slice(0, 11),
       ]);
+      setLastCapture({
+        value,
+        label: resolvedMode === "barcode" ? "Barcode fallback" : "RFID tag",
+        at: new Date(),
+      });
 
       setFlashSuccess(res.authorized);
       setFlashTitle(res.authorized ? "AUTHORIZED" : "DENIED");
@@ -781,9 +914,8 @@ function ExitMode({ token }: { token: string }) {
         errorFeedback();
       }
 
-      setScanValue("");
-      setTimeout(() => inputRef.current?.focus(), 50);
       if (res.remainingAuthorizations === 0) {
+        setSession(null);
         void loadOrders();
       }
     } catch (e) {
@@ -798,31 +930,22 @@ function ExitMode({ token }: { token: string }) {
     <View style={{ gap: 14 }}>
       {error ? <ErrorText>{error}</ErrorText> : null}
 
-      <Card>
-        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>1. Start an exit session</Text>
-        <MutedText>This short-lived token proves the operator and gate session before any items can leave.</MutedText>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <Badge label={`Authorized ${orders.length}`} tone={orders.length > 0 ? "warning" : "default"} />
+        <Badge label={`Gate ${gateLocation}`} tone="default" />
+        <Badge label={session ? `Lane ${countdown}` : "Lane re-arming"} tone={session ? "success" : "default"} />
+      </View>
 
-        <View style={{ height: 12 }} />
-        <Text style={[theme.typography.label, { color: theme.colors.textMuted, marginBottom: 8 }]}>Authorized order</Text>
+      <Card>
+        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Exit queue</Text>
         <View style={{ gap: 8 }}>
-          <Pressable
-            onPress={() => setSelectedOrderId("")}
-            style={{
-              borderWidth: 1,
-              borderColor: selectedOrderId ? theme.colors.border : theme.colors.primary,
-              backgroundColor: selectedOrderId ? theme.colors.surface : theme.colors.primarySoft,
-              borderRadius: theme.radius.md,
-              padding: 12,
-            }}
-          >
-            <Text style={{ color: theme.colors.text, fontWeight: "700" }}>Any authorized order for this gate</Text>
-          </Pressable>
           {orders.map((order) => (
             <Pressable
               key={order._id}
               onPress={() => {
                 setSelectedOrderId(order._id);
                 setGateLocation(order.authorizationLocation || gateLocation);
+                setSession(null);
               }}
               style={{
                 borderWidth: 1,
@@ -836,20 +959,24 @@ function ExitMode({ token }: { token: string }) {
                 <Text style={{ color: theme.colors.text, fontWeight: "700" }}>Order #{order._id.slice(-6)}</Text>
                 <Badge label={order.status} tone={toneForStatus(order.status)} />
               </View>
-              <MutedText style={{ marginTop: 6 }}>
-                Gate {order.authorizationLocation || "-"} | Window {order.authorizationExpiresAt ? formatCountdown(order.authorizationExpiresAt) : "-"}
-              </MutedText>
-            </Pressable>
-          ))}
+                <MutedText style={{ marginTop: 6 }}>
+                  Gate {order.authorizationLocation || "-"} | Window {order.authorizationExpiresAt ? formatCountdown(order.authorizationExpiresAt) : "-"}
+                </MutedText>
+              </Pressable>
+            ))}
+          {orders.length === 0 ? <MutedText>No authorized orders are waiting for exit.</MutedText> : null}
         </View>
 
         <View style={{ height: 12 }} />
-        <Text style={[theme.typography.label, { color: theme.colors.textMuted, marginBottom: 8 }]}>Gate</Text>
+        <Text style={[theme.typography.label, { color: theme.colors.textMuted, marginBottom: 8 }]}>Lane</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {GATE_PRESETS.map((preset) => (
             <Pressable
               key={preset}
-              onPress={() => setGateLocation(preset)}
+              onPress={() => {
+                setGateLocation(preset);
+                setSession(null);
+              }}
               style={{
                 paddingVertical: 8,
                 paddingHorizontal: 14,
@@ -865,53 +992,20 @@ function ExitMode({ token }: { token: string }) {
         </View>
 
         <View style={{ height: 12 }} />
-        <AppButton title="Request exit token" onPress={() => void requestSession()} loading={loading} />
+        <AppButton title="Re-arm lane" onPress={() => void requestSession()} loading={loading} variant="secondary" />
       </Card>
 
       {session ? (
-        <Card>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={[theme.typography.h3, { color: theme.colors.text }]}>2. Verify the leaving items</Text>
-              <MutedText>Token {session.token}</MutedText>
-            </View>
-            <Badge label={`Valid ${countdown}`} tone={countdown === "Expired" ? "danger" : "warning"} />
-          </View>
-
-          <View style={{ height: 12 }} />
-          <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
-            {(["tagId", "barcode"] as const).map((mode) => (
-              <Pressable
-                key={mode}
-                onPress={() => setScanMode(mode)}
-                style={{
-                  paddingVertical: 8,
-                  paddingHorizontal: 14,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: scanMode === mode ? theme.colors.primary : theme.colors.border,
-                  backgroundColor: scanMode === mode ? theme.colors.primary : theme.colors.surface,
-                }}
-              >
-                <Text style={{ color: scanMode === mode ? "#0B0F17" : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>
-                  {mode === "tagId" ? "RFID tag" : "Barcode"}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <ScannerInput
-            inputRef={inputRef}
-            label={scanMode === "tagId" ? "RFID tag scan" : "Barcode scan"}
-            value={scanValue}
-            onChangeText={setScanValue}
-            onSubmit={(value) => void verifyScan(value)}
-            placeholder={scanMode === "tagId" ? "Tap here, then scan the RFID tag" : "Tap here, then scan the barcode"}
-          />
-
-          <View style={{ height: 12 }} />
-          <AppButton title="Verify scan" onPress={() => void verifyScan(scanValue.trim())} loading={verifying} disabled={!scanValue.trim() || verifying} />
-        </Card>
+        <PassiveScanDock
+          title="Exit lane armed"
+          subtitle={`RFID and barcode scans are being verified automatically for ${session.location}.`}
+          accentColor={theme.colors.warning}
+          enabled
+          busy={verifying || loading}
+          lastCapture={lastCapture}
+          statusLabel={`Valid ${countdown}`}
+          onScan={(value) => void verifyScan(value)}
+        />
       ) : null}
 
       {scanLog.length > 0 ? (
@@ -939,7 +1033,7 @@ function ExitMode({ token }: { token: string }) {
                 </View>
                 <MutedText>{entry.itemName ?? entry.decision}</MutedText>
                 <MutedText>
-                  {entry.mode === "tagId" ? "RFID" : "Barcode"} | {entry.when.toLocaleTimeString()}
+                  {entry.mode === "tagId" ? "RFID" : "Barcode fallback"} | {entry.when.toLocaleTimeString()}
                 </MutedText>
               </View>
             ))}
@@ -956,10 +1050,8 @@ function TagsMode({ token }: { token: string }) {
   const [tags, setTags] = useState<TagRecord[]>([]);
   const [selectedTagId, setSelectedTagId] = useState("");
   const [selectedTag, setSelectedTag] = useState<TagRecord | null>(null);
-  const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
-  const [itemSearch, setItemSearch] = useState("");
-  const [itemResults, setItemResults] = useState<InventoryItem[]>([]);
+  const [inventoryCatalog, setInventoryCatalog] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -971,7 +1063,6 @@ function TagsMode({ token }: { token: string }) {
     try {
       const params = new URLSearchParams();
       if (statusFilter !== "all") params.set("status", statusFilter);
-      if (search.trim()) params.set("search", search.trim());
       const res = await apiRequest<{ ok: true; tags: TagRecord[] }>(`/rfid/tags?${params.toString()}`, { method: "GET", token });
       setTags(res.tags);
       if (!selectedTagId && res.tags[0]) {
@@ -982,7 +1073,7 @@ function TagsMode({ token }: { token: string }) {
     } finally {
       setLoading(false);
     }
-  }, [search, selectedTagId, statusFilter, token]);
+  }, [selectedTagId, statusFilter, token]);
 
   const loadSelectedTag = useCallback(async () => {
     if (!selectedTagId) {
@@ -997,6 +1088,19 @@ function TagsMode({ token }: { token: string }) {
     }
   }, [selectedTagId, token]);
 
+  const loadInventoryCatalog = useCallback(async () => {
+    try {
+      const res = await apiRequest<{ ok: true; items: InventoryItem[] }>("/inventory/items", { method: "GET", token });
+      setInventoryCatalog(
+        [...res.items]
+          .sort((left, right) => left.name.localeCompare(right.name))
+          .slice(0, 24)
+      );
+    } catch {
+      setInventoryCatalog([]);
+    }
+  }, [token]);
+
   useEffect(() => {
     void loadTags();
   }, [loadTags]);
@@ -1006,17 +1110,8 @@ function TagsMode({ token }: { token: string }) {
   }, [loadSelectedTag]);
 
   useEffect(() => {
-    if (!itemSearch.trim()) {
-      setItemResults([]);
-      return;
-    }
-    const timer = setTimeout(() => {
-      apiRequest<{ ok: true; items: InventoryItem[] }>(`/inventory/items?q=${encodeURIComponent(itemSearch.trim())}`, { method: "GET", token })
-        .then((res) => setItemResults(res.items.slice(0, 8)))
-        .catch(() => setItemResults([]));
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [itemSearch, token]);
+    void loadInventoryCatalog();
+  }, [loadInventoryCatalog]);
 
   async function runTagAction(action: "activate" | "deactivate" | "remove", tagId: string) {
     setSaving(true);
@@ -1051,8 +1146,6 @@ function TagsMode({ token }: { token: string }) {
         body: JSON.stringify({ itemId }),
       });
       setMessage(`${tagId} reassigned`);
-      setItemSearch("");
-      setItemResults([]);
       successFeedback();
       await loadTags();
       await loadSelectedTag();
@@ -1064,18 +1157,29 @@ function TagsMode({ token }: { token: string }) {
     }
   }
 
+  const activeCount = useMemo(() => tags.filter((tag) => tag.status === "active").length, [tags]);
+  const inactiveCount = useMemo(() => tags.filter((tag) => tag.status === "inactive").length, [tags]);
+  const queuedExitCount = useMemo(() => tags.filter((tag) => (tag.activeExitAuthorizations ?? 0) > 0).length, [tags]);
+  const reassignmentCandidates = useMemo(() => {
+    if (!selectedTag) return inventoryCatalog.slice(0, 10);
+    return inventoryCatalog.filter((item) => item._id !== selectedTag.itemId).slice(0, 10);
+  }, [inventoryCatalog, selectedTag]);
+
   return (
     <View style={{ gap: 14 }}>
       {error ? <ErrorText>{error}</ErrorText> : null}
       {message ? <Badge label={message} tone="success" /> : null}
 
       <Card>
-        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>RFID registry</Text>
-        <MutedText>This is the portal for viewing tags, moving them between products, and taking broken tags out of service.</MutedText>
+        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Registry overview</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <Badge label={`Total ${tags.length}`} tone="default" />
+          <Badge label={`Active ${activeCount}`} tone={activeCount > 0 ? "success" : "default"} />
+          <Badge label={`Inactive ${inactiveCount}`} tone={inactiveCount > 0 ? "warning" : "default"} />
+          <Badge label={`Queued exits ${queuedExitCount}`} tone={queuedExitCount > 0 ? "warning" : "default"} />
+        </View>
         <View style={{ height: 12 }} />
-        <TextField label="Search tags" value={search} onChangeText={setSearch} placeholder="Tag, SKU, or item name" autoCapitalize="none" />
-        <View style={{ height: 12 }} />
-        <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {(["all", "active", "inactive"] as const).map((status) => (
             <Pressable
               key={status}
@@ -1099,7 +1203,7 @@ function TagsMode({ token }: { token: string }) {
       </Card>
 
       <Card>
-        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Tag list</Text>
+        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Tag registry</Text>
         {loading ? (
           <ActivityIndicator color={theme.colors.primary} />
         ) : tags.length === 0 ? (
@@ -1158,10 +1262,9 @@ function TagsMode({ token }: { token: string }) {
 
           <View style={{ height: 16 }} />
           <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Reassign tag</Text>
-          <TextField label="Search inventory" value={itemSearch} onChangeText={setItemSearch} placeholder="Find the new product" autoCapitalize="none" />
-          {itemResults.length > 0 ? (
-            <View style={{ marginTop: 12, gap: 8 }}>
-              {itemResults.map((item) => (
+          {reassignmentCandidates.length > 0 ? (
+            <View style={{ gap: 8 }}>
+              {reassignmentCandidates.map((item) => (
                 <Pressable
                   key={item._id}
                   onPress={() => void reassignTag(selectedTag.tagId, item._id)}
@@ -1175,12 +1278,13 @@ function TagsMode({ token }: { token: string }) {
                 >
                   <Text style={{ color: theme.colors.text, fontWeight: "700" }}>{item.name}</Text>
                   <MutedText>SKU: {item.sku}</MutedText>
+                  <MutedText>{item.barcode ? `Barcode ${item.barcode}` : "No barcode fallback"}</MutedText>
                 </Pressable>
               ))}
             </View>
-          ) : itemSearch.trim() ? (
-            <MutedText style={{ marginTop: 12 }}>No matching inventory items.</MutedText>
-          ) : null}
+          ) : (
+            <MutedText>No inventory candidates loaded.</MutedText>
+          )}
         </Card>
       ) : null}
     </View>
@@ -1203,8 +1307,18 @@ export function RfidHubScreen() {
     <Screen title="RFID Hub" scroll>
       <View style={{ gap: theme.spacing.md, paddingBottom: 40 }}>
         <Card>
-          <Text style={[theme.typography.h2, { color: theme.colors.text, marginBottom: 8 }]}>RFID warehouse flow</Text>
-          <MutedText>Receive the unit and bind the tag, authorize the right order for exit, then verify each leaving item with a short-lived gate token.</MutedText>
+          <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <View style={{ flex: 1, gap: 6 }}>
+              <Text style={[theme.typography.h2, { color: theme.colors.text }]}>RFID Control Center</Text>
+              <MutedText>Autonomous station online</MutedText>
+            </View>
+            <Badge label="Live" tone="success" />
+          </View>
+          <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            <Badge label="Hands-free receive" tone="primary" />
+            <Badge label="Auto exit verification" tone="warning" />
+            <Badge label="Registry controls" tone="default" />
+          </View>
         </Card>
 
         <ModeTabs mode={mode} onChange={setMode} />

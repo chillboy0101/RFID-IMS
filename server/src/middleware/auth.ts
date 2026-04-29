@@ -7,6 +7,8 @@ import { UserModel, userRoles, type UserRole } from "../models/User.js";
 
 export type AuthUser = {
   id: string;
+  email?: string;
+  name?: string;
   role: UserRole;
   jti?: string;
 };
@@ -54,7 +56,7 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
       return;
     }
 
-    const user = await UserModel.findById(id).select({ role: 1 }).exec();
+    const user = await UserModel.findById(id).select({ role: 1, name: 1, email: 1 }).exec();
     if (!user || !userRoles.includes(user.role as UserRole)) {
       res.status(401).json({ ok: false, error: "Unauthorized" });
       return;
@@ -97,7 +99,13 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
       }
     }
 
-    req.auth = { id: user._id.toString(), role: user.role as UserRole, jti: jtiStr ?? undefined };
+    req.auth = {
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      role: user.role as UserRole,
+      jti: jtiStr ?? undefined,
+    };
     next();
   } catch {
     res.status(401).json({ ok: false, error: "Unauthorized" });

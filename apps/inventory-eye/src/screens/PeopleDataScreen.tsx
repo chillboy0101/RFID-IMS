@@ -1,12 +1,16 @@
-import React from "react";
+import React, { useContext } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
+import { AuthContext } from "../auth/AuthContext";
 import type { MoreStackParamList } from "../navigation/types";
 import { ListRow, Screen } from "../ui";
 
 type Props = NativeStackScreenProps<MoreStackParamList, "PeopleData">;
 
 export function PeopleDataScreen({ navigation }: Props) {
+  const { effectiveRole } = useContext(AuthContext);
+  const isAdmin = effectiveRole === "admin";
+
   return (
     <Screen title="People & Data" scroll>
       <ListRow
@@ -34,6 +38,13 @@ export function PeopleDataScreen({ navigation }: Props) {
         subtitle="Sessions and performance summary"
         onPress={() => navigation.navigate("Progress")}
       />
+      {isAdmin ? (
+        <ListRow
+          title="Audit Trail"
+          subtitle="Track who changed what, when, and from where"
+          onPress={() => navigation.navigate("Audit")}
+        />
+      ) : null}
     </Screen>
   );
 }
