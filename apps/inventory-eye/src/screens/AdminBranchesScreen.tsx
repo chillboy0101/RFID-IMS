@@ -221,6 +221,12 @@ export function AdminBranchesScreen({ navigation }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [noticeTone, setNoticeTone] = useState<"success" | "warning">("success");
+
+  const showNotice = useCallback((message: string, tone: "success" | "warning" = "success") => {
+    setNoticeTone(tone);
+    setNotice(message);
+  }, []);
 
   const list = useMemo(() => (Array.isArray(tenants) ? (tenants as TenantInfo[]) : []), [tenants]);
 
@@ -300,25 +306,33 @@ export function AdminBranchesScreen({ navigation }: Props) {
     setError(null);
     setNotice(null);
     try {
-      const res = await apiRequest<{ ok: true; notification?: { email?: string; delivered?: boolean } }>(`/tenants/${activeTenantId}/users`, {
-        method: "POST",
-        token,
-        body: JSON.stringify({
-          name: cleanName,
-          email: cleanEmail,
-          role: createUserRole,
-          makeSuperAdmin: isSuperAdmin ? createUserMakeSuperAdmin : false,
-        }),
-      });
+      const res = await apiRequest<{ ok: true; warning?: string; notification?: { email?: string; delivered?: boolean } }>(
+        `/tenants/${activeTenantId}/users`,
+        {
+          method: "POST",
+          token,
+          timeoutMs: 30000,
+          body: JSON.stringify({
+            name: cleanName,
+            email: cleanEmail,
+            role: createUserRole,
+            makeSuperAdmin: isSuperAdmin ? createUserMakeSuperAdmin : false,
+          }),
+        }
+      );
       setCreateUserName("");
       setCreateUserEmail("");
       setCreateUserRole("inventory_staff");
       setCreateUserMakeSuperAdmin(false);
-      setNotice(
-        res.notification?.delivered
-          ? `Account created. A temporary password was emailed to ${res.notification.email ?? cleanEmail}.`
-          : `Account created for ${cleanEmail}.`
-      );
+      if (res.notification?.delivered) {
+        showNotice(`Account created. A temporary password was emailed to ${res.notification.email ?? cleanEmail}.`);
+      } else {
+        showNotice(
+          res.warning ??
+            `Account created for ${cleanEmail}, but the temporary password email was not delivered. Check SMTP settings, then use Resend password email.`,
+          "warning"
+        );
+      }
       await loadMembers(activeTenantId);
       if (isSuperAdmin) {
         await loadAllUsers().catch(() => undefined);
@@ -328,7 +342,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
     } finally {
       setBusy(false);
     }
-  }, [activeTenantId, createUserEmail, createUserMakeSuperAdmin, createUserName, createUserRole, isBranchAdmin, isSuperAdmin, loadAllUsers, loadMembers, token]);
+  }, [activeTenantId, createUserEmail, createUserMakeSuperAdmin, createUserName, createUserRole, isBranchAdmin, isSuperAdmin, loadAllUsers, loadMembers, showNotice, token]);
 
   const confirmAction = useCallback(async (title: string, message: string): Promise<boolean> => {
     if (Platform.OS === "web") {
@@ -392,14 +406,14 @@ export function AdminBranchesScreen({ navigation }: Props) {
         });
         await loadAllUsers();
         await refreshTenants();
-        setNotice("Global role updated.");
+        showNotice("Global role updated.");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to update global role");
       } finally {
         setBusy(false);
       }
     },
-    [busy, confirmAction, isSuperAdmin, loadAllUsers, refreshTenants, token]
+    [busy, confirmAction, isSuperAdmin, loadAllUsers, refreshTenants, showNotice, token]
   );
 
   const deleteUser = useCallback(async (userId: string, email: string) => {
@@ -422,13 +436,13 @@ export function AdminBranchesScreen({ navigation }: Props) {
     try {
       await apiRequest<{ ok: true }>(`/admin/users/${userId}`, { method: "DELETE", token });
       await Promise.all([loadMembers(activeTenantId), loadAllUsers()]);
-      setNotice(`${email} was deleted.`);
+      showNotice(`${email} was deleted.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to delete user");
     } finally {
       setBusy(false);
     }
-  }, [activeTenantId, isSuperAdmin, loadAllUsers, loadMembers, token]);
+  }, [activeTenantId, isSuperAdmin, loadAllUsers, loadMembers, showNotice, token]);
 
   const resendTemporaryPassword = useCallback(async (userId: string, emailAddress: string) => {
     if (!token || !activeTenantId || !isBranchAdmin || busy) return;
@@ -445,9 +459,9 @@ export function AdminBranchesScreen({ navigation }: Props) {
     try {
       const res = await apiRequest<{ ok: true; notification?: { email?: string; delivered?: boolean } }>(
         `/tenants/${activeTenantId}/users/${userId}/resend-temporary-password`,
-        { method: "POST", token }
+        { method: "POST", token, timeoutMs: 30000 }
       );
-      setNotice(`Temporary password email sent to ${res.notification?.email ?? emailAddress}.`);
+      showNotice(`Temporary password email sent to ${res.notification?.email ?? emailAddress}.`);
       await Promise.all([
         loadMembers(activeTenantId),
         isSuperAdmin ? loadAllUsers() : Promise.resolve(),
@@ -458,7 +472,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
     } finally {
       setBusy(false);
     }
-  }, [activeTenantId, busy, confirmAction, isBranchAdmin, isSuperAdmin, loadAllUsers, loadMembers, loadSessions, token]);
+  }, [activeTenantId, busy, confirmAction, isBranchAdmin, isSuperAdmin, loadAllUsers, loadMembers, loadSessions, showNotice, token]);
 
   const assignUserToActiveBranch = useCallback(async (userId: string) => {
     if (!token || !isSuperAdmin) return;
@@ -477,13 +491,13 @@ export function AdminBranchesScreen({ navigation }: Props) {
         body: JSON.stringify({ userId, role: memberRole }),
       });
       await Promise.all([loadMembers(activeTenantId), loadAllUsers()]);
-      setNotice("User assigned to the active branch.");
+      showNotice("User assigned to the active branch.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to assign user");
     } finally {
       setBusy(false);
     }
-  }, [activeTenantId, isSuperAdmin, loadAllUsers, loadMembers, memberRole, token]);
+  }, [activeTenantId, isSuperAdmin, loadAllUsers, loadMembers, memberRole, showNotice, token]);
 
   const updateMemberRole = useCallback(async (userId: string, role: UserRole) => {
     if (!token || !isBranchAdmin) return;
@@ -506,13 +520,13 @@ export function AdminBranchesScreen({ navigation }: Props) {
         body: JSON.stringify({ userId, role }),
       });
       await loadMembers(activeTenantId);
-      setNotice("Branch role updated.");
+      showNotice("Branch role updated.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update role");
     } finally {
       setBusy(false);
     }
-  }, [activeTenantId, busy, confirmAction, isBranchAdmin, loadMembers, token]);
+  }, [activeTenantId, busy, confirmAction, isBranchAdmin, loadMembers, showNotice, token]);
 
   useFocusEffect(
     useCallback(() => {
@@ -582,7 +596,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
       if (res?.tenant?.id) {
         await setActiveTenantId(res.tenant.id);
       }
-      setNotice("Branch created and set as active.");
+      showNotice("Branch created and set as active.");
       setBranchTab("list");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create branch");
@@ -635,7 +649,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
       setEmail("");
       setMemberRole("inventory_staff");
       setMemberMakeSuperAdmin(false);
-      setNotice(`${cleanEmail} was added to the active branch. This does not send a password email; use Resend password email if they need a new temporary password.`);
+      showNotice(`${cleanEmail} was added to the active branch. This does not send a password email; use Resend password email if they need a new temporary password.`);
       await loadMembers(activeTenantId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to add member");
@@ -660,13 +674,13 @@ export function AdminBranchesScreen({ navigation }: Props) {
         token,
       });
       await loadMembers(activeTenantId);
-      setNotice("User removed from the active branch.");
+      showNotice("User removed from the active branch.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to remove member");
     } finally {
       setBusy(false);
     }
-  }, [activeTenantId, confirmAction, isBranchAdmin, loadMembers, token]);
+  }, [activeTenantId, confirmAction, isBranchAdmin, loadMembers, showNotice, token]);
 
   const branchRows = useMemo(() => {
     return list.map((t) => <BranchRow key={t.id} id={t.id} name={t.name} slug={t.slug} isActive={t.id === activeTenantId} onSelect={selectBranch} />);
@@ -713,7 +727,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
     >
       <View style={{ gap: theme.spacing.md }}>
         {error ? <ErrorText>{error}</ErrorText> : null}
-        {notice ? <MutedText style={{ color: theme.colors.success }}>{notice}</MutedText> : null}
+        {notice ? <MutedText style={{ color: noticeTone === "warning" ? theme.colors.warning : theme.colors.success }}>{notice}</MutedText> : null}
 
         <Card>
           <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Branches</Text>

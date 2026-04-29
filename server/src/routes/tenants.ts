@@ -462,18 +462,6 @@ router.post("/:id/users", requireTenant, requireRole("admin"), async (req: Tenan
     text: emailMessage.text,
   });
 
-  if (!emailSent) {
-    await Promise.all([
-      TenantMembershipModel.deleteMany({ tenantId: tenant._id, userId }).exec(),
-      UserModel.deleteOne({ _id: userId }).exec(),
-    ]);
-    res.status(502).json({
-      ok: false,
-      error: "User account was not created because the temporary password email could not be delivered.",
-    });
-    return;
-  }
-
   setAuditContext(res, {
     type: "tenants.user.create",
     category: "tenants",
@@ -487,7 +475,8 @@ router.post("/:id/users", requireTenant, requireRole("admin"), async (req: Tenan
       tenantName: tenant.name,
       tenantSlug: tenant.slug,
       membershipRole: memberRole,
-      notification: "email",
+      notification: emailSent ? "email" : "email_failed",
+      notificationDelivered: emailSent,
     },
   });
 
@@ -495,7 +484,10 @@ router.post("/:id/users", requireTenant, requireRole("admin"), async (req: Tenan
     ok: true,
     user: provisionedUser,
     membership: { tenantId: tenant._id.toString(), userId: provisionedUser.id, role: memberRole },
-    notification: { email: cleanEmail, delivered: true },
+    notification: { email: cleanEmail, delivered: emailSent },
+    warning: emailSent
+      ? undefined
+      : "Account was created, but the temporary password email could not be delivered. Check SMTP settings, then use Resend password email.",
   });
 });
 

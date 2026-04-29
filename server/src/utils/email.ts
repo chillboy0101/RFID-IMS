@@ -47,15 +47,41 @@ function getTransportConfigs(): MailTransportConfig[] {
 }
 
 function createTransporter(config: MailTransportConfig) {
+  const timeoutMs = getSmtpTimeoutMs();
   return nodemailer.createTransport({
     host: config.host,
     port: config.port,
     secure: config.secure,
+    connectionTimeout: timeoutMs,
+    greetingTimeout: timeoutMs,
+    socketTimeout: timeoutMs,
     auth: {
       user: config.user,
       pass: config.pass,
     },
   });
+}
+
+function getSmtpTimeoutMs(): number {
+  const parsed = Number(process.env.SMTP_TIMEOUT_MS ?? 12000);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 12000;
+  }
+  return Math.max(4000, Math.min(parsed, 15000));
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 
 function resolveFromAddress(): string {
@@ -99,23 +125,30 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
 
   const from = resolveFromAddress();
   let lastError: unknown = null;
+  const timeoutMs = getSmtpTimeoutMs();
 
   for (const config of configs) {
     const transporter = createTransporter(config);
 
     try {
-      await transporter.sendMail({
-        from,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text ?? options.html.replace(/<[^>]*>/g, ""),
-      });
+      await withTimeout(
+        transporter.sendMail({
+          from,
+          to: options.to,
+          subject: options.subject,
+          html: options.html,
+          text: options.text ?? options.html.replace(/<[^>]*>/g, ""),
+        }),
+        timeoutMs,
+        `Email delivery via ${config.host}:${config.port}`
+      );
       console.log(`Email sent successfully to ${options.to} via ${config.host}:${config.port} secure=${config.secure}`);
       return true;
     } catch (err) {
       lastError = err;
       console.error(`Failed to send email via ${config.host}:${config.port} secure=${config.secure}:`, err);
+    } finally {
+      transporter.close();
     }
   }
 
@@ -428,7 +461,7 @@ export function buildProvisionedAccountEmail(input: ProvisionedAccountEmailInput
         ${branchLine}
       </div>
       <div class="password-box">${escapedPassword}</div>
-      <p style="text-align: center;"><a href="${input.loginUrl}" class="button">Open Sign In</a></p>
+      <p style="text-align: center;"><a href="${escapedLoginUrl}" class="button">Open Sign In</a></p>
       <p>Or copy and paste this link into your browser:</p>
       <div class="token-box">${escapedLoginUrl}</div>
     </div>
