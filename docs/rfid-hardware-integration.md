@@ -1,31 +1,34 @@
 # RFID Hardware Integration
 
-This project supports two RFID integration patterns:
+This document is the handoff contract for RFID readers, barcode-capable middleware, and tag commissioning stations.
 
-1. Fixed gate reader flow for portal readers and middleware.
-2. Operator-assisted exit-session flow for scanners that work with a signed-in warehouse user.
-
-The local API base URL is:
+Use the deployed API host in production. For local testing, use the backend host that the app points to, for example:
 
 ```text
-http://172.20.10.5:4000
+http://localhost:4000
+http://<LAN-IP>:4000
 ```
 
-## 1. Fixed Gate Reader Flow
+## Core Flow
 
-Use this when the hardware team is wiring a portal reader, antenna controller, or reader-side middleware.
+1. Create the item master record in the app or API. New items start with `quantity: 0`.
+2. Receive physical units through the RFID receiving station. Each successful tag read creates one inventory unit and increments stock.
+3. Create an order from available stock.
+4. Authorize the order for an exit gate.
+5. Fixed gate reader posts exit reads. The server returns `ALLOW` or `DENY` and records the event/audit trail.
 
-### Authentication
+## Authentication
 
-Send the raw gate key in the `X-Gate-Api-Key` header.
+Hardware endpoints use gate/station keys:
 
 ```http
 X-Gate-Api-Key: gate_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-X-Source: fx9600-exit-main
+X-Source: receiving-station-a1
+X-Event-ID: reader-a1-20260429-000001
 Content-Type: application/json
 ```
 
-Create gate keys from the app in `RFID Hub -> Gate Keys`, or by calling:
+Create keys from `RFID Hub -> Gate Keys`. A key can be bound to a location with `locationHint`; when it is bound, hardware does not need to send `location`.
 
 ```http
 POST /rfid/gate-keys
@@ -34,48 +37,125 @@ X-Tenant-ID: <tenant-id>
 Content-Type: application/json
 
 {
-  "name": "EXIT_MAIN portal",
+  "name": "Main exit reader",
   "locationHint": "EXIT_MAIN",
   "minutes": 43200
 }
 ```
 
-### Reader Endpoint
+For retry-safe hardware delivery, always send either the `X-Event-ID` header or `eventId` in the JSON body. Duplicate event IDs return `duplicate: true` without processing the scan twice.
+
+## Receiving Reader
+
+Use this for receiving/tag assignment. This is the preferred hardware path for adding stock.
 
 ```http
-POST /rfid/gate-events
+POST /rfid/receiving-events
+X-Gate-Api-Key: <raw gate key>
+X-Source: receiving-station-a1
+X-Event-ID: receiving-a1-000001
+Content-Type: application/json
 ```
 
-### Reader Payload
-
-Preferred autonomous payload: send a single `value` and let the server resolve whether it is an RFID tag or a barcode. `tagId` and `barcode` are still supported when the reader middleware already knows the identity type.
+Preferred payload:
 
 ```json
 {
-  "value": "E20034120123456789012345",
-  "location": "EXIT_MAIN",
-  "source": "fx9600-exit-main",
-  "observedAt": "2026-04-28T23:45:00.000Z"
+  "eventId": "receiving-a1-000001",
+  "tagId": "E20034120123456789012345",
+  "itemBarcode": "BW-BLND-130",
+  "location": "RECEIVING_STAGING",
+  "observedAt": "2026-04-29T14:10:00.000Z"
 }
 ```
 
-Optional fields are preserved in the raw RFID event payload, so middleware-specific metadata can also be sent:
+Accepted item identifiers:
 
 ```json
 {
-  "value": "E20034120123456789012345",
+  "tagId": "E20034120123456789012345",
+  "itemId": "68101234567890abcdef9999"
+}
+```
+
+```json
+{
+  "tagId": "E20034120123456789012345",
+  "sku": "BW-BLND-130"
+}
+```
+
+Successful response:
+
+```json
+{
+  "ok": true,
+  "processed": true,
+  "event": {
+    "_id": "68101234567890abcdef5678",
+    "eventId": "receiving-a1-000001",
+    "tagId": "E20034120123456789012345"
+  },
+  "item": {
+    "_id": "68101234567890abcdef9999",
+    "name": "Brazilian wig",
+    "sku": "BW-BLND-130",
+    "quantity": 1
+  },
+  "unit": {
+    "_id": "68101234567890abcdef1111",
+    "tagId": "E20034120123456789012345",
+    "status": "in_stock",
+    "location": "RECEIVING_STAGING"
+  }
+}
+```
+
+Rules:
+
+- One tag read creates one inventory unit.
+- Receiving locations must not be exit gates.
+- A tag can only be assigned once.
+- Inactive items cannot receive stock.
+- Stock quantity is incremented by the server after the read is accepted.
+
+## Fixed Exit Gate Reader
+
+Use this for autonomous exit verification at gate/portal readers.
+
+```http
+POST /rfid/gate-events
+X-Gate-Api-Key: <raw gate key>
+X-Source: fx9600-exit-main
+X-Event-ID: exit-main-000001
+Content-Type: application/json
+```
+
+Preferred payload:
+
+```json
+{
+  "eventId": "exit-main-000001",
+  "tagId": "E20034120123456789012345",
   "location": "EXIT_MAIN",
-  "source": "fx9600-exit-main",
-  "observedAt": "2026-04-28T23:45:00.000Z",
+  "observedAt": "2026-04-29T14:20:00.000Z",
   "readerId": "FX9600-EXIT-01",
   "antenna": 2,
   "rssi": -47
 }
 ```
 
-### Reader Response
+Barcode fallback is supported when middleware reads a barcode instead of EPC:
 
-`decision` is the contract the middleware should act on.
+```json
+{
+  "eventId": "exit-main-000002",
+  "barcode": "1234567890123",
+  "location": "EXIT_MAIN"
+}
+```
+
+Allowed response:
 
 ```json
 {
@@ -90,8 +170,8 @@ Optional fields are preserved in the raw RFID event payload, so middleware-speci
   },
   "item": {
     "_id": "68101234567890abcdef9999",
-    "name": "Industrial Label Roll",
-    "sku": "LBL-ROLL-01"
+    "name": "Brazilian wig",
+    "sku": "BW-BLND-130"
   },
   "order": {
     "_id": "68101234567890abcdef7777",
@@ -101,7 +181,7 @@ Optional fields are preserved in the raw RFID event payload, so middleware-speci
 }
 ```
 
-If the tag is not authorized to leave, the same endpoint returns:
+Denied response:
 
 ```json
 {
@@ -115,8 +195,8 @@ If the tag is not authorized to leave, the same endpoint returns:
   },
   "item": {
     "_id": "68101234567890abcdef9999",
-    "name": "Industrial Label Roll",
-    "sku": "LBL-ROLL-01"
+    "name": "Brazilian wig",
+    "sku": "BW-BLND-130"
   },
   "order": null,
   "alert": {
@@ -128,34 +208,23 @@ If the tag is not authorized to leave, the same endpoint returns:
 }
 ```
 
-### Gate Decision Rules
+Rules:
 
-- `ALLOW`: the gate scan matches an active exit authorization for the configured location.
-- `DENY`: the scan does not match an active authorization and a security alert is recorded.
-- `remainingAuthorizations`: how many authorized scans remain on the order after this read.
+- Exit gate locations must be exit locations, for example `EXIT_MAIN`.
+- Authorization decisions use server time, not reader time.
+- `ALLOW` consumes one active authorization.
+- `DENY` records a security alert.
 
-## 2. Operator Exit-Session Flow
+## Operator Exit Session
 
-Use this when the operator must start a short-lived exit session before the items are scanned out.
-
-This is the closest match to the sequence:
-
-1. User scan requests a short-lived token.
-2. User scans tags or barcodes together with that token.
-3. Server verifies both the session and the leaving items.
-
-### Start Exit Session
+This remains available for handheld/scanner flows that require a signed-in operator token.
 
 ```http
 POST /rfid/exit-sessions
 Authorization: Bearer <jwt>
 X-Tenant-ID: <tenant-id>
 Content-Type: application/json
-```
 
-Payload:
-
-```json
 {
   "location": "EXIT_MAIN",
   "minutes": 5,
@@ -163,173 +232,84 @@ Payload:
 }
 ```
 
-Response:
-
-```json
-{
-  "ok": true,
-  "session": {
-    "id": "68101234567890abcdefbbbb",
-    "token": "exit_abcdef0123456789abcdef01",
-    "expiresAt": "2026-04-28T23:50:00.000Z",
-    "location": "EXIT_MAIN",
-    "orderId": "68101234567890abcdef7777"
-  }
-}
-```
-
-### Verify an Exit Scan
+Verify scan:
 
 ```http
 POST /rfid/exit-sessions/verify
 Authorization: Bearer <jwt>
 X-Tenant-ID: <tenant-id>
+X-Event-ID: handheld-exit-000001
 Content-Type: application/json
-```
 
-Preferred autonomous payload:
-
-```json
-{
-  "token": "exit_abcdef0123456789abcdef01",
-  "value": "E20034120123456789012345",
-  "observedAt": "2026-04-28T23:46:30.000Z"
-}
-```
-
-Explicit RFID payload:
-
-```json
 {
   "token": "exit_abcdef0123456789abcdef01",
   "tagId": "E20034120123456789012345",
-  "observedAt": "2026-04-28T23:46:30.000Z"
+  "eventId": "handheld-exit-000001"
 }
 ```
 
-Explicit barcode fallback payload:
+## Item and Order API Notes
 
-```json
-{
-  "token": "exit_abcdef0123456789abcdef01",
-  "barcode": "1234567890123",
-  "observedAt": "2026-04-28T23:46:30.000Z"
-}
-```
-
-Response:
-
-```json
-{
-  "ok": true,
-  "mode": "tagId",
-  "authorized": true,
-  "decision": "ALLOW",
-  "remainingAuthorizations": 2,
-  "session": {
-    "expiresAt": "2026-04-28T23:50:00.000Z",
-    "location": "EXIT_MAIN",
-    "orderId": "68101234567890abcdef7777"
-  },
-  "item": {
-    "_id": "68101234567890abcdef9999",
-    "name": "Industrial Label Roll",
-    "sku": "LBL-ROLL-01"
-  },
-  "order": {
-    "_id": "68101234567890abcdef7777",
-    "status": "authorized"
-  }
-}
-```
-
-## 3. Tag Registry Endpoints
-
-These are the endpoints behind the RFID Hub tag portal.
-
-### List Tags
+Create item master data:
 
 ```http
-GET /rfid/tags?status=active&search=LBL
-Authorization: Bearer <jwt>
-X-Tenant-ID: <tenant-id>
-```
-
-### Get Tag Details
-
-```http
-GET /rfid/tags/:tagId
-Authorization: Bearer <jwt>
-X-Tenant-ID: <tenant-id>
-```
-
-### Reassign or Change Tracker Mapping
-
-```http
-PATCH /rfid/tags/:tagId
+POST /inventory/items
 Authorization: Bearer <jwt>
 X-Tenant-ID: <tenant-id>
 Content-Type: application/json
 
 {
-  "itemId": "68101234567890abcdef9999"
-}
-```
-
-### Activate Tag
-
-```http
-POST /rfid/tags/:tagId/activate
-Authorization: Bearer <jwt>
-X-Tenant-ID: <tenant-id>
-```
-
-### Deactivate Tag
-
-```http
-POST /rfid/tags/:tagId/deactivate
-Authorization: Bearer <jwt>
-X-Tenant-ID: <tenant-id>
-```
-
-### Remove Tag Assignment
-
-```http
-DELETE /rfid/tags/:tagId
-Authorization: Bearer <jwt>
-X-Tenant-ID: <tenant-id>
-```
-
-## 4. Receiving and Tag Assignment Flow
-
-This is the app-side receiving endpoint used when warehouse staff binds a physical unit to a tag.
-
-```http
-POST /inventory/receiving/units
-Authorization: Bearer <jwt>
-X-Tenant-ID: <tenant-id>
-Content-Type: application/json
-
-{
-  "itemId": "68101234567890abcdef9999",
-  "tagId": "E20034120123456789012345",
+  "name": "Brazilian wig",
+  "sku": "BW-BLND-130",
+  "barcode": "BW-BLND-130",
   "location": "RECEIVING_STAGING",
-  "quantity": 1
+  "quantity": 0,
+  "reorderLevel": 10,
+  "status": "active"
 }
 ```
 
-Rules:
+Create order:
 
-- `tagId` plus `quantity: 1` creates a single unit with an RFID binding.
-- `quantity > 1` is only valid when `tagId` is omitted.
-- Once received, the unit can move into picking, authorization, and exit scanning.
+```http
+POST /orders
+Authorization: Bearer <jwt>
+X-Tenant-ID: <tenant-id>
+Content-Type: application/json
 
-## 5. Useful Meta Endpoint
+{
+  "items": [
+    {
+      "itemId": "68101234567890abcdef9999",
+      "quantity": 2
+    }
+  ],
+  "notes": "Customer pickup"
+}
+```
 
-The server now exposes a hardware summary endpoint:
+Authorize order exit:
+
+```http
+POST /orders/:id/authorize-exit
+Authorization: Bearer <jwt>
+X-Tenant-ID: <tenant-id>
+Content-Type: application/json
+
+{
+  "location": "EXIT_MAIN",
+  "minutes": 10
+}
+```
+
+The server rejects orders that request more units than are currently available after reserved/picked/packed units are considered.
+
+## Meta Endpoint
+
+Hardware can inspect the current contract with:
 
 ```http
 GET /rfid/meta
 ```
 
-That returns the current fixed-reader, exit-session, and tag-registry endpoint map.
+This returns fixed gate, receiving reader, exit session, and tag registry endpoint information.

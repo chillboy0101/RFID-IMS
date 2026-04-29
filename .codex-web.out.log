@@ -143,3 +143,170 @@ Web Bundled 82ms index.ts (1 module)
 Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
 Web Bundled 83ms index.ts (1 module)
  LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 106ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 107ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 93ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 108ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 80ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 87ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 90ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 77ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 81ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 86ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Unable to resolve "../screens/OrderDetailScreen" from "src\navigation\AppNavigator.tsx"
+[0m [90m 24 |[39m [36mimport[39m { [33mInventoryAdjustScreen[39m } [36mfrom[39m [32m"../screens/InventoryAdjustScreen"[39m[33m;[39m
+ [90m 25 |[39m [36mimport[39m { [33mInventoryLogsScreen[39m } [36mfrom[39m [32m"../screens/InventoryLogsScreen"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 26 |[39m [36mimport[39m { [33mOrderDetailScreen[39m } [36mfrom[39m [32m"../screens/OrderDetailScreen"[39m[33m;[39m
+ [90m    |[39m                                    [31m[1m^[22m[39m
+ [90m 27 |[39m [36mimport[39m { [33mOrderCreateScreen[39m } [36mfrom[39m [32m"../screens/OrderCreateScreen"[39m[33m;[39m
+ [90m 28 |[39m [36mimport[39m { [33mMoreMenuScreen[39m } [36mfrom[39m [32m"../screens/MoreMenuScreen"[39m[33m;[39m
+ [90m 29 |[39m [36mimport[39m { [33mBranchSelectGateScreen[39m } [36mfrom[39m [32m"../screens/BranchSelectGateScreen"[39m[33m;[39m[0m
+
+Import stack:
+
+ src\navigation\AppNavigator.tsx
+ | import "../screens/OrderDetailScreen"
+
+ App.tsx
+ | import "./src/navigation/AppNavigator"
+
+ index.ts
+ | import "./App"
+
+ 
+ | import "./index.ts"
+
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 78ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 86ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 80ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 87ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 92ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 89ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 88ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Unable to resolve "../screens/InventoryDetailScreen" from "src\navigation\AppNavigator.tsx"
+[0m [90m 20 |[39m [36mimport[39m { [33mOrdersListScreen[39m } [36mfrom[39m [32m"../screens/OrdersListScreen"[39m[33m;[39m
+ [90m 21 |[39m [36mimport[39m { [33mSettingsScreen[39m } [36mfrom[39m [32m"../screens/SettingsScreen"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 22 |[39m [36mimport[39m { [33mInventoryDetailScreen[39m } [36mfrom[39m [32m"../screens/InventoryDetailScreen"[39m[33m;[39m
+ [90m    |[39m                                        [31m[1m^[22m[39m
+ [90m 23 |[39m [36mimport[39m { [33mInventoryEditScreen[39m } [36mfrom[39m [32m"../screens/InventoryEditScreen"[39m[33m;[39m
+ [90m 24 |[39m [36mimport[39m { [33mInventoryAdjustScreen[39m } [36mfrom[39m [32m"../screens/InventoryAdjustScreen"[39m[33m;[39m
+ [90m 25 |[39m [36mimport[39m { [33mInventoryLogsScreen[39m } [36mfrom[39m [32m"../screens/InventoryLogsScreen"[39m[33m;[39m[0m
+
+Import stack:
+
+ src\navigation\AppNavigator.tsx
+ | import "../screens/InventoryDetailScreen"
+
+ App.tsx
+ | import "./src/navigation/AppNavigator"
+
+ index.ts
+ | import "./App"
+
+ 
+ | import "./index.ts"
+
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 81ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 84ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 93ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 80ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 84ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Unable to resolve "../screens/GateKeysScreen" from "src\navigation\AppNavigator.tsx"
+[0m [90m 49 |[39m [36mimport[39m { [33mPeopleDataScreen[39m } [36mfrom[39m [32m"../screens/PeopleDataScreen"[39m[33m;[39m
+ [90m 50 |[39m [36mimport[39m { [33mAdminHubScreen[39m } [36mfrom[39m [32m"../screens/AdminHubScreen"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 51 |[39m [36mimport[39m { [33mGateKeysScreen[39m } [36mfrom[39m [32m"../screens/GateKeysScreen"[39m[33m;[39m
+ [90m    |[39m                                 [31m[1m^[22m[39m
+ [90m 52 |[39m [36mimport[39m { [33mAuditScreen[39m } [36mfrom[39m [32m"../screens/AuditScreen"[39m[33m;[39m
+ [90m 53 |[39m [36mimport[39m { [33mAutomaticProgressTracker[39m } [36mfrom[39m [32m"../progress/AutomaticProgressTracker"[39m[33m;[39m
+ [90m 54 |[39m[0m
+
+Import stack:
+
+ src\navigation\AppNavigator.tsx
+ | import "../screens/GateKeysScreen"
+
+ App.tsx
+ | import "./src/navigation/AppNavigator"
+
+ index.ts
+ | import "./App"
+
+ 
+ | import "./index.ts"
+
+Unable to resolve "../screens/SettingsScreen" from "src\navigation\AppNavigator.tsx"
+[0m [90m 19 |[39m [36mimport[39m { [33mInventoryListScreen[39m } [36mfrom[39m [32m"../screens/InventoryListScreen"[39m[33m;[39m
+ [90m 20 |[39m [36mimport[39m { [33mOrdersListScreen[39m } [36mfrom[39m [32m"../screens/OrdersListScreen"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 21 |[39m [36mimport[39m { [33mSettingsScreen[39m } [36mfrom[39m [32m"../screens/SettingsScreen"[39m[33m;[39m
+ [90m    |[39m                                 [31m[1m^[22m[39m
+ [90m 22 |[39m [36mimport[39m { [33mInventoryDetailScreen[39m } [36mfrom[39m [32m"../screens/InventoryDetailScreen"[39m[33m;[39m
+ [90m 23 |[39m [36mimport[39m { [33mInventoryEditScreen[39m } [36mfrom[39m [32m"../screens/InventoryEditScreen"[39m[33m;[39m
+ [90m 24 |[39m [36mimport[39m { [33mInventoryAdjustScreen[39m } [36mfrom[39m [32m"../screens/InventoryAdjustScreen"[39m[33m;[39m[0m
+
+Import stack:
+
+ src\navigation\AppNavigator.tsx
+ | import "../screens/SettingsScreen"
+
+ App.tsx
+ | import "./src/navigation/AppNavigator"
+
+ index.ts
+ | import "./App"
+
+ 
+ | import "./index.ts"
+
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 87ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 87ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 112ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console

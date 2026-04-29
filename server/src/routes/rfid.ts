@@ -15,12 +15,26 @@ import { OrderModel } from "../models/Order.js";
 import { RfidEventModel, rfidEventTypes, type RfidEventType } from "../models/RfidEvent.js";
 import { RfidTagModel, upsertRfidTag } from "../models/RfidTag.js";
 import { SecurityAlertModel } from "../models/SecurityAlert.js";
+import { buildInventoryFlowSummaryMap } from "../utils/inventoryFlow.js";
 import { consumeExitAuthorization } from "../utils/orderFulfillment.js";
 
 const router = express.Router();
 
 function normalizeLocation(value: unknown, fallback = "EXIT_MAIN") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function normalizeExternalEventId(req: express.Request, body: Record<string, unknown>) {
+  const fromBody = [body.eventId, body.readId, body.scanId, body.idempotencyKey]
+    .find((value) => typeof value === "string" && value.trim());
+  const fromHeader = req.header("x-event-id") ?? req.header("x-idempotency-key") ?? "";
+  return (typeof fromBody === "string" ? fromBody : fromHeader).trim();
+}
+
+function resolveHardwareLocation(req: GateRequest, body: Record<string, unknown>, fallback: string) {
+  const boundLocation = req.gateKeyLocationHint?.trim();
+  if (boundLocation) return boundLocation;
+  return normalizeLocation(body.location, fallback);
 }
 
 function uniqueStrings(values: Array<string | null | undefined>) {
@@ -40,7 +54,8 @@ function normalizeScan(body: Record<string, unknown>) {
   const tagId = typeof body.tagId === "string" ? body.tagId.trim() : "";
   const barcode = typeof body.barcode === "string" ? body.barcode.trim() : "";
   const source = typeof body.source === "string" && body.source.trim() ? body.source.trim() : "rfid";
-  const observedAt = typeof body.observedAt === "string" && body.observedAt.trim() ? new Date(body.observedAt) : new Date();
+  const parsedObservedAt = typeof body.observedAt === "string" && body.observedAt.trim() ? new Date(body.observedAt) : null;
+  const observedAt = parsedObservedAt && Number.isFinite(parsedObservedAt.getTime()) ? parsedObservedAt : new Date();
   return { value, tagId, barcode, source, observedAt };
 }
 
@@ -59,6 +74,33 @@ async function resolveItem(tenantId: string, identifiers: { itemId?: unknown; ta
 
   if (identifiers.barcode) {
     return (await InventoryItemModel.findOne({ tenantId, barcode: identifiers.barcode }).exec()) as InventoryItemDocument | null;
+  }
+
+  return null;
+}
+
+async function resolveReceivingItem(tenantId: string, body: Record<string, unknown>) {
+  const itemId = typeof body.itemId === "string" ? body.itemId.trim() : "";
+  if (itemId) {
+    if (!mongoose.isValidObjectId(itemId)) {
+      throw new Error("Invalid itemId");
+    }
+    return (await InventoryItemModel.findOne({ _id: itemId, tenantId }).exec()) as InventoryItemDocument | null;
+  }
+
+  const itemBarcode =
+    typeof body.itemBarcode === "string" && body.itemBarcode.trim()
+      ? body.itemBarcode.trim()
+      : typeof body.productBarcode === "string" && body.productBarcode.trim()
+        ? body.productBarcode.trim()
+        : "";
+  if (itemBarcode) {
+    return (await InventoryItemModel.findOne({ tenantId, barcode: itemBarcode }).exec()) as InventoryItemDocument | null;
+  }
+
+  const sku = typeof body.sku === "string" ? body.sku.trim() : "";
+  if (sku) {
+    return (await InventoryItemModel.findOne({ tenantId, sku }).exec()) as InventoryItemDocument | null;
   }
 
   return null;
@@ -222,28 +264,49 @@ router.get("/meta", async (_req, res) => {
         headers: {
           "X-Gate-Api-Key": "Required gate API key",
           "X-Source": "Optional reader/source label",
+          "X-Event-ID": "Optional unique scan/read id for retry-safe idempotency",
         },
         payload: {
-          value: "string (single autonomous scan value; server auto-detects RFID vs barcode)",
           tagId: "string (recommended for RFID reads)",
+          value: "string (single autonomous scan value; server auto-detects RFID vs barcode)",
           barcode: "string (optional barcode fallback)",
-          location: "string, default EXIT_MAIN",
+          eventId: "string, optional unique scan/read id; recommended",
+          location: "string, optional when key is not bound to a location",
           source: "string, default rfid",
-          observedAt: "ISO timestamp, optional",
+          observedAt: "ISO timestamp, optional; server time is used for authorization decisions",
           itemId: "Mongo ObjectId, optional manual override",
         },
       },
-        operatorExitSession: {
-          requestSession: "POST /rfid/exit-sessions",
-          verifyScan: "POST /rfid/exit-sessions/verify",
-          auth: "Bearer JWT + X-Tenant-ID",
-          verifyPayload: {
-            value: "string (single autonomous scan value; server auto-detects RFID vs barcode)",
-            token: "short-lived exit session token",
-            tagId: "string (preferred)",
-            barcode: "string (fallback)",
-            observedAt: "ISO timestamp, optional",
-          },
+      receivingReader: {
+        endpoint: "POST /rfid/receiving-events",
+        headers: {
+          "X-Gate-Api-Key": "Required station API key",
+          "X-Source": "Optional reader/source label",
+          "X-Event-ID": "Optional unique scan/read id for retry-safe idempotency",
+        },
+        payload: {
+          tagId: "string (required RFID tag/EPC unless value is supplied)",
+          value: "string (RFID tag/EPC fallback)",
+          eventId: "string, optional unique scan/read id; recommended",
+          itemId: "Mongo ObjectId, optional",
+          itemBarcode: "string, product barcode/SKU scan from receiving workflow",
+          sku: "string, optional item SKU fallback",
+          location: "string, optional when key is not bound to a location",
+          source: "string, default rfid",
+          observedAt: "ISO timestamp, optional",
+        },
+      },
+      operatorExitSession: {
+        requestSession: "POST /rfid/exit-sessions",
+        verifyScan: "POST /rfid/exit-sessions/verify",
+        auth: "Bearer JWT + X-Tenant-ID",
+        verifyPayload: {
+          value: "string (single autonomous scan value; server auto-detects RFID vs barcode)",
+          token: "short-lived exit session token",
+          tagId: "string (preferred)",
+          barcode: "string (fallback)",
+          observedAt: "ISO timestamp, optional",
+        },
       },
       tagRegistry: {
         list: "GET /rfid/tags",
@@ -257,15 +320,123 @@ router.get("/meta", async (_req, res) => {
   });
 });
 
+router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (req: GateRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const { value, tagId: rawTagId, source, observedAt } = normalizeScan(body);
+  const tagId = rawTagId || value;
+  const eventId = normalizeExternalEventId(req, body);
+  const location = resolveHardwareLocation(req, body, "RECEIVING_STAGING");
+
+  if (!tagId) {
+    res.status(400).json({ ok: false, error: "tagId or value is required" });
+    return;
+  }
+
+  if (isExitLocation(location)) {
+    res.status(400).json({ ok: false, error: "Receiving events must use a receiving/storage location, not an exit gate" });
+    return;
+  }
+
+  if (eventId) {
+    const duplicate = await RfidEventModel.findOne({ tenantId, eventId }).exec();
+    if (duplicate) {
+      res.json({ ok: true, duplicate: true, processed: false, event: duplicate });
+      return;
+    }
+  }
+
+  let item: InventoryItemDocument | null = null;
+  try {
+    item = await resolveReceivingItem(tenantId, body);
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Invalid receiving item" });
+    return;
+  }
+
+  if (!item) {
+    res.status(404).json({ ok: false, error: "Receiving item not found. Send itemId, itemBarcode, or sku." });
+    return;
+  }
+
+  if ((item.status ?? "active").trim().toLowerCase() === "inactive") {
+    res.status(409).json({ ok: false, error: "Cannot receive stock into an inactive item" });
+    return;
+  }
+
+  const existingUnit = await InventoryUnitModel.findOne({ tenantId, tagId }).select({ _id: 1, itemId: 1 }).exec();
+  if (existingUnit) {
+    res.status(409).json({ ok: false, error: "RFID tag already exists" });
+    return;
+  }
+
+  const event = await RfidEventModel.create({
+    tenantId,
+    eventId: eventId || undefined,
+    tagId,
+    eventType: "scan",
+    itemId: item._id,
+    location,
+    observedAt,
+    source,
+    raw: req.body,
+  });
+
+  const unit = await InventoryUnitModel.create({
+    tenantId,
+    itemId: item._id,
+    tagId,
+    location,
+    status: "in_stock",
+  });
+
+  const previousQuantity = item.quantity;
+  item.quantity = previousQuantity + 1;
+  item.location = item.location || location;
+  item.rfidTagId = tagId;
+  await item.save();
+  await upsertRfidTag(tenantId, tagId, item);
+
+  await InventoryLogModel.create({
+    tenantId,
+    itemId: item._id,
+    action: "add",
+    delta: 1,
+    previousQuantity,
+    newQuantity: item.quantity,
+    reason: "RFID hardware receiving",
+    meta: { location, tagId, unitId: unit._id.toString(), rfidEventId: event._id.toString(), eventId: eventId || undefined },
+  });
+
+  const flow = (await buildInventoryFlowSummaryMap(tenantId, [item])).get(item._id.toString());
+  res.status(201).json({ ok: true, processed: true, event, item: { ...item.toObject(), flow }, unit });
+});
+
 router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: GateRequest, res) => {
   const tenantId = req.tenantId as string;
   const body = (req.body ?? {}) as Record<string, unknown>;
   const { value, tagId: rawTagId, barcode: rawBarcode, source, observedAt } = normalizeScan(body);
-  const location = normalizeLocation(body.location);
+  const eventId = normalizeExternalEventId(req, body);
+  const location = resolveHardwareLocation(req, body, "EXIT_MAIN");
+  const decisionAt = new Date();
+
+  if (!isExitLocation(location)) {
+    res.status(400).json({ ok: false, error: "Gate events must use an exit gate location" });
+    return;
+  }
+
+  if (eventId) {
+    const duplicate = await RfidEventModel.findOne({ tenantId, eventId }).exec();
+    if (duplicate) {
+      res.json({ ok: true, duplicate: true, processed: false, event: duplicate });
+      return;
+    }
+  }
+
   const { tagId, barcode, mode } = await resolveScanIdentity({
     tenantId,
     location,
-    observedAt,
+    observedAt: decisionAt,
     value,
     tagId: rawTagId,
     barcode: rawBarcode,
@@ -286,6 +457,7 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
 
   const event = await RfidEventModel.create({
     tenantId,
+    eventId: eventId || undefined,
     tagId: tagId || barcode || value,
     eventType: "scan",
     itemId: item?._id,
@@ -301,9 +473,17 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
     barcode: barcode || undefined,
     location,
     source,
-    observedAt,
+    observedAt: decisionAt,
     fallbackItem: item,
   });
+
+  event.raw = {
+    ...(typeof event.raw === "object" && event.raw ? (event.raw as Record<string, unknown>) : {}),
+    decision: result.decision,
+    authorized: result.authorized,
+    authorizationId: result.authorizationId,
+  };
+  await event.save();
 
   if (!result.authorized && result.alert) {
     result.alert.meta = { ...(result.alert.meta ?? {}), rfidEventId: event._id.toString() };
@@ -563,10 +743,20 @@ router.post("/exit-sessions/verify", requireRole("manager", "admin"), async (req
   const body = (req.body ?? {}) as Record<string, unknown>;
   const rawToken = typeof body.token === "string" ? body.token.trim() : "";
   const { value, tagId: rawTagId, barcode: rawBarcode, observedAt } = normalizeScan(body);
+  const eventId = normalizeExternalEventId(req, body);
+  const decisionAt = new Date();
 
   if (!rawToken) {
     res.status(400).json({ ok: false, error: "token is required" });
     return;
+  }
+
+  if (eventId) {
+    const duplicate = await RfidEventModel.findOne({ tenantId, eventId }).exec();
+    if (duplicate) {
+      res.json({ ok: true, duplicate: true, processed: false, event: duplicate });
+      return;
+    }
   }
 
   const session = await ExitSessionModel.findOne({
@@ -585,7 +775,7 @@ router.post("/exit-sessions/verify", requireRole("manager", "admin"), async (req
   const { tagId, barcode, mode } = await resolveScanIdentity({
     tenantId,
     location: session.location,
-    observedAt,
+    observedAt: decisionAt,
     value,
     tagId: rawTagId,
     barcode: rawBarcode,
@@ -599,6 +789,7 @@ router.post("/exit-sessions/verify", requireRole("manager", "admin"), async (req
   const fallbackItem = await resolveItem(tenantId, { tagId, barcode });
   const event = await RfidEventModel.create({
     tenantId,
+    eventId: eventId || undefined,
     tagId: tagId || barcode || value,
     eventType: "scan",
     itemId: fallbackItem?._id,
@@ -614,10 +805,19 @@ router.post("/exit-sessions/verify", requireRole("manager", "admin"), async (req
     barcode: barcode || undefined,
     location: session.location,
     source: "exit-session",
-    observedAt,
+    observedAt: decisionAt,
     actorUserId: auth.id,
     fallbackItem,
   });
+
+  event.raw = {
+    ...(typeof event.raw === "object" && event.raw ? (event.raw as Record<string, unknown>) : {}),
+    decision: result.decision,
+    authorized: result.authorized,
+    authorizationId: result.authorizationId,
+    exitSessionId: session._id.toString(),
+  };
+  await event.save();
 
   session.lastSeenAt = new Date();
   if (result.remainingAuthorizations === 0) {

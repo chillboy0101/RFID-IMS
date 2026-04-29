@@ -5,7 +5,7 @@ import mongoose from "mongoose";
 import { GateApiKeyModel } from "../models/GateApiKey.js";
 import { TenantModel } from "../models/Tenant.js";
 
-export type GateRequest = Request & { tenantId?: string; gateKeyName?: string };
+export type GateRequest = Request & { tenantId?: string; gateKeyName?: string; gateKeyLocationHint?: string };
 
 /** Hash a raw API key with SHA-256. We store keyPrefix + hash so we can show
  *  the prefix on the key-listing screen without exposing the full secret. */
@@ -50,6 +50,7 @@ export async function requireGateApiKey(req: Request, res: Response, next: NextF
 
   (req as GateRequest).tenantId = keyDoc.tenantId.toString();
   (req as GateRequest).gateKeyName = keyDoc.name;
+  (req as GateRequest).gateKeyLocationHint = keyDoc.locationHint?.trim();
 
   next();
 }

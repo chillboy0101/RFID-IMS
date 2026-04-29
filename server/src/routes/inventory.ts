@@ -124,6 +124,10 @@ router.post("/items", async (req: TenantRequest, res) => {
     res.status(400).json({ ok: false, error: quantityR.error });
     return;
   }
+  if ((quantityR.value ?? 0) > 0) {
+    res.status(400).json({ ok: false, error: "Create the item with zero quantity, then receive stock through RFID receiving." });
+    return;
+  }
   const reorderLevelR = asNumber(body.reorderLevel, { field: "reorderLevel", integer: true, min: 0 });
   if (!reorderLevelR.ok) {
     res.status(400).json({ ok: false, error: reorderLevelR.error });
@@ -171,7 +175,7 @@ router.post("/items", async (req: TenantRequest, res) => {
     barcode: barcodeR.value,
     description: descriptionR.value,
     location: locationR.value,
-    quantity: quantityR.value,
+    quantity: 0,
     reorderLevel: reorderLevelR.value,
     expiryDate: expiryDateR.value,
     rfidTagId: rfidTagIdR.value,

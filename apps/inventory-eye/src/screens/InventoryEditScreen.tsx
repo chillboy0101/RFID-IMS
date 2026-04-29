@@ -113,6 +113,7 @@ function FormField({
   inputRef,
   keyboardType,
   autoCapitalize,
+  editable = true,
 }: {
   label: string;
   value: string;
@@ -125,6 +126,7 @@ function FormField({
   inputRef?: React.RefObject<TextInput | null>;
   keyboardType?: "default" | "numeric";
   autoCapitalize?: "none" | "sentences" | "characters";
+  editable?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   const borderColor = errorText ? theme.colors.danger : focused ? theme.colors.primary : theme.colors.border;
@@ -142,6 +144,7 @@ function FormField({
         numberOfLines={numberOfLines}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
+        editable={editable}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         style={{
@@ -151,8 +154,8 @@ function FormField({
           borderRadius: theme.radius.sm,
           borderWidth: focused || errorText ? 2 : 1,
           borderColor,
-          backgroundColor: theme.colors.surface2,
-          color: theme.colors.text,
+          backgroundColor: editable ? theme.colors.surface2 : theme.colors.surface,
+          color: editable ? theme.colors.text : theme.colors.textMuted,
           textAlignVertical: multiline ? "top" : "center",
           ...(Platform.OS === "web"
             ? ({
@@ -393,7 +396,8 @@ export function InventoryEditScreen({ navigation, route }: Props) {
   const initialRef = useRef<InventoryItem | null>(null);
 
   const title = id ? "Edit item" : "New item";
-  const stockLabel = id ? "On-hand quantity" : "Opening quantity";
+  const stockLabel = id ? "On-hand quantity" : "Starting quantity";
+  const quantityHelperText = id ? undefined : "New items start at 0. Receive units through the RFID Hub.";
 
   const hydrateFromItem = useCallback((item: InventoryItem | null) => {
     initialRef.current = item;
@@ -607,7 +611,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
         barcode: barcode.trim() ? barcode.trim() : undefined,
         description: description.trim() ? description.trim() : undefined,
         location: location.trim() ? location.trim() : undefined,
-        quantity: Number(quantity) || 0,
+        quantity: id ? Number(quantity) || 0 : 0,
         reorderLevel: Number(reorderLevel) || 0,
         expiryDate: expiryDate.trim() ? expiryDate.trim() : undefined,
         vendorId: vendorId.trim() ? vendorId.trim() : undefined,
@@ -739,7 +743,16 @@ export function InventoryEditScreen({ navigation, route }: Props) {
 
         <View style={{ width: 332, gap: theme.spacing.md, flexShrink: 0 }}>
           <SurfaceCard title="Stock levels">
-            <FormField label={stockLabel} value={quantity} onChangeText={setQuantity} keyboardType="numeric" errorText={quantityError} placeholder="0" />
+            <FormField
+              label={stockLabel}
+              value={id ? quantity : "0"}
+              onChangeText={id ? setQuantity : () => undefined}
+              keyboardType="numeric"
+              errorText={quantityError}
+              placeholder="0"
+              helperText={quantityHelperText}
+              editable={Boolean(id)}
+            />
             <FormField
               label="Low stock alert"
               value={reorderLevel}
@@ -939,7 +952,16 @@ export function InventoryEditScreen({ navigation, route }: Props) {
         </AccordionSection>
 
         <AccordionSection title="Stock & status" subtitle="Quantity, alerts, and visibility" defaultOpen>
-          <FormField label={stockLabel} value={quantity} onChangeText={setQuantity} keyboardType="numeric" errorText={quantityError} placeholder="0" />
+          <FormField
+            label={stockLabel}
+            value={id ? quantity : "0"}
+            onChangeText={id ? setQuantity : () => undefined}
+            keyboardType="numeric"
+            errorText={quantityError}
+            placeholder="0"
+            helperText={quantityHelperText}
+            editable={Boolean(id)}
+          />
           <FormField
             label="Low stock alert"
             value={reorderLevel}

@@ -331,6 +331,13 @@ const auditDescriptorMap: Record<string, AuditDescriptor> = {
     successSummary: "Captured gate reader event",
     failureSummary: "Failed to capture gate reader event",
   },
+  "POST /rfid/receiving-events": {
+    type: "rfid.receiving_event.capture",
+    category: "rfid",
+    entityType: "rfid_event",
+    successSummary: "Captured receiving reader event",
+    failureSummary: "Failed to capture receiving reader event",
+  },
   "POST /rfid/gate-keys": {
     type: "rfid.gate_key.create",
     category: "rfid",
@@ -706,6 +713,10 @@ function buildMetadata(req: AuditedRequest, res: AuditedResponse): Record<string
 
   if (typeof req.gateKeyName === "string" && req.gateKeyName.trim()) {
     metadata.gateKeyName = req.gateKeyName.trim();
+  }
+
+  if (typeof req.gateKeyLocationHint === "string" && req.gateKeyLocationHint.trim()) {
+    metadata.gateKeyLocation = req.gateKeyLocationHint.trim();
   }
 
   if (error) {

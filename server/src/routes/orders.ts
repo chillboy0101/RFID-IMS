@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import { requireTenant, type TenantRequest } from "../middleware/tenant.js";
 import { InventoryItemModel } from "../models/InventoryItem.js";
 import { InventoryLogModel } from "../models/InventoryLog.js";
+import { InventoryUnitModel } from "../models/InventoryUnit.js";
 import { OrderModel, orderStatuses, type OrderStatus } from "../models/Order.js";
 import {
   authorizeOrderExit,
@@ -142,13 +143,43 @@ router.post("/", async (req: TenantRequest, res) => {
     items.push({ itemId: itemIdR.value, quantity: qtyR.value });
   }
 
-  const itemDocs = await InventoryItemModel.find({ tenantId, _id: { $in: items.map((item) => item.itemId) } }).exec();
-  if (itemDocs.length !== items.length) {
+  const requestedByItemId = new Map<string, number>();
+  for (const line of items) {
+    requestedByItemId.set(line.itemId, (requestedByItemId.get(line.itemId) ?? 0) + line.quantity);
+  }
+
+  const itemDocs = await InventoryItemModel.find({ tenantId, _id: { $in: Array.from(requestedByItemId.keys()) } }).exec();
+  if (itemDocs.length !== requestedByItemId.size) {
     res.status(400).json({ ok: false, error: "One or more items not found" });
     return;
   }
 
   const itemById = new Map(itemDocs.map((doc) => [doc._id.toString(), doc]));
+  const committedUnits = await InventoryUnitModel.aggregate([
+    {
+      $match: {
+        tenantId: new mongoose.Types.ObjectId(tenantId),
+        itemId: { $in: itemDocs.map((doc) => doc._id) },
+        status: { $in: ["reserved", "picked", "packed"] },
+      },
+    },
+    { $group: { _id: "$itemId", count: { $sum: 1 } } },
+  ]).exec();
+  const committedByItemId = new Map(committedUnits.map((row) => [String(row._id), Number(row.count) || 0]));
+
+  for (const doc of itemDocs) {
+    const requested = requestedByItemId.get(doc._id.toString()) ?? 0;
+    const committed = committedByItemId.get(doc._id.toString()) ?? 0;
+    const available = Math.max(0, doc.quantity - committed);
+    if ((doc.status ?? "active").trim().toLowerCase() === "inactive") {
+      res.status(409).json({ ok: false, error: `${doc.sku} is inactive and cannot be ordered` });
+      return;
+    }
+    if (requested > available) {
+      res.status(409).json({ ok: false, error: `${doc.sku} has only ${available} available units` });
+      return;
+    }
+  }
 
   const order = await OrderModel.create({
     tenantId,
