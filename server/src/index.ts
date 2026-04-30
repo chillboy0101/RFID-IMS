@@ -61,6 +61,17 @@ function resolveFrontendFaviconPath(): string | null {
   return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
 }
 
+function resolveServerPublicAssetPath(fileName: string): string | null {
+  const safeName = path.basename(fileName);
+  const candidates = [
+    path.resolve(process.cwd(), "public", safeName),
+    path.resolve(process.cwd(), "server/public", safeName),
+    path.resolve(process.cwd(), "../server/public", safeName),
+  ];
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
+}
+
 app.use((req: ReqWithId, res, next) => {
   const header = req.header("x-request-id") ?? "";
   const requestId = header.trim() || crypto.randomUUID();
@@ -252,6 +263,18 @@ app.get(["/favicon.ico", "/favicon.png"], (_req: Request, res: Response) => {
   res.setHeader("cache-control", "public, max-age=86400");
   res.type("png").sendFile(faviconPath);
 });
+
+app.get("/vdl-logo.png", (_req: Request, res: Response) => {
+  const logoPath = resolveServerPublicAssetPath("vdl-logo.png");
+  if (!logoPath) {
+    res.status(404).send("Not found");
+    return;
+  }
+
+  res.setHeader("cache-control", "public, max-age=86400");
+  res.type("png").sendFile(logoPath);
+});
+
 app.get("/verify-email", async (req: Request, res: Response) => {
   const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
   const appBaseUrl = resolveAppBaseUrl(req);

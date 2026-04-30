@@ -49,7 +49,7 @@ export function renderApiHome(options: ApiHomeOptions): string {
   const uptime = formatDuration(options.uptimeMs);
   const statusLabel = dbConnected ? "Operational" : "Degraded";
   const statusTone = dbConnected ? "ok" : "warn";
-  const logoUrl = "https://vdlfulfilment.com/wp-content/uploads/2023/05/cropped-VDL-Logo-compositions-15-300x141.png";
+  const logoUrl = "/vdl-logo.png";
 
   return `<!doctype html>
 <html lang="en">
