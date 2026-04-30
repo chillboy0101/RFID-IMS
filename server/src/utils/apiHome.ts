@@ -49,6 +49,7 @@ export function renderApiHome(options: ApiHomeOptions): string {
   const uptime = formatDuration(options.uptimeMs);
   const statusLabel = dbConnected ? "Operational" : "Degraded";
   const statusTone = dbConnected ? "ok" : "warn";
+  const logoUrl = "https://vdlfulfilment.com/wp-content/uploads/2023/05/cropped-VDL-Logo-compositions-15-300x141.png";
 
   return `<!doctype html>
 <html lang="en">
@@ -113,21 +114,19 @@ export function renderApiHome(options: ApiHomeOptions): string {
       }
 
       .mark {
-        display: grid;
-        width: 42px;
+        display: flex;
+        width: 76px;
         height: 42px;
-        place-items: center;
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        background: var(--card);
-        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-        font-weight: 900;
-        letter-spacing: -0.05em;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
       }
 
       .mark img {
-        width: 28px;
-        height: 28px;
+        display: block;
+        width: 76px;
+        max-height: 38px;
+        height: auto;
         object-fit: contain;
       }
 
@@ -372,6 +371,11 @@ export function renderApiHome(options: ApiHomeOptions): string {
         .hero-side {
           padding: 24px;
         }
+
+        .mark,
+        .mark img {
+          width: 68px;
+        }
       }
     </style>
   </head>
@@ -379,7 +383,7 @@ export function renderApiHome(options: ApiHomeOptions): string {
     <main class="shell">
       <header class="topbar">
         <div class="brand">
-          <div class="mark"><img src="/favicon.png" alt="VDL" /></div>
+          <div class="mark"><img src="${logoUrl}" alt="VDL Fulfilment" /></div>
           <div>
             <div class="brand-title">VDL Fulfilment Ops API</div>
             <div class="brand-subtitle">${escapeHtml(options.origin)}</div>
