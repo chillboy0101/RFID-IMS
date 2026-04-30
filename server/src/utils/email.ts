@@ -11,6 +11,45 @@ type MailTransportConfig = {
   pass: string;
 };
 
+type ParsedSender = {
+  name?: string;
+  email: string;
+};
+
+function parseSenderAddress(value: string): ParsedSender | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const match = trimmed.match(/^(.*?)\s*<([^>]+)>$/);
+  if (match) {
+    const name = match[1]?.trim().replace(/^"|"$/g, "");
+    const email = match[2]?.trim();
+    if (email) {
+      return {
+        name: name || undefined,
+        email,
+      };
+    }
+  }
+
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    return { email: trimmed };
+  }
+
+  return null;
+}
+
+function resolveBrevoSender(): ParsedSender | null {
+  const email = (process.env.BREVO_FROM_EMAIL ?? "").trim();
+  const name = (process.env.BREVO_FROM_NAME ?? "VDL Fulfilment Ops").trim();
+  if (email) {
+    return { email, name: name || undefined };
+  }
+
+  const from = (process.env.BREVO_FROM ?? "").trim() || resolveFromAddress();
+  return parseSenderAddress(from);
+}
+
 function getTransportConfigs(): MailTransportConfig[] {
   const host = process.env.SMTP_HOST;
   const port = Number(process.env.SMTP_PORT ?? 587);
@@ -97,6 +136,53 @@ function resolveFromAddress(): string {
   return configured;
 }
 
+async function sendWithBrevo(options: SendEmailOptions): Promise<boolean> {
+  const apiKey = (process.env.BREVO_API_KEY ?? "").trim();
+  if (!apiKey) return false;
+
+  const sender = resolveBrevoSender();
+  if (!sender) {
+    console.error("Brevo sender not configured. Set BREVO_FROM_EMAIL or BREVO_FROM.");
+    return false;
+  }
+
+  const timeoutMs = getSmtpTimeoutMs();
+  const apiUrl = (process.env.BREVO_API_URL ?? "https://api.brevo.com/v3/smtp/email").trim();
+  try {
+    const response = await withTimeout(
+      fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "api-key": apiKey,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          sender,
+          to: [{ email: options.to }],
+          subject: options.subject,
+          htmlContent: options.html,
+          textContent: options.text ?? options.html.replace(/<[^>]*>/g, ""),
+        }),
+      }),
+      timeoutMs,
+      "Brevo email delivery"
+    );
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      console.error(`Brevo email delivery failed with HTTP ${response.status}: ${body.slice(0, 500)}`);
+      return false;
+    }
+
+    console.log(`Email sent successfully to ${options.to} via Brevo`);
+    return true;
+  } catch (err) {
+    console.error("Brevo email delivery failed:", err);
+    return false;
+  }
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -119,9 +205,15 @@ interface SendEmailOptions {
 }
 
 export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
+  if ((process.env.BREVO_API_KEY ?? "").trim()) {
+    const delivered = await sendWithBrevo(options);
+    if (delivered) return true;
+    console.error("Falling back to SMTP after Brevo delivery failed.");
+  }
+
   const configs = getTransportConfigs();
   if (!configs.length) {
-    console.error("Email transporter not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS in environment.");
+    console.error("Email transporter not configured. Set BREVO_API_KEY + BREVO_FROM_EMAIL, or SMTP_HOST + SMTP_USER + SMTP_PASS.");
     return false;
   }
 
