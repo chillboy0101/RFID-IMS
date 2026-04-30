@@ -478,6 +478,46 @@ router.post("/change-password", requireAuth, async (req: AuthRequest, res) => {
   });
 });
 
+router.post("/complete-password-change", requireAuth, async (req: AuthRequest, res) => {
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const { newPassword } = req.body as { newPassword?: string };
+  if (!newPassword || newPassword.length < 6) {
+    res.status(400).json({ ok: false, error: "Password must be at least 6 characters" });
+    return;
+  }
+
+  const user = await UserModel.findById(auth.id).exec();
+  if (!user) {
+    res.status(404).json({ ok: false, error: "User not found" });
+    return;
+  }
+
+  if (!(user as any).mustChangePassword) {
+    res.status(400).json({ ok: false, error: "Password change is not required for this account" });
+    return;
+  }
+
+  user.passwordHash = await bcrypt.hash(newPassword, 12);
+  (user as any).mustChangePassword = false;
+  await user.save();
+
+  res.json({
+    ok: true,
+    user: {
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      mustChangePassword: Boolean((user as any).mustChangePassword),
+    },
+  });
+});
+
 router.get("/me", requireAuth, async (req: AuthRequest, res) => {
   const auth = req.auth;
   if (!auth) {

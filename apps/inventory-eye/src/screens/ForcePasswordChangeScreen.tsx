@@ -7,7 +7,6 @@ import { AppButton, Card, ErrorText, MutedText, Screen, TextField, theme } from 
 
 export function ForcePasswordChangeScreen() {
   const { token, user, refreshMe, signOut } = useContext(AuthContext);
-  const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -28,7 +27,7 @@ export function ForcePasswordChangeScreen() {
     if (!token || busy) return;
     setError(null);
 
-    if (!oldPassword || newPassword.length < 6) {
+    if (newPassword.length < 6) {
       setError("Password must be at least 6 characters");
       return;
     }
@@ -40,12 +39,11 @@ export function ForcePasswordChangeScreen() {
 
     setBusy(true);
     try {
-      await apiRequest<{ ok: true; user: any }>("/auth/change-password", {
+      await apiRequest<{ ok: true; user: any }>("/auth/complete-password-change", {
         method: "POST",
         token,
-        body: JSON.stringify({ oldPassword, newPassword }),
+        body: JSON.stringify({ newPassword }),
       });
-      setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
       await refreshMe();
@@ -66,11 +64,8 @@ export function ForcePasswordChangeScreen() {
           <Card>
             <MutedText>
               {user?.email ? `Hi ${user.email}. ` : ""}
-              You must set a new password before continuing.
+              Choose a new password before continuing.
             </MutedText>
-            <View style={{ height: 12 }} />
-
-            <TextField label="Temporary password" value={oldPassword} onChangeText={setOldPassword} secureTextEntry placeholder="Temporary password" />
             <View style={{ height: 12 }} />
 
             <TextField label="New password" value={newPassword} onChangeText={setNewPassword} secureTextEntry placeholder="At least 6 characters" />
