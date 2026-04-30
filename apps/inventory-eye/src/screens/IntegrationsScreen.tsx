@@ -1,5 +1,8 @@
 import React, { useCallback, useContext, useMemo, useState } from "react";
 import { Platform, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { apiRequest } from "../api/client";
@@ -15,6 +18,10 @@ type ExportType = "inventory" | "orders" | "logs" | "reorders";
 type Props = NativeStackScreenProps<MoreStackParamList, "Integrations">;
 
 const exportTypes: ExportType[] = ["inventory", "orders", "logs", "reorders"];
+
+function safeFileName(name: string) {
+  return name.replace(/[^a-z0-9._-]/gi, "-");
+}
 
 export function IntegrationsScreen({ navigation }: Props) {
   const { token, effectiveRole } = useContext(AuthContext);
@@ -42,8 +49,26 @@ export function IntegrationsScreen({ navigation }: Props) {
 
   const canUse = isAdmin;
 
-  const downloadTextFile = useCallback((filename: string, text: string, mimeType: string) => {
-    if (Platform.OS !== "web") return;
+  const downloadTextFile = useCallback(async (filename: string, text: string, mimeType: string) => {
+    if (!text.trim()) return;
+
+    if (Platform.OS !== "web") {
+      const dir = FileSystem.cacheDirectory;
+      if (!dir) throw new Error("File storage is unavailable on this device");
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (!canShare) throw new Error("File sharing is unavailable on this device");
+
+      const uri = `${dir}${safeFileName(filename)}`;
+      await FileSystem.writeAsStringAsync(uri, text, { encoding: FileSystem.EncodingType.UTF8 });
+      await Sharing.shareAsync(uri, {
+        mimeType,
+        UTI: mimeType === "text/csv" ? "public.comma-separated-values-text" : "public.plain-text",
+        dialogTitle: filename,
+      });
+      return;
+    }
+
     if (typeof document === "undefined") return;
 
     const blob = new Blob([text], { type: mimeType });
@@ -135,8 +160,42 @@ export function IntegrationsScreen({ navigation }: Props) {
     return { header, body, totalRows: Math.max(0, rows.length - 1) };
   }, [importCsv, parseCsv]);
 
-  const pickImportFile = useCallback(() => {
-    if (Platform.OS !== "web") return;
+  const applyImportFileText = useCallback(
+    (text: string, filename: string) => {
+      setImportFileName(filename);
+      const rows = parseCsv(text);
+      if (rows.length < 2) {
+        throw new Error("CSV must include a header row and at least 1 data row");
+      }
+      setImportPreviewCount(Math.max(0, rows.length - 1));
+      setImportCsv(text);
+      setImportPreviewOpen(true);
+    },
+    [parseCsv]
+  );
+
+  const pickImportFile = useCallback(async () => {
+    if (Platform.OS !== "web") {
+      try {
+        const picked = await DocumentPicker.getDocumentAsync({
+          type: ["text/csv", "text/plain", "text/comma-separated-values", "application/vnd.ms-excel"],
+          copyToCacheDirectory: true,
+          multiple: false,
+        });
+        if (picked.canceled) return;
+        const asset = picked.assets?.[0];
+        if (!asset) return;
+        const text = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.UTF8 });
+        applyImportFileText(text, asset.name || "inventory-import.csv");
+      } catch (e) {
+        setImportFileName("");
+        setImportPreviewCount(null);
+        setImportCsv("");
+        setError(e instanceof Error ? e.message : "Invalid import file");
+      }
+      return;
+    }
+
     if (typeof document === "undefined") return;
 
     const input = document.createElement("input");
@@ -147,14 +206,7 @@ export function IntegrationsScreen({ navigation }: Props) {
       if (!file) return;
       try {
         const text = await file.text();
-        setImportFileName(file.name);
-        const rows = parseCsv(text);
-        if (rows.length < 2) {
-          throw new Error("CSV must include a header row and at least 1 data row");
-        }
-        setImportPreviewCount(Math.max(0, rows.length - 1));
-        setImportCsv(text);
-        setImportPreviewOpen(true);
+        applyImportFileText(text, file.name);
       } catch (e) {
         setImportFileName("");
         setImportPreviewCount(null);
@@ -163,7 +215,7 @@ export function IntegrationsScreen({ navigation }: Props) {
       }
     };
     input.click();
-  }, [parseCsv]);
+  }, [applyImportFileText]);
 
   const onPasteImportCsv = useCallback(
     (text: string) => {
@@ -211,9 +263,18 @@ export function IntegrationsScreen({ navigation }: Props) {
     }
   }, [canUse, exportType, token]);
 
+  const downloadExportCsv = useCallback(async () => {
+    if (!exportCsv) return;
+    setError(null);
+    try {
+      await downloadTextFile(`export-${exportType}.csv`, exportCsv, "text/csv");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Download failed");
+    }
+  }, [downloadTextFile, exportCsv, exportType]);
+
   const downloadTemplate = useCallback(async () => {
     if (!token || !canUse) return;
-    if (Platform.OS !== "web") return;
     setLoading(true);
     setError(null);
     try {
@@ -230,7 +291,7 @@ export function IntegrationsScreen({ navigation }: Props) {
       if (!res.ok) {
         throw new Error(text || `HTTP ${res.status}`);
       }
-      downloadTextFile("inventory-import-template.csv", text, "text/csv");
+      await downloadTextFile("inventory-import-template.csv", text, "text/csv");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Template download failed");
     } finally {
@@ -341,6 +402,40 @@ export function IntegrationsScreen({ navigation }: Props) {
     []
   );
 
+  const PreviewToolbar = useCallback(
+    ({
+      totalRows,
+      open,
+      onToggle,
+    }: {
+      totalRows: number;
+      open: boolean;
+      onToggle: () => void;
+    }) => (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          minHeight: 48,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+          <Badge label={`Rows: ${totalRows}`} tone="primary" />
+          {isDesktopWeb ? <Badge label="Preview (first 50)" tone="default" /> : <MutedText>Preview</MutedText>}
+        </View>
+        <AppButton
+          title={open ? "Hide preview" : "Show preview"}
+          variant="secondary"
+          onPress={onToggle}
+          style={{ minWidth: isDesktopWeb ? undefined : 142 }}
+        />
+      </View>
+    ),
+    [isDesktopWeb]
+  );
+
   return (
     <Screen
       title="Import & Export"
@@ -373,23 +468,19 @@ export function IntegrationsScreen({ navigation }: Props) {
             <AppButton title="Run export" onPress={runExport} disabled={!canUse || loading} loading={loading} />
             <AppButton
               title="Download CSV"
-              onPress={() => downloadTextFile(`export-${exportType}.csv`, exportCsv, "text/csv")}
+              onPress={downloadExportCsv}
               variant="secondary"
-              disabled={!canUse || Platform.OS !== "web" || !exportCsv}
+              disabled={!canUse || !exportCsv}
             />
           </View>
 
           {exportPreview ? (
             <View style={{ marginTop: 10 }}>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-                <Badge label={`Rows: ${exportPreview.totalRows}`} tone="primary" />
-                <Badge label="Preview (first 50)" tone="default" />
-                <AppButton
-                  title={exportPreviewOpen ? "Hide preview" : "Show preview"}
-                  variant="secondary"
-                  onPress={() => setExportPreviewOpen((v) => !v)}
-                />
-              </View>
+              <PreviewToolbar
+                totalRows={exportPreview.totalRows}
+                open={exportPreviewOpen}
+                onToggle={() => setExportPreviewOpen((v) => !v)}
+              />
               {exportPreviewOpen ? <Table header={exportPreview.header} body={exportPreview.body} /> : null}
             </View>
           ) : null}
@@ -401,12 +492,12 @@ export function IntegrationsScreen({ navigation }: Props) {
 
           <View style={{ height: 10 }} />
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-            <AppButton title="Choose file" onPress={pickImportFile} variant="secondary" disabled={!canUse || Platform.OS !== "web"} />
+            <AppButton title="Choose file" onPress={pickImportFile} variant="secondary" disabled={!canUse || loading} />
             <AppButton
               title="Download template"
               onPress={downloadTemplate}
               variant="secondary"
-              disabled={!canUse || Platform.OS !== "web"}
+              disabled={!canUse || loading}
             />
             {importFileName ? <Badge label={importFileName} tone="default" /> : null}
             {typeof importPreviewCount === "number" ? <Badge label={`Items: ${importPreviewCount}`} tone="primary" /> : null}
@@ -437,15 +528,11 @@ export function IntegrationsScreen({ navigation }: Props) {
 
           {importPreview ? (
             <View style={{ marginTop: 10 }}>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-                <Badge label={`Rows: ${importPreview.totalRows}`} tone="primary" />
-                <Badge label="Preview (first 50)" tone="default" />
-                <AppButton
-                  title={importPreviewOpen ? "Hide preview" : "Show preview"}
-                  variant="secondary"
-                  onPress={() => setImportPreviewOpen((v) => !v)}
-                />
-              </View>
+              <PreviewToolbar
+                totalRows={importPreview.totalRows}
+                open={importPreviewOpen}
+                onToggle={() => setImportPreviewOpen((v) => !v)}
+              />
               {importPreviewOpen ? <Table header={importPreview.header} body={importPreview.body} /> : null}
             </View>
           ) : null}

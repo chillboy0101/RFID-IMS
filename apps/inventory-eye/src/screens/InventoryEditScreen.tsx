@@ -376,7 +376,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 1080;
   const insets = useSafeAreaInsets();
-  const compactActionDockOffset = Platform.OS === "web" ? 92 : 88 + insets.bottom;
+  const compactActionDockOffset = Platform.OS === "web" ? 92 : Math.max(28, 68 - insets.bottom);
   const compactActionDockHeight = 96;
 
   const barcodeRef = useRef<TextInput>(null);

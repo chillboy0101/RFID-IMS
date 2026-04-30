@@ -371,31 +371,60 @@ function KeyListMobile({
         const status = statusForKey(key, nowMs);
         return (
           <Card key={key._id}>
-            <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-              <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
                 <Text style={[theme.typography.h3, { color: theme.colors.text }]} numberOfLines={1}>
                   {key.name}
                 </Text>
                 <MutedText style={{ marginTop: 4 }}>{formatLocation(key.locationHint)}</MutedText>
               </View>
-              <StatusPill status={status} />
+              <View style={{ width: 88, alignItems: "flex-end", flexShrink: 0 }}>
+                <StatusPill status={status} />
+              </View>
             </View>
 
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
               <Badge label={`${key.keyPrefix}......`} />
               <Badge label={key.lastSeenAt ? "Seen" : "Unused"} tone={key.lastSeenAt ? "success" : "default"} />
-              <Badge label={key.expiresAt ? (status === "expired" ? "Expired" : "Expires") : "No expiry"} tone={key.expiresAt ? "warning" : "default"} />
             </View>
 
-            <View style={{ marginTop: 12, gap: 4 }}>
-              <MutedText>Created {formatDate(key.createdAt)}</MutedText>
-              <MutedText>{key.lastSeenAt ? `Last seen ${formatDate(key.lastSeenAt)}` : "No hardware activity yet"}</MutedText>
-              {key.lastSeenSource ? <MutedText>Source: {key.lastSeenSource}</MutedText> : null}
-              <MutedText>{formatValidUntil(key, nowMs)}</MutedText>
+            <View style={{ marginTop: 12, gap: 8 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+                <MutedText>Created</MutedText>
+                <Text style={[theme.typography.body, { color: theme.colors.text, flexShrink: 1, textAlign: "right" }]} numberOfLines={1}>
+                  {formatDate(key.createdAt)}
+                </Text>
+              </View>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+                <MutedText>Activity</MutedText>
+                <Text style={[theme.typography.body, { color: theme.colors.text, flexShrink: 1, textAlign: "right" }]} numberOfLines={1}>
+                  {key.lastSeenAt ? formatDate(key.lastSeenAt) : "No activity yet"}
+                </Text>
+              </View>
+              {key.lastSeenSource ? (
+                <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+                  <MutedText>Source</MutedText>
+                  <Text style={[theme.typography.body, { color: theme.colors.text, flexShrink: 1, textAlign: "right" }]} numberOfLines={1}>
+                    {key.lastSeenSource}
+                  </Text>
+                </View>
+              ) : null}
+              <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+                <MutedText>Valid until</MutedText>
+                <Text
+                  style={[
+                    theme.typography.body,
+                    { color: status === "expired" ? theme.colors.warning : theme.colors.text, flexShrink: 1, textAlign: "right" },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {formatValidUntil(key, nowMs)}
+                </Text>
+              </View>
             </View>
 
             {!key.revokedAt ? (
-              <View style={{ marginTop: 14, alignItems: "flex-start" }}>
+              <View style={{ marginTop: 14, alignItems: "flex-end" }}>
                 <RevokePill disabled={refreshing} onPress={() => onRevoke(key._id, key.name)} />
               </View>
             ) : null}

@@ -16,6 +16,45 @@ type Props = {
   onScanned: (value: string) => void;
 };
 
+function ScanFrameOverlay() {
+  const lineColor = "rgba(255,255,255,0.92)";
+  const shadowColor = "rgba(11,15,23,0.28)";
+  const cornerSize = 34;
+  const lineWidth = 3;
+
+  const baseCorner = {
+    position: "absolute" as const,
+    width: cornerSize,
+    height: cornerSize,
+    borderColor: lineColor,
+    shadowColor,
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+  };
+
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <View style={{ width: "74%", height: "48%", maxWidth: 310, maxHeight: 220, minHeight: 138, position: "relative" }}>
+        <View style={[baseCorner, { top: 0, left: 0, borderTopWidth: lineWidth, borderLeftWidth: lineWidth }]} />
+        <View style={[baseCorner, { top: 0, right: 0, borderTopWidth: lineWidth, borderRightWidth: lineWidth }]} />
+        <View style={[baseCorner, { bottom: 0, left: 0, borderBottomWidth: lineWidth, borderLeftWidth: lineWidth }]} />
+        <View style={[baseCorner, { bottom: 0, right: 0, borderBottomWidth: lineWidth, borderRightWidth: lineWidth }]} />
+      </View>
+    </View>
+  );
+}
+
 export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onScanned }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const [busy, setBusy] = useState(false);
@@ -436,10 +475,31 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     if (Platform.OS !== "web") return;
     if (webScanDisabled) return;
     if (!visible) return;
-    setWebNeedsTap(true);
-    setWebStatus("Tap anywhere on the black area to start camera");
+    setWebNeedsTap(false);
+    setWebStatus("Starting camera...");
+    void startWebCamera();
     return () => stopWebCamera();
   }, [startWebCamera, stopWebCamera, visible, webScanDisabled]);
+
+  useEffect(() => {
+    if (!visible) return;
+    if (Platform.OS !== "web") return;
+    const id = setTimeout(() => {
+      try {
+        manualInputRef.current?.focus?.();
+      } catch {
+        // ignore
+      }
+    }, 120);
+
+    return () => {
+      try {
+        clearTimeout(id);
+      } catch {
+        // ignore
+      }
+    };
+  }, [visible]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -644,7 +704,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
                   {webNeedsTap ? "Tap to start the camera, then point it at the barcode." : "Preparing camera preview..."}
                 </Text>
                 <MutedText style={{ color: "rgba(255,255,255,0.82)", textAlign: "center" }}>
-                  Camera and keyboard scanner input both work here.
+                  Scanning starts automatically when the code is in frame.
                 </MutedText>
               </View>
             ) : null}
@@ -656,69 +716,43 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
             barcodeScannerSettings={{ barcodeTypes }}
           />
         )}
+        <ScanFrameOverlay />
       </View>
       <View style={{ padding: theme.spacing.md, gap: 10 }}>
-        {isWeb ? (
-          <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-            <AppButton title={webVideoReady ? "Restart camera" : "Start camera"} onPress={() => void startWebCamera()} variant="secondary" />
-            {webVideoReady ? <AppButton title="Stop camera" onPress={stopWebCamera} variant="secondary" /> : null}
-          </View>
-        ) : null}
-        {isWeb ? (
-          <View style={{ gap: 6 }}>
-            {webStatus ? <MutedText>{webStatus}</MutedText> : null}
-            {webDiag ? <MutedText>{webDiag}</MutedText> : null}
-          </View>
-        ) : null}
         {last ? (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
             <Badge label={busy ? "Processing" : "Scanned"} tone={busy ? "warning" : "success"} />
             <MutedText>Value: {last}</MutedText>
           </View>
         ) : (
-          <MutedText>Point the camera at the barcode/QR code.</MutedText>
+          <MutedText>Point the camera at the barcode/QR code. Scanning continues automatically.</MutedText>
         )}
-        <View style={{ gap: 8 }}>
-          <Text style={[theme.typography.label, { color: theme.colors.text }]}>Scanner input</Text>
-          <View
-            style={{
-              minHeight: 48,
-              borderRadius: theme.radius.sm,
-              borderWidth: 1,
-              borderColor: theme.colors.border,
-              backgroundColor: theme.colors.surface2,
-              flexDirection: "row",
-              alignItems: "center",
-              overflow: "hidden",
+        {isWeb && webStatus && !webVideoReady ? <MutedText>{webStatus}</MutedText> : null}
+        {isWeb ? (
+          <TextInput
+            ref={manualInputRef}
+            value={manualValue}
+            onChangeText={(next) => {
+              setManualValue(next);
+              if (error) setError(null);
             }}
-          >
-            <TextInput
-              ref={manualInputRef}
-              value={manualValue}
-              onChangeText={(next) => {
-                setManualValue(next);
-                if (error) setError(null);
-              }}
-              onSubmitEditing={submitManualValue}
-              autoFocus={isWeb && visible}
-              autoCapitalize="none"
-              autoCorrect={false}
-              blurOnSubmit={false}
-              placeholder="Scan with HID scanner or paste barcode"
-              placeholderTextColor={theme.colors.textMuted}
-              style={{
-                flex: 1,
-                minHeight: 48,
-                paddingHorizontal: 14,
-                color: theme.colors.text,
-                ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null),
-              }}
-            />
-            <View style={{ width: 1, alignSelf: "stretch", backgroundColor: theme.colors.border }} />
-            <AppButton title="Use value" onPress={submitManualValue} variant="secondary" disabled={!manualValue.trim() || busy} style={{ borderRadius: 0, borderWidth: 0 }} />
-          </View>
-          <MutedText>Handheld scanners that type like keyboards will land here automatically.</MutedText>
-        </View>
+            onSubmitEditing={submitManualValue}
+            autoFocus={visible}
+            autoCapitalize="none"
+            autoCorrect={false}
+            blurOnSubmit={false}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={{
+              position: "absolute",
+              width: 1,
+              height: 1,
+              opacity: 0,
+              left: -1000,
+              top: -1000,
+            }}
+          />
+        ) : null}
       </View>
     </Card>
   );
@@ -732,9 +766,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
     </View>
   );
 
-  const helper = isWeb ? (
-    <MutedText>If the camera does not open, allow camera access or use the scanner input below.</MutedText>
-  ) : null;
+  const helper = null;
 
   const errorBox = error ? (
     <View style={{ marginTop: 10 }}>

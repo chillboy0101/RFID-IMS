@@ -14,7 +14,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.equalizerjr.inventoryeye"
+      "bundleIdentifier": "com.equalizerjr.inventoryeye",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.equalizerjr.inventoryeye",

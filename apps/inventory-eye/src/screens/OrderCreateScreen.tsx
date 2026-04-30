@@ -238,6 +238,7 @@ export function OrderCreateScreen({ navigation }: Props) {
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 1100;
   const insets = useSafeAreaInsets();
+  const mobileOverlayBottom = Platform.OS === "web" ? 92 : Math.max(28, 68 - insets.bottom);
 
   const searchRef = useRef<TextInput>(null);
   const sheetAnim = useRef(new Animated.Value(0)).current;
@@ -683,7 +684,7 @@ export function OrderCreateScreen({ navigation }: Props) {
         position: "absolute",
         left: theme.spacing.md,
         right: theme.spacing.md,
-        bottom: 86 + insets.bottom,
+        bottom: mobileOverlayBottom,
       }}
     >
       <Pressable
