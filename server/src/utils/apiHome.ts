@@ -136,15 +136,6 @@ export function renderApiHome(options: ApiHomeOptions): string {
         letter-spacing: -0.04em;
       }
 
-      .brand-subtitle {
-        margin-top: 2px;
-        overflow: hidden;
-        color: var(--muted);
-        font-size: 13px;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
       .pill {
         display: inline-flex;
         align-items: center;
@@ -386,7 +377,6 @@ export function renderApiHome(options: ApiHomeOptions): string {
           <div class="mark"><img src="${logoUrl}" alt="VDL Fulfilment" /></div>
           <div>
             <div class="brand-title">VDL Fulfilment Ops API</div>
-            <div class="brand-subtitle">${escapeHtml(options.origin)}</div>
           </div>
         </div>
         <div class="pill ${statusTone}"><span class="pulse"></span>${escapeHtml(statusLabel)}</div>
