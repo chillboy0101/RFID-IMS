@@ -278,13 +278,13 @@ router.post("/sessions/:jti/revoke", requireRole("admin"), async (req: AuthReque
 router.get("/users", requireRole("admin"), async (_req: AuthRequest, res) => {
   const { page, limit, skip } = getPagination(_req.query as Record<string, unknown>, { defaultLimit: 200, maxLimit: 500 });
 
-  const docs = await UserModel.find({}).select({ name: 1, email: 1, role: 1 }).sort({ createdAt: 1 }).skip(skip).limit(limit + 1).exec();
+  const docs = await UserModel.find({}).select({ name: 1, email: 1, role: 1, operatorTagId: 1 }).sort({ createdAt: 1 }).skip(skip).limit(limit + 1).exec();
   const hasMore = docs.length > limit;
   const users = (hasMore ? docs.slice(0, limit) : docs);
 
   res.json({
     ok: true,
-    users: users.map((u) => ({ id: u._id.toString(), name: u.name, email: u.email, role: u.role })),
+    users: users.map((u) => ({ id: u._id.toString(), name: u.name, email: u.email, role: u.role, operatorTagId: u.operatorTagId ?? null })),
     page,
     limit,
     hasMore,
@@ -294,7 +294,7 @@ router.get("/users", requireRole("admin"), async (_req: AuthRequest, res) => {
 router.get("/users-with-memberships", requireRole("admin"), async (_req: AuthRequest, res) => {
   const { page, limit, skip } = getPagination(_req.query as Record<string, unknown>, { defaultLimit: 200, maxLimit: 500 });
 
-  const userDocs = await UserModel.find({}).select({ name: 1, email: 1, role: 1 }).sort({ createdAt: 1 }).skip(skip).limit(limit + 1).exec();
+  const userDocs = await UserModel.find({}).select({ name: 1, email: 1, role: 1, operatorTagId: 1 }).sort({ createdAt: 1 }).skip(skip).limit(limit + 1).exec();
   const hasMore = userDocs.length > limit;
   const users = (hasMore ? userDocs.slice(0, limit) : userDocs);
 
@@ -324,6 +324,7 @@ router.get("/users-with-memberships", requireRole("admin"), async (_req: AuthReq
         name: u.name,
         email: u.email,
         role: u.role,
+        operatorTagId: u.operatorTagId ?? null,
         tenantIds,
         tenantCount: tenantIds.length,
         tenants: tenantRefs,

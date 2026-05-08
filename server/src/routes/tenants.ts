@@ -7,6 +7,8 @@ import { requireAuth, requireRole, type AuthRequest } from "../middleware/auth.j
 import { setAuditContext } from "../middleware/audit.js";
 import { requireTenant, type TenantRequest } from "../middleware/tenant.js";
 import { AuthSessionModel } from "../models/AuthSession.js";
+import { InventoryUnitModel } from "../models/InventoryUnit.js";
+import { RfidTagModel } from "../models/RfidTag.js";
 import { TenantModel } from "../models/Tenant.js";
 import { TenantMembershipModel } from "../models/TenantMembership.js";
 import { UserModel, userRoles, type UserRole } from "../models/User.js";
@@ -21,6 +23,10 @@ function createTemporaryPassword(): string {
 
 function normalizeEmail(value: unknown): string {
   return String(value ?? "").toLowerCase().trim();
+}
+
+function normalizeOperatorTagId(value: unknown): string {
+  return String(value ?? "").trim();
 }
 
 function isValidEmail(value: string): boolean {
@@ -106,7 +112,7 @@ router.get("/:id/sessions", requireTenant, requireRole("admin"), async (req: Ten
     .exec();
 
   const userIds = Array.from(new Set(sessions.map((s) => String(s.userId))));
-  const users = await UserModel.find({ _id: { $in: userIds } }).select({ name: 1, email: 1, role: 1 }).exec();
+  const users = await UserModel.find({ _id: { $in: userIds } }).select({ name: 1, email: 1, role: 1, operatorTagId: 1 }).exec();
   const userById = new Map(users.map((u) => [u._id.toString(), u]));
 
   res.json({
@@ -120,7 +126,7 @@ router.get("/:id/sessions", requireTenant, requireRole("admin"), async (req: Ten
         lastSeenAt: s.lastSeenAt,
         createdAt: s.createdAt,
         isCurrent: Boolean(auth.jti && String(auth.jti) === String(s.jti)),
-        user: u ? { id: u._id.toString(), name: u.name, email: u.email, role: u.role } : null,
+        user: u ? { id: u._id.toString(), name: u.name, email: u.email, role: u.role, operatorTagId: u.operatorTagId ?? null } : null,
       };
     }),
   });
@@ -623,7 +629,7 @@ router.get("/:id/members", requireTenant, requireRole("admin"), async (req: Tena
 
   const memberships = await TenantMembershipModel.find({ tenantId: tenant._id }).sort({ createdAt: 1 }).exec();
   const userIds = memberships.map((m) => m.userId);
-  const users = await UserModel.find({ _id: { $in: userIds } }).select({ name: 1, email: 1, role: 1 }).exec();
+  const users = await UserModel.find({ _id: { $in: userIds } }).select({ name: 1, email: 1, role: 1, operatorTagId: 1 }).exec();
   const userById = new Map(users.map((u) => [u._id.toString(), u]));
 
   res.json({
@@ -635,9 +641,162 @@ router.get("/:id/members", requireTenant, requireRole("admin"), async (req: Tena
         tenantId: String(m.tenantId),
         userId: String(m.userId),
         role: m.role,
-        user: u ? { id: u._id.toString(), name: u.name, email: u.email, role: u.role } : null,
+        user: u ? { id: u._id.toString(), name: u.name, email: u.email, role: u.role, operatorTagId: u.operatorTagId ?? null } : null,
       };
     }),
+  });
+});
+
+router.patch("/:id/users/:userId/operator-tag", requireTenant, requireRole("admin"), async (req: TenantRequest, res) => {
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const { id, userId } = req.params;
+  const tenantId = req.tenantId as string;
+  if (String(tenantId) !== String(id)) {
+    res.status(400).json({ ok: false, error: "X-Tenant-ID must match :id" });
+    return;
+  }
+
+  if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(userId)) {
+    res.status(400).json({ ok: false, error: "Invalid id" });
+    return;
+  }
+
+  const operatorTagId = normalizeOperatorTagId((req.body as Record<string, unknown> | undefined)?.operatorTagId);
+  if (!operatorTagId) {
+    res.status(400).json({ ok: false, error: "operatorTagId is required" });
+    return;
+  }
+
+  const [tenant, membership, targetUser] = await Promise.all([
+    TenantModel.findById(id).exec(),
+    TenantMembershipModel.findOne({ tenantId: id, userId }).exec(),
+    UserModel.findById(userId).exec(),
+  ]);
+
+  if (!tenant) {
+    res.status(404).json({ ok: false, error: "Tenant not found" });
+    return;
+  }
+  if (!membership || !targetUser) {
+    res.status(404).json({ ok: false, error: "User is not a member of this branch" });
+    return;
+  }
+
+  const [existingOwner, inventoryTag, inventoryUnit] = await Promise.all([
+    UserModel.findOne({ operatorTagId, _id: { $ne: targetUser._id } }).select({ name: 1, email: 1 }).exec(),
+    RfidTagModel.exists({ tagId: operatorTagId }).exec(),
+    InventoryUnitModel.exists({ tagId: operatorTagId }).exec(),
+  ]);
+
+  if (existingOwner) {
+    res.status(409).json({ ok: false, error: `Staff RFID card is already assigned to ${existingOwner.name || existingOwner.email}` });
+    return;
+  }
+
+  if (inventoryTag || inventoryUnit) {
+    res.status(409).json({ ok: false, error: "This RFID tag is already used by inventory and cannot be assigned to a user" });
+    return;
+  }
+
+  const previousTag = targetUser.operatorTagId ?? null;
+  targetUser.operatorTagId = operatorTagId;
+  await targetUser.save();
+
+  setAuditContext(res, {
+    type: previousTag ? "tenants.user.operator_tag_change" : "tenants.user.operator_tag_assign",
+    category: "tenants",
+    entityType: "user",
+    entityId: targetUser._id.toString(),
+    entityLabel: `${targetUser.name} (${targetUser.email})`,
+    summary: previousTag ? `Changed ${targetUser.name} staff RFID card` : `Assigned ${targetUser.name} staff RFID card`,
+    targetUserId: targetUser._id.toString(),
+    metadata: {
+      tenantName: tenant.name,
+      tenantSlug: tenant.slug,
+      previousOperatorTagId: previousTag,
+      operatorTagId,
+    },
+  });
+
+  res.json({
+    ok: true,
+    user: {
+      id: targetUser._id.toString(),
+      name: targetUser.name,
+      email: targetUser.email,
+      role: targetUser.role,
+      operatorTagId: targetUser.operatorTagId ?? null,
+    },
+  });
+});
+
+router.delete("/:id/users/:userId/operator-tag", requireTenant, requireRole("admin"), async (req: TenantRequest, res) => {
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const { id, userId } = req.params;
+  const tenantId = req.tenantId as string;
+  if (String(tenantId) !== String(id)) {
+    res.status(400).json({ ok: false, error: "X-Tenant-ID must match :id" });
+    return;
+  }
+
+  if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(userId)) {
+    res.status(400).json({ ok: false, error: "Invalid id" });
+    return;
+  }
+
+  const [tenant, membership, targetUser] = await Promise.all([
+    TenantModel.findById(id).exec(),
+    TenantMembershipModel.findOne({ tenantId: id, userId }).exec(),
+    UserModel.findById(userId).exec(),
+  ]);
+
+  if (!tenant) {
+    res.status(404).json({ ok: false, error: "Tenant not found" });
+    return;
+  }
+  if (!membership || !targetUser) {
+    res.status(404).json({ ok: false, error: "User is not a member of this branch" });
+    return;
+  }
+
+  const previousTag = targetUser.operatorTagId ?? null;
+  targetUser.operatorTagId = undefined;
+  await targetUser.save();
+
+  setAuditContext(res, {
+    type: "tenants.user.operator_tag_remove",
+    category: "tenants",
+    entityType: "user",
+    entityId: targetUser._id.toString(),
+    entityLabel: `${targetUser.name} (${targetUser.email})`,
+    summary: `Removed ${targetUser.name} staff RFID card`,
+    targetUserId: targetUser._id.toString(),
+    metadata: {
+      tenantName: tenant.name,
+      tenantSlug: tenant.slug,
+      previousOperatorTagId: previousTag,
+    },
+  });
+
+  res.json({
+    ok: true,
+    user: {
+      id: targetUser._id.toString(),
+      name: targetUser.name,
+      email: targetUser.email,
+      role: targetUser.role,
+      operatorTagId: null,
+    },
   });
 });
 

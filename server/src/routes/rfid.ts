@@ -2,6 +2,7 @@ import crypto from "crypto";
 import express from "express";
 import mongoose from "mongoose";
 
+import { setAuditContext } from "../middleware/audit.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { generateKey, hashKey, requireGateApiKey, requireGateTenant, type GateRequest } from "../middleware/gate.js";
 import { requireTenant, type TenantRequest } from "../middleware/tenant.js";
@@ -11,10 +12,13 @@ import { GateApiKeyModel } from "../models/GateApiKey.js";
 import { InventoryItemModel, type InventoryItemDocument } from "../models/InventoryItem.js";
 import { InventoryLogModel } from "../models/InventoryLog.js";
 import { InventoryUnitModel } from "../models/InventoryUnit.js";
+import { OperatorSessionModel, type OperatorSessionDocument } from "../models/OperatorSession.js";
 import { OrderModel } from "../models/Order.js";
 import { RfidEventModel, rfidEventTypes, type RfidEventType } from "../models/RfidEvent.js";
 import { RfidTagModel, upsertRfidTag } from "../models/RfidTag.js";
 import { SecurityAlertModel } from "../models/SecurityAlert.js";
+import { TenantMembershipModel, type TenantMembershipDocument } from "../models/TenantMembership.js";
+import { UserModel, type UserDocument } from "../models/User.js";
 import { buildInventoryFlowSummaryMap } from "../utils/inventoryFlow.js";
 import { consumeExitAuthorization } from "../utils/orderFulfillment.js";
 
@@ -57,6 +61,107 @@ function normalizeScan(body: Record<string, unknown>) {
   const parsedObservedAt = typeof body.observedAt === "string" && body.observedAt.trim() ? new Date(body.observedAt) : null;
   const observedAt = parsedObservedAt && Number.isFinite(parsedObservedAt.getTime()) ? parsedObservedAt : new Date();
   return { value, tagId, barcode, source, observedAt };
+}
+
+function resolveHardwareSource(req: express.Request, fallback: string) {
+  const headerSource = req.header("x-source")?.trim();
+  return headerSource || fallback;
+}
+
+function normalizeOperatorTagId(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function generateOperatorToken(): { raw: string; prefix: string; hash: string } {
+  const raw = `op_${crypto.randomBytes(24).toString("hex")}`;
+  return { raw, prefix: raw.slice(0, 12), hash: hashKey(raw) };
+}
+
+function resolveOperatorSessionToken(req: express.Request, body: Record<string, unknown>) {
+  const fromHeader = String(req.header("x-operator-session") ?? req.header("X-Operator-Session") ?? "").trim();
+  if (fromHeader) return fromHeader;
+
+  const authorization = String(req.header("authorization") ?? "").trim();
+  const bearer = authorization.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  if (bearer?.startsWith("op_")) return bearer;
+
+  const fromBody = [body.operatorSessionToken, body.operatorToken, body.token].find(
+    (value) => typeof value === "string" && value.trim()
+  );
+  return typeof fromBody === "string" ? fromBody.trim() : "";
+}
+
+function redactHardwareRaw(body: Record<string, unknown>) {
+  const raw = { ...body };
+  delete raw.operatorSessionToken;
+  delete raw.operatorToken;
+  delete raw.token;
+  return raw;
+}
+
+type HardwareOperatorContext = {
+  session: OperatorSessionDocument;
+  user: UserDocument;
+  membership: TenantMembershipDocument;
+};
+
+async function resolveHardwareOperator(
+  req: GateRequest,
+  body: Record<string, unknown>
+): Promise<{ ok: true; operator: HardwareOperatorContext } | { ok: false; status: number; error: string }> {
+  const tenantId = req.tenantId as string;
+  const rawToken = resolveOperatorSessionToken(req, body);
+  if (!rawToken) {
+    return { ok: false, status: 401, error: "X-Operator-Session or Authorization: Bearer op_... is required" };
+  }
+
+  const session = await OperatorSessionModel.findOne({
+    tenantId,
+    tokenPrefix: rawToken.slice(0, 12),
+    tokenHash: hashKey(rawToken),
+    $or: [{ endedAt: { $exists: false } }, { endedAt: null }],
+    expiresAt: { $gt: new Date() },
+  }).exec();
+
+  if (!session) {
+    return { ok: false, status: 401, error: "Invalid or expired operator session" };
+  }
+
+  if (req.gateKeyId && String(session.gateKeyId) !== String(req.gateKeyId)) {
+    return { ok: false, status: 403, error: "Operator session belongs to a different RFID reader" };
+  }
+
+  const [user, membership] = await Promise.all([
+    UserModel.findOne({ _id: session.userId, operatorTagId: session.operatorTagId }).exec() as Promise<UserDocument | null>,
+    TenantMembershipModel.findOne({ tenantId, userId: session.userId }).exec() as Promise<TenantMembershipDocument | null>,
+  ]);
+
+  if (!user || !membership) {
+    return { ok: false, status: 403, error: "Operator is not authorized for this branch" };
+  }
+
+  session.lastSeenAt = new Date();
+  await session.save();
+
+  return { ok: true, operator: { session, user, membership } };
+}
+
+function setHardwareOperatorAudit(res: express.Response, operator: HardwareOperatorContext, summary: string, metadata?: Record<string, unknown>) {
+  setAuditContext(res, {
+    actorSource: "hardware",
+    actorUserId: operator.user._id.toString(),
+    actorName: operator.user.name,
+    actorEmail: operator.user.email,
+    actorRole: operator.user.role,
+    actorTenantRole: operator.membership.role,
+    summary,
+    metadata: {
+      operatorTagId: operator.session.operatorTagId,
+      operatorSessionId: operator.session._id.toString(),
+      gateKeyName: operator.session.gateKeyName,
+      ...(metadata ?? {}),
+    },
+  });
 }
 
 async function resolveItem(tenantId: string, identifiers: { itemId?: unknown; tagId?: string; barcode?: string }) {
@@ -259,10 +364,29 @@ router.get("/meta", async (_req, res) => {
   res.json({
     ok: true,
     hardware: {
+      staffAuthScan: {
+        endpoint: "POST /rfid/operator-sessions",
+        headers: {
+          "X-Gate-Api-Key": "Required reader/station API key",
+          "X-Source": "Optional reader/source label",
+        },
+        payload: {
+          operatorTagId: "string (required staff RFID card/tag EPC)",
+          location: "string, optional when key is not bound to a location",
+          source: "string, optional reader label",
+          observedAt: "ISO timestamp, optional",
+        },
+        response: {
+          operatorSessionToken: "Short-lived token. Send as X-Operator-Session or Authorization: Bearer op_...",
+          expiresAt: "ISO timestamp",
+          operator: "Matched system user for the scanned staff card",
+        },
+      },
       fixedGateReader: {
         endpoint: "POST /rfid/gate-events",
         headers: {
           "X-Gate-Api-Key": "Required gate API key",
+          "X-Operator-Session": "Required short-lived token from POST /rfid/operator-sessions",
           "X-Source": "Optional reader/source label",
           "X-Event-ID": "Optional unique scan/read id for retry-safe idempotency",
         },
@@ -281,6 +405,7 @@ router.get("/meta", async (_req, res) => {
         endpoint: "POST /rfid/receiving-events",
         headers: {
           "X-Gate-Api-Key": "Required station API key",
+          "X-Operator-Session": "Required short-lived token from POST /rfid/operator-sessions",
           "X-Source": "Optional reader/source label",
           "X-Event-ID": "Optional unique scan/read id for retry-safe idempotency",
         },
@@ -320,10 +445,148 @@ router.get("/meta", async (_req, res) => {
   });
 });
 
+router.post("/operator-sessions", requireGateApiKey, requireGateTenant, async (req: GateRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const operatorTagId = normalizeOperatorTagId(body.operatorTagId ?? body.tagId ?? body.value);
+  const parsedObservedAt = typeof body.observedAt === "string" && body.observedAt.trim() ? new Date(body.observedAt) : null;
+  const observedAt = parsedObservedAt && Number.isFinite(parsedObservedAt.getTime()) ? parsedObservedAt : new Date();
+  const source = typeof body.source === "string" && body.source.trim()
+    ? body.source.trim()
+    : String(req.header("x-source") ?? "").trim() || "rfid";
+  const location = resolveHardwareLocation(req, body, "EXIT_MAIN");
+  const minutes = Math.min(120, Math.max(1, typeof body.minutes === "number" ? Math.floor(body.minutes) : 30));
+
+  if (!operatorTagId) {
+    res.status(400).json({ ok: false, error: "operatorTagId is required" });
+    return;
+  }
+
+  if (!req.gateKeyId) {
+    res.status(401).json({ ok: false, error: "Invalid gate key context" });
+    return;
+  }
+
+  const user = (await UserModel.findOne({ operatorTagId }).exec()) as UserDocument | null;
+  if (!user) {
+    res.status(404).json({ ok: false, error: "Staff RFID card is not assigned to a user" });
+    return;
+  }
+
+  const membership = (await TenantMembershipModel.findOne({ tenantId, userId: user._id }).exec()) as TenantMembershipDocument | null;
+  if (!membership) {
+    res.status(403).json({ ok: false, error: "User is not authorized for this branch" });
+    return;
+  }
+
+  const { raw, prefix, hash } = generateOperatorToken();
+  const expiresAt = new Date(Date.now() + minutes * 60 * 1000);
+  const session = await OperatorSessionModel.create({
+    tenantId,
+    userId: user._id,
+    gateKeyId: req.gateKeyId,
+    gateKeyName: req.gateKeyName,
+    location,
+    source,
+    operatorTagId,
+    tokenPrefix: prefix,
+    tokenHash: hash,
+    startedAt: observedAt,
+    lastSeenAt: observedAt,
+    expiresAt,
+  });
+
+  setAuditContext(res, {
+    actorSource: "hardware",
+    actorUserId: user._id.toString(),
+    actorName: user.name,
+    actorEmail: user.email,
+    actorRole: user.role,
+    actorTenantRole: membership.role,
+    type: "rfid.operator_session.create",
+    category: "rfid",
+    entityType: "operator_session",
+    entityId: session._id.toString(),
+    entityLabel: `${user.name} at ${location}`,
+    summary: "Authorized RFID device user",
+    targetUserId: user._id.toString(),
+    metadata: {
+      operatorTagId,
+      gateKeyName: req.gateKeyName,
+      location,
+      source,
+      observedAt,
+      expiresAt,
+    },
+  });
+
+  res.status(201).json({
+    ok: true,
+    operatorSession: {
+      id: session._id.toString(),
+      token: raw,
+      operatorSessionToken: raw,
+      expiresAt,
+      location,
+      source,
+      operator: {
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        role: membership.role,
+      },
+    },
+  });
+});
+
+router.delete("/operator-sessions/:token", requireGateApiKey, requireGateTenant, async (req: GateRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const rawToken = String(req.params.token ?? "").trim();
+  if (!rawToken) {
+    res.status(400).json({ ok: false, error: "token is required" });
+    return;
+  }
+
+  const session = await OperatorSessionModel.findOneAndUpdate(
+    {
+      tenantId,
+      tokenPrefix: rawToken.slice(0, 12),
+      tokenHash: hashKey(rawToken),
+      ...(req.gateKeyId ? { gateKeyId: req.gateKeyId } : {}),
+      $or: [{ endedAt: { $exists: false } }, { endedAt: null }],
+    },
+    { $set: { endedAt: new Date(), lastSeenAt: new Date() } },
+    { new: true }
+  ).exec();
+
+  if (!session) {
+    res.status(404).json({ ok: false, error: "Operator session not found or already ended" });
+    return;
+  }
+
+  setAuditContext(res, {
+    actorSource: "hardware",
+    actorUserId: session.userId.toString(),
+    type: "rfid.operator_session.end",
+    category: "rfid",
+    entityType: "operator_session",
+    entityId: session._id.toString(),
+    summary: "Ended RFID operator session",
+    metadata: {
+      operatorTagId: session.operatorTagId,
+      gateKeyName: session.gateKeyName,
+      location: session.location,
+    },
+  });
+
+  res.json({ ok: true, ended: { id: session._id.toString(), endedAt: session.endedAt } });
+});
+
 router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (req: GateRequest, res) => {
   const tenantId = req.tenantId as string;
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const { value, tagId: rawTagId, source, observedAt } = normalizeScan(body);
+  const { value, tagId: rawTagId, source: bodySource, observedAt } = normalizeScan(body);
+  const source = resolveHardwareSource(req, bodySource);
   const tagId = rawTagId || value;
   const eventId = normalizeExternalEventId(req, body);
   const location = resolveHardwareLocation(req, body, "RECEIVING_STAGING");
@@ -333,8 +596,21 @@ router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (re
     return;
   }
 
+  const operatorResult = await resolveHardwareOperator(req, body);
+  if (!operatorResult.ok) {
+    res.status(operatorResult.status).json({ ok: false, error: operatorResult.error });
+    return;
+  }
+  const operator = operatorResult.operator;
+
   if (isExitLocation(location)) {
     res.status(400).json({ ok: false, error: "Receiving events must use a receiving/storage location, not an exit gate" });
+    return;
+  }
+
+  const staffCardConflict = await UserModel.exists({ operatorTagId: tagId }).exec();
+  if (staffCardConflict) {
+    res.status(409).json({ ok: false, error: "RFID tag is assigned to a staff user card and cannot be received as inventory" });
     return;
   }
 
@@ -376,10 +652,14 @@ router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (re
     tagId,
     eventType: "scan",
     itemId: item._id,
+    actorUserId: operator.user._id,
+    operatorSessionId: operator.session._id,
+    operatorTagId: operator.session.operatorTagId,
+    gateKeyName: req.gateKeyName,
     location,
     observedAt,
     source,
-    raw: req.body,
+    raw: redactHardwareRaw(body),
   });
 
   const unit = await InventoryUnitModel.create({
@@ -404,8 +684,26 @@ router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (re
     delta: 1,
     previousQuantity,
     newQuantity: item.quantity,
+    actorUserId: operator.user._id,
     reason: "RFID hardware receiving",
-    meta: { location, tagId, unitId: unit._id.toString(), rfidEventId: event._id.toString(), eventId: eventId || undefined },
+    meta: {
+      location,
+      tagId,
+      unitId: unit._id.toString(),
+      rfidEventId: event._id.toString(),
+      eventId: eventId || undefined,
+      operatorSessionId: operator.session._id.toString(),
+      operatorTagId: operator.session.operatorTagId,
+      gateKeyName: req.gateKeyName,
+    },
+  });
+
+  setHardwareOperatorAudit(res, operator, "Captured receiving reader event", {
+    itemId: item._id.toString(),
+    itemSku: item.sku,
+    tagId,
+    location,
+    rfidEventId: event._id.toString(),
   });
 
   const flow = (await buildInventoryFlowSummaryMap(tenantId, [item])).get(item._id.toString());
@@ -415,7 +713,8 @@ router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (re
 router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: GateRequest, res) => {
   const tenantId = req.tenantId as string;
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const { value, tagId: rawTagId, barcode: rawBarcode, source, observedAt } = normalizeScan(body);
+  const { value, tagId: rawTagId, barcode: rawBarcode, source: bodySource, observedAt } = normalizeScan(body);
+  const source = resolveHardwareSource(req, bodySource);
   const eventId = normalizeExternalEventId(req, body);
   const location = resolveHardwareLocation(req, body, "EXIT_MAIN");
   const decisionAt = new Date();
@@ -424,6 +723,13 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
     res.status(400).json({ ok: false, error: "Gate events must use an exit gate location" });
     return;
   }
+
+  const operatorResult = await resolveHardwareOperator(req, body);
+  if (!operatorResult.ok) {
+    res.status(operatorResult.status).json({ ok: false, error: operatorResult.error });
+    return;
+  }
+  const operator = operatorResult.operator;
 
   if (eventId) {
     const duplicate = await RfidEventModel.findOne({ tenantId, eventId }).exec();
@@ -461,10 +767,14 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
     tagId: tagId || barcode || value,
     eventType: "scan",
     itemId: item?._id,
+    actorUserId: operator.user._id,
+    operatorSessionId: operator.session._id,
+    operatorTagId: operator.session.operatorTagId,
+    gateKeyName: req.gateKeyName,
     location,
     observedAt,
     source,
-    raw: req.body,
+    raw: redactHardwareRaw(body),
   });
 
   const result = await verifyExitScan({
@@ -474,6 +784,7 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
     location,
     source,
     observedAt: decisionAt,
+    actorUserId: operator.user._id.toString(),
     fallbackItem: item,
   });
 
@@ -482,6 +793,9 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
     decision: result.decision,
     authorized: result.authorized,
     authorizationId: result.authorizationId,
+    operatorSessionId: operator.session._id.toString(),
+    operatorTagId: operator.session.operatorTagId,
+    actorUserId: operator.user._id.toString(),
   };
   await event.save();
 
@@ -489,6 +803,18 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
     result.alert.meta = { ...(result.alert.meta ?? {}), rfidEventId: event._id.toString() };
     await result.alert.save();
   }
+
+  setHardwareOperatorAudit(res, operator, "Captured gate reader event", {
+    decision: result.decision,
+    authorized: result.authorized,
+    authorizationId: result.authorizationId,
+    itemId: result.item?._id?.toString(),
+    orderId: result.order?._id?.toString(),
+    tagId: tagId || undefined,
+    barcode: barcode || undefined,
+    location,
+    rfidEventId: event._id.toString(),
+  });
 
   res.json({
     ok: true,
@@ -498,6 +824,12 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
     authorizationId: result.authorizationId,
     remainingAuthorizations: result.remainingAuthorizations,
     event,
+    operator: {
+      id: operator.user._id.toString(),
+      name: operator.user.name,
+      email: operator.user.email,
+      role: operator.membership.role,
+    },
     item: result.item,
     order: result.order,
     alert: result.alert,
@@ -793,10 +1125,11 @@ router.post("/exit-sessions/verify", requireRole("manager", "admin"), async (req
     tagId: tagId || barcode || value,
     eventType: "scan",
     itemId: fallbackItem?._id,
+    actorUserId: auth.id,
     location: session.location,
     observedAt,
     source: "exit-session",
-    raw: req.body,
+    raw: redactHardwareRaw(body),
   });
 
   const result = await verifyExitScan({

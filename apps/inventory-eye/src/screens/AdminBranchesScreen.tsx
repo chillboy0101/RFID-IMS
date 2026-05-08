@@ -7,7 +7,7 @@ import { apiRequest } from "../api/client";
 import { AuthContext, type UserRole } from "../auth/AuthContext";
 import { goBackOrNavigate } from "../navigation/moreBack";
 import type { MoreStackParamList } from "../navigation/types";
-import { AppButton, Badge, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
+import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
 
 type Props = NativeStackScreenProps<MoreStackParamList, "Branches">;
 
@@ -21,7 +21,7 @@ type BranchMember = {
   tenantId: string;
   userId: string;
   role: UserRole;
-  user?: { id: string; name: string; email: string; role: UserRole } | null;
+  user?: { id: string; name: string; email: string; role: UserRole; operatorTagId?: string | null } | null;
 };
 
 type AdminUserRow = {
@@ -29,6 +29,7 @@ type AdminUserRow = {
   name: string;
   email: string;
   role: UserRole;
+  operatorTagId?: string | null;
   tenantIds: string[];
   tenantCount: number;
   tenants?: TenantInfo[];
@@ -41,6 +42,12 @@ type TenantSessionRow = {
   createdAt: string;
   isCurrent?: boolean;
   user: { id: string; name: string; email: string; role: UserRole } | null;
+};
+
+type OperatorTagTarget = {
+  userId: string;
+  label: string;
+  currentTag?: string | null;
 };
 
 const roles: UserRole[] = ["inventory_staff", "manager", "admin"];
@@ -71,6 +78,8 @@ type MemberCardProps = {
   onUpdateMemberRole: (userId: string, role: UserRole) => void;
   onUpdateGlobalRole: (userId: string, nextRole: UserRole) => void;
   onResendTemporaryPassword: (userId: string, email: string) => void;
+  onAssignOperatorTag: (userId: string, label: string, currentTag?: string | null) => void;
+  onRemoveOperatorTag: (userId: string, label: string) => void;
   onRemoveMember: (userId: string) => void;
 };
 
@@ -81,19 +90,67 @@ const MemberCard = React.memo(function MemberCard({
   onUpdateMemberRole,
   onUpdateGlobalRole,
   onResendTemporaryPassword,
+  onAssignOperatorTag,
+  onRemoveOperatorTag,
   onRemoveMember,
 }: MemberCardProps) {
   const displayRole = member.user?.role === "admin" ? "super_admin" : member.role;
   const displayTone = member.user?.role === "admin" ? "warning" : member.role === "admin" ? "primary" : "default";
   const memberEmail = member.user?.email || "";
+  const memberLabel = member.user?.name || member.user?.email || member.userId;
+  const operatorTagId = member.user?.operatorTagId ?? null;
 
   return (
     <Card>
       <ListRow
-        title={member.user?.name || member.user?.email || member.userId}
+        title={memberLabel}
         subtitle={member.user?.email || ""}
-        right={<Badge label={displayRole} tone={displayTone} />}
+        right={
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "flex-end" }}>
+            <Badge label={displayRole} tone={displayTone} />
+            <Badge label={operatorTagId ? "Staff card linked" : "No staff card"} tone={operatorTagId ? "success" : "default"} />
+          </View>
+        }
       />
+      <View style={{ height: 10 }} />
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.surface2,
+          borderRadius: theme.radius.md,
+          padding: 12,
+          gap: 10,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: theme.colors.text, fontWeight: "800" }}>Staff RFID card</Text>
+            <Text style={[theme.typography.body, { color: theme.colors.textMuted }]} numberOfLines={1}>
+              {operatorTagId || "Scan a staff card to identify this user at RFID readers."}
+            </Text>
+          </View>
+          <Badge label={operatorTagId ? "Linked" : "Unassigned"} tone={operatorTagId ? "success" : "warning"} />
+        </View>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+          <AppButton
+            title={operatorTagId ? "Change card" : "Assign card"}
+            onPress={() => onAssignOperatorTag(member.userId, memberLabel, operatorTagId)}
+            variant="secondary"
+            disabled={busy}
+            iconName="radio-outline"
+          />
+          {operatorTagId ? (
+            <AppButton
+              title="Remove card"
+              onPress={() => onRemoveOperatorTag(member.userId, memberLabel)}
+              variant="secondary"
+              disabled={busy}
+              iconName="close-circle-outline"
+            />
+          ) : null}
+        </View>
+      </View>
       <View style={{ height: 10 }} />
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
         {roles.map((r) => (
@@ -171,6 +228,7 @@ const AllUserCard = React.memo(function AllUserCard({ user, busy, activeTenantId
               label={(user.tenantCount ?? 0) === 0 ? "Unassigned" : `Branches: ${user.tenantCount}`}
               tone={(user.tenantCount ?? 0) === 0 ? "warning" : "default"}
             />
+            <Badge label={user.operatorTagId ? "Staff card linked" : "No staff card"} tone={user.operatorTagId ? "success" : "default"} />
           </View>
         }
       />
@@ -218,6 +276,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
   const [createUserRole, setCreateUserRole] = useState<UserRole>("inventory_staff");
   const [createUserMakeSuperAdmin, setCreateUserMakeSuperAdmin] = useState(false);
   const [sessions, setSessions] = useState<TenantSessionRow[]>([]);
+  const [operatorTagTarget, setOperatorTagTarget] = useState<OperatorTagTarget | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -474,6 +533,67 @@ export function AdminBranchesScreen({ navigation }: Props) {
     }
   }, [activeTenantId, busy, confirmAction, isBranchAdmin, isSuperAdmin, loadAllUsers, loadMembers, loadSessions, showNotice, token]);
 
+  const openOperatorTagScanner = useCallback((userId: string, label: string, currentTag?: string | null) => {
+    if (!activeTenantId) {
+      setError("Select a branch first");
+      return;
+    }
+    setError(null);
+    setOperatorTagTarget({ userId, label, currentTag });
+  }, [activeTenantId]);
+
+  const assignOperatorTagFromScan = useCallback(async (value: string) => {
+    if (!token || !activeTenantId || !operatorTagTarget || busy) return;
+    const operatorTagId = value.trim();
+    if (!operatorTagId) {
+      setError("Scan a staff RFID card first.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    setOperatorTagTarget(null);
+    try {
+      await apiRequest<{ ok: true; user?: { operatorTagId?: string | null } }>(
+        `/tenants/${activeTenantId}/users/${operatorTagTarget.userId}/operator-tag`,
+        {
+          method: "PATCH",
+          token,
+          body: JSON.stringify({ operatorTagId }),
+        }
+      );
+      await Promise.all([loadMembers(activeTenantId), isSuperAdmin ? loadAllUsers() : Promise.resolve()]);
+      showNotice(`${operatorTagTarget.label} staff RFID card linked.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to assign staff RFID card");
+    } finally {
+      setBusy(false);
+    }
+  }, [activeTenantId, busy, isSuperAdmin, loadAllUsers, loadMembers, operatorTagTarget, showNotice, token]);
+
+  const removeOperatorTag = useCallback(async (userId: string, label: string) => {
+    if (!token || !activeTenantId || busy) return;
+    const ok = await confirmAction("Remove staff RFID card", `Remove the staff RFID card from ${label}?`);
+    if (!ok) return;
+
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await apiRequest<{ ok: true }>(`/tenants/${activeTenantId}/users/${userId}/operator-tag`, {
+        method: "DELETE",
+        token,
+      });
+      await Promise.all([loadMembers(activeTenantId), isSuperAdmin ? loadAllUsers() : Promise.resolve()]);
+      showNotice(`${label} staff RFID card removed.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to remove staff RFID card");
+    } finally {
+      setBusy(false);
+    }
+  }, [activeTenantId, busy, confirmAction, isSuperAdmin, loadAllUsers, loadMembers, showNotice, token]);
+
   const assignUserToActiveBranch = useCallback(async (userId: string) => {
     if (!token || !isSuperAdmin) return;
     if (!activeTenantId) {
@@ -696,10 +816,12 @@ export function AdminBranchesScreen({ navigation }: Props) {
         onUpdateMemberRole={updateMemberRole}
         onUpdateGlobalRole={updateGlobalRole}
         onResendTemporaryPassword={resendTemporaryPassword}
+        onAssignOperatorTag={openOperatorTagScanner}
+        onRemoveOperatorTag={removeOperatorTag}
         onRemoveMember={removeMember}
       />
     ));
-  }, [busy, isSuperAdmin, members, removeMember, resendTemporaryPassword, updateGlobalRole, updateMemberRole]);
+  }, [busy, isSuperAdmin, members, openOperatorTagScanner, removeMember, removeOperatorTag, resendTemporaryPassword, updateGlobalRole, updateMemberRole]);
 
   const sessionCards = useMemo(() => {
     return sessions.map((s) => <SessionCard key={s.jti} session={s} busy={busy} isSuperAdmin={isSuperAdmin} onRevoke={revokeSession} />);
@@ -889,6 +1011,14 @@ export function AdminBranchesScreen({ navigation }: Props) {
           </>
         ) : null}
       </View>
+      <BarcodeScanModal
+        visible={Boolean(operatorTagTarget)}
+        title={operatorTagTarget?.currentTag ? "Change staff RFID card" : "Assign staff RFID card"}
+        onClose={() => setOperatorTagTarget(null)}
+        onScanned={(value) => {
+          void assignOperatorTagFromScan(value);
+        }}
+      />
     </Screen>
   );
 }

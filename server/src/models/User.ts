@@ -11,6 +11,14 @@ const userSchema = new mongoose.Schema(
     mustChangePassword: { type: Boolean, required: true, default: false },
     emailVerified: { type: Boolean, required: true, default: false },
     accountRecoveryRequiredAt: { type: Date, default: null },
+    operatorTagId: {
+      type: String,
+      trim: true,
+      set: (value: unknown) => {
+        const normalized = typeof value === "string" ? value.trim() : "";
+        return normalized || undefined;
+      },
+    },
     role: {
       type: String,
       required: true,
@@ -19,6 +27,14 @@ const userSchema = new mongoose.Schema(
     },
   },
   { timestamps: true }
+);
+
+userSchema.index(
+  { operatorTagId: 1 },
+  {
+    unique: true,
+    sparse: true,
+  }
 );
 
 export type User = InferSchemaType<typeof userSchema>;
