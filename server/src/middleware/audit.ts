@@ -65,6 +65,13 @@ const auditDescriptorMap: Record<string, AuditDescriptor> = {
     successSummary: "Bootstrapped tenant structure",
     failureSummary: "Failed to bootstrap tenant structure",
   },
+  "POST /admin/clear-inventory-data": {
+    type: "admin.inventory_data.clear",
+    category: "admin",
+    entityType: "tenant_inventory",
+    successSummary: "Cleared test inventory data",
+    failureSummary: "Failed to clear test inventory data",
+  },
   "POST /admin/sessions/:jti/revoke": {
     type: "admin.session.revoke",
     category: "admin",

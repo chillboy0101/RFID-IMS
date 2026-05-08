@@ -4,15 +4,20 @@ import mongoose from "mongoose";
 import { requireAuth, requireRole, type AuthRequest } from "../middleware/auth.js";
 import { setAuditContext } from "../middleware/audit.js";
 import { AuthSessionModel } from "../models/AuthSession.js";
+import { ExitAuthorizationModel } from "../models/ExitAuthorization.js";
+import { ExitSessionModel } from "../models/ExitSession.js";
 import { FeedbackModel } from "../models/Feedback.js";
 import { InventoryItemModel } from "../models/InventoryItem.js";
 import { InventoryLogModel } from "../models/InventoryLog.js";
+import { InventoryUnitModel } from "../models/InventoryUnit.js";
 import { InviteModel } from "../models/Invite.js";
 import { LoginAlertModel } from "../models/LoginAlert.js";
 import { OrderModel } from "../models/Order.js";
 import { PasswordResetTokenModel } from "../models/PasswordResetToken.js";
 import { ReorderRequestModel } from "../models/ReorderRequest.js";
 import { RfidEventModel } from "../models/RfidEvent.js";
+import { RfidTagModel } from "../models/RfidTag.js";
+import { SecurityAlertModel } from "../models/SecurityAlert.js";
 import { TaskSessionModel } from "../models/TaskSession.js";
 import { TenantModel } from "../models/Tenant.js";
 import { TenantMembershipModel } from "../models/TenantMembership.js";
@@ -333,6 +338,102 @@ router.get("/users-with-memberships", requireRole("admin"), async (_req: AuthReq
     page,
     limit,
     hasMore,
+  });
+});
+
+router.post("/clear-inventory-data", requireRole("admin"), async (req: AuthRequest, res) => {
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL ?? "equalizerjr@gmail.com").toLowerCase().trim();
+  const actor = await UserModel.findById(auth.id).select({ email: 1 }).exec();
+  const actorEmail = String(actor?.email ?? "").toLowerCase().trim();
+  if (!actor || !actorEmail || actorEmail !== superAdminEmail) {
+    res.status(403).json({ ok: false, error: "Forbidden" });
+    return;
+  }
+
+  const tenantId = String(req.header("x-tenant-id") ?? req.header("X-Tenant-ID") ?? "").trim();
+  if (!tenantId) {
+    res.status(400).json({ ok: false, error: "X-Tenant-ID is required" });
+    return;
+  }
+  if (!mongoose.isValidObjectId(tenantId)) {
+    res.status(400).json({ ok: false, error: "Invalid X-Tenant-ID" });
+    return;
+  }
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const confirm = typeof body.confirm === "string" ? body.confirm.trim() : "";
+  if (confirm !== "CLEAR INVENTORY") {
+    res.status(400).json({ ok: false, error: "Type CLEAR INVENTORY to confirm this reset" });
+    return;
+  }
+
+  const tenant = await TenantModel.findById(tenantId).select({ name: 1, slug: 1 }).exec();
+  if (!tenant) {
+    res.status(404).json({ ok: false, error: "Tenant not found" });
+    return;
+  }
+
+  const [
+    inventoryItems,
+    inventoryUnits,
+    inventoryLogs,
+    rfidTags,
+    rfidEvents,
+    orders,
+    reorders,
+    exitAuthorizations,
+    exitSessions,
+    securityAlerts,
+  ] = await Promise.all([
+    InventoryItemModel.deleteMany({ tenantId }).exec(),
+    InventoryUnitModel.deleteMany({ tenantId }).exec(),
+    InventoryLogModel.deleteMany({ tenantId }).exec(),
+    RfidTagModel.deleteMany({ tenantId }).exec(),
+    RfidEventModel.deleteMany({ tenantId }).exec(),
+    OrderModel.deleteMany({ tenantId }).exec(),
+    ReorderRequestModel.deleteMany({ tenantId }).exec(),
+    ExitAuthorizationModel.deleteMany({ tenantId }).exec(),
+    ExitSessionModel.deleteMany({ tenantId }).exec(),
+    SecurityAlertModel.deleteMany({ tenantId }).exec(),
+  ]);
+
+  const deleted = {
+    inventoryItems: (inventoryItems as any).deletedCount ?? 0,
+    inventoryUnits: (inventoryUnits as any).deletedCount ?? 0,
+    inventoryLogs: (inventoryLogs as any).deletedCount ?? 0,
+    rfidTags: (rfidTags as any).deletedCount ?? 0,
+    rfidEvents: (rfidEvents as any).deletedCount ?? 0,
+    orders: (orders as any).deletedCount ?? 0,
+    reorders: (reorders as any).deletedCount ?? 0,
+    exitAuthorizations: (exitAuthorizations as any).deletedCount ?? 0,
+    exitSessions: (exitSessions as any).deletedCount ?? 0,
+    securityAlerts: (securityAlerts as any).deletedCount ?? 0,
+  };
+
+  setAuditContext(res, {
+    type: "admin.inventory_data.clear",
+    category: "admin",
+    entityType: "tenant_inventory",
+    entityId: tenant._id.toString(),
+    entityLabel: tenant.name,
+    summary: `Cleared test inventory data for ${tenant.name}`,
+    metadata: {
+      tenantName: tenant.name,
+      tenantSlug: tenant.slug,
+      deleted,
+    },
+  });
+
+  res.json({
+    ok: true,
+    tenant: { id: tenant._id.toString(), name: tenant.name, slug: tenant.slug },
+    deleted,
   });
 });
 
