@@ -29,6 +29,13 @@ export function PeopleDataScreen({ navigation }: Props) {
         subtitle={canManageUsers ? "Switch active branch and manage team members" : "Switch your active branch"}
         onPress={() => navigation.navigate("Branches")}
       />
+      {canManageUsers ? (
+        <ListRow
+          title="Staff RFID Cards"
+          subtitle="Assign, change, or remove staff scan cards"
+          onPress={() => navigation.navigate("Branches", { initialTab: "staffCards" })}
+        />
+      ) : null}
       <ListRow
         title="Feedback"
         subtitle="Send feedback and track its status"

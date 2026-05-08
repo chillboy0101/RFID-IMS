@@ -51,6 +51,7 @@ type OperatorTagTarget = {
 };
 
 const roles: UserRole[] = ["inventory_staff", "manager", "admin"];
+type AdminTab = "members" | "staffCards" | "add" | "sessions" | "users";
 
 type BranchRowProps = {
   id: string;
@@ -185,6 +186,62 @@ const MemberCard = React.memo(function MemberCard({
   );
 });
 
+type StaffOperatorCardProps = {
+  member: BranchMember;
+  busy: boolean;
+  onAssignOperatorTag: (userId: string, label: string, currentTag?: string | null) => void;
+  onRemoveOperatorTag: (userId: string, label: string) => void;
+};
+
+const StaffOperatorCard = React.memo(function StaffOperatorCard({ member, busy, onAssignOperatorTag, onRemoveOperatorTag }: StaffOperatorCardProps) {
+  const memberLabel = member.user?.name || member.user?.email || member.userId;
+  const operatorTagId = member.user?.operatorTagId ?? null;
+
+  return (
+    <Card>
+      <ListRow
+        title={memberLabel}
+        subtitle={member.user?.email || member.role}
+        right={<Badge label={operatorTagId ? "Linked" : "Unassigned"} tone={operatorTagId ? "success" : "warning"} />}
+      />
+      <View style={{ height: 10 }} />
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.surface2,
+          borderRadius: theme.radius.md,
+          padding: 12,
+          gap: 10,
+        }}
+      >
+        <Text style={{ color: theme.colors.textMuted, fontWeight: "800" }}>Staff RFID card</Text>
+        <Text selectable style={[theme.typography.body, { color: theme.colors.text, fontWeight: operatorTagId ? "800" : "600" }]} numberOfLines={2}>
+          {operatorTagId || "No card assigned"}
+        </Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+          <AppButton
+            title={operatorTagId ? "Change card" : "Assign card"}
+            onPress={() => onAssignOperatorTag(member.userId, memberLabel, operatorTagId)}
+            variant={operatorTagId ? "secondary" : "primary"}
+            disabled={busy}
+            iconName="radio-outline"
+          />
+          {operatorTagId ? (
+            <AppButton
+              title="Remove card"
+              onPress={() => onRemoveOperatorTag(member.userId, memberLabel)}
+              variant="secondary"
+              disabled={busy}
+              iconName="close-circle-outline"
+            />
+          ) : null}
+        </View>
+      </View>
+    </Card>
+  );
+});
+
 type SessionCardProps = {
   session: TenantSessionRow;
   busy: boolean;
@@ -212,14 +269,28 @@ type AllUserCardProps = {
   busy: boolean;
   activeTenantId: string | null;
   onAssignToActive: (userId: string) => void;
+  onAssignOperatorTag: (userId: string, label: string, currentTag?: string | null) => void;
+  onRemoveOperatorTag: (userId: string, label: string) => void;
   onDelete: (userId: string, email: string) => void;
 };
 
-const AllUserCard = React.memo(function AllUserCard({ user, busy, activeTenantId, onAssignToActive, onDelete }: AllUserCardProps) {
+const AllUserCard = React.memo(function AllUserCard({
+  user,
+  busy,
+  activeTenantId,
+  onAssignToActive,
+  onAssignOperatorTag,
+  onRemoveOperatorTag,
+  onDelete,
+}: AllUserCardProps) {
+  const isInActiveBranch = Boolean(activeTenantId && user.tenantIds?.some((id) => String(id) === String(activeTenantId)));
+  const userLabel = user.name || user.email;
+  const operatorTagId = user.operatorTagId ?? null;
+
   return (
     <Card key={user.id} style={(user.tenantCount ?? 0) === 0 ? { borderColor: theme.colors.warning } : undefined}>
       <ListRow
-        title={user.name || user.email}
+        title={userLabel}
         subtitle={user.email}
         right={
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "flex-end" }}>
@@ -242,6 +313,45 @@ const AllUserCard = React.memo(function AllUserCard({ user, busy, activeTenantId
         <MutedText>No branches</MutedText>
       )}
       <View style={{ height: 10 }} />
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.surface2,
+          borderRadius: theme.radius.md,
+          padding: 12,
+          gap: 10,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: theme.colors.text, fontWeight: "800" }}>Staff RFID card</Text>
+            <Text selectable style={[theme.typography.body, { color: theme.colors.textMuted }]} numberOfLines={1}>
+              {operatorTagId || (isInActiveBranch ? "No card assigned" : "Assign user to active branch first")}
+            </Text>
+          </View>
+          <Badge label={operatorTagId ? "Linked" : "Unassigned"} tone={operatorTagId ? "success" : "warning"} />
+        </View>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+          <AppButton
+            title={operatorTagId ? "Change card" : "Assign card"}
+            onPress={() => onAssignOperatorTag(user.id, userLabel, operatorTagId)}
+            variant={operatorTagId ? "secondary" : "primary"}
+            disabled={busy || !isInActiveBranch}
+            iconName="radio-outline"
+          />
+          {operatorTagId ? (
+            <AppButton
+              title="Remove card"
+              onPress={() => onRemoveOperatorTag(user.id, userLabel)}
+              variant="secondary"
+              disabled={busy || !isInActiveBranch}
+              iconName="close-circle-outline"
+            />
+          ) : null}
+        </View>
+      </View>
+      <View style={{ height: 10 }} />
       <AppButton
         title={activeTenantId ? "Assign to active branch" : "Select a branch to assign"}
         onPress={() => onAssignToActive(user.id)}
@@ -254,7 +364,7 @@ const AllUserCard = React.memo(function AllUserCard({ user, busy, activeTenantId
   );
 });
 
-export function AdminBranchesScreen({ navigation }: Props) {
+export function AdminBranchesScreen({ navigation, route }: Props) {
   const { token, user, effectiveRole, tenants, activeTenantId, setActiveTenantId, refreshMe, refreshTenants } = useContext(AuthContext);
   const isSuperAdmin = user?.role === "admin";
   const isBranchAdmin = effectiveRole === "admin";
@@ -270,7 +380,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
   const [members, setMembers] = useState<BranchMember[]>([]);
   const [allUsers, setAllUsers] = useState<AdminUserRow[]>([]);
   const [branchTab, setBranchTab] = useState<"list" | "create">("list");
-  const [adminTab, setAdminTab] = useState<"members" | "add" | "sessions" | "users">("members");
+  const [adminTab, setAdminTab] = useState<AdminTab>(route.params?.initialTab === "staffCards" ? "staffCards" : "members");
   const [createUserName, setCreateUserName] = useState("");
   const [createUserEmail, setCreateUserEmail] = useState("");
   const [createUserRole, setCreateUserRole] = useState<UserRole>("inventory_staff");
@@ -288,6 +398,12 @@ export function AdminBranchesScreen({ navigation }: Props) {
   }, []);
 
   const list = useMemo(() => (Array.isArray(tenants) ? (tenants as TenantInfo[]) : []), [tenants]);
+
+  useEffect(() => {
+    if (route.params?.initialTab === "staffCards") {
+      setAdminTab("staffCards");
+    }
+  }, [route.params?.initialTab]);
 
   const loadMembers = useCallback(
     async (tenantId: string | null) => {
@@ -321,7 +437,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
       setMembers([]);
       return;
     }
-    if (adminTab !== "members") return;
+    if (adminTab !== "members" && adminTab !== "staffCards") return;
     loadMembers(activeTenantId).catch(() => undefined);
   }, [activeTenantId, adminTab, isBranchAdmin, loadMembers, token]);
 
@@ -346,6 +462,14 @@ export function AdminBranchesScreen({ navigation }: Props) {
     }
     return count;
   }, [allUsers]);
+
+  const staffCardStats = useMemo(() => {
+    let linked = 0;
+    for (const member of members) {
+      if (member.user?.operatorTagId) linked++;
+    }
+    return { linked, unassigned: Math.max(0, members.length - linked) };
+  }, [members]);
 
   const createUserInActiveBranch = useCallback(async () => {
     if (!token || !isBranchAdmin) return;
@@ -654,7 +778,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
       setError(null);
       refreshTenants().catch(() => undefined);
       if (isBranchAdmin) {
-        if (adminTab === "members") {
+        if (adminTab === "members" || adminTab === "staffCards") {
           loadMembers(activeTenantId).catch(() => undefined);
         }
         if (adminTab === "sessions") {
@@ -726,12 +850,12 @@ export function AdminBranchesScreen({ navigation }: Props) {
   }
 
   const selectAdminTab = useCallback(
-    async (tab: "members" | "add" | "sessions" | "users") => {
+    async (tab: AdminTab) => {
       setAdminTab(tab);
       if (tab === "sessions") {
         await refreshMe().catch(() => undefined);
       }
-      if (tab === "members") {
+      if (tab === "members" || tab === "staffCards") {
         await loadMembers(activeTenantId).catch(() => undefined);
       }
       if (tab === "users" && isSuperAdmin) {
@@ -823,6 +947,18 @@ export function AdminBranchesScreen({ navigation }: Props) {
     ));
   }, [busy, isSuperAdmin, members, openOperatorTagScanner, removeMember, removeOperatorTag, resendTemporaryPassword, updateGlobalRole, updateMemberRole]);
 
+  const staffOperatorCards = useMemo(() => {
+    return members.map((m) => (
+      <StaffOperatorCard
+        key={`operator-${m.userId}-${m.tenantId}`}
+        member={m}
+        busy={busy}
+        onAssignOperatorTag={openOperatorTagScanner}
+        onRemoveOperatorTag={removeOperatorTag}
+      />
+    ));
+  }, [busy, members, openOperatorTagScanner, removeOperatorTag]);
+
   const sessionCards = useMemo(() => {
     return sessions.map((s) => <SessionCard key={s.jti} session={s} busy={busy} isSuperAdmin={isSuperAdmin} onRevoke={revokeSession} />);
   }, [busy, isSuperAdmin, revokeSession, sessions]);
@@ -835,10 +971,12 @@ export function AdminBranchesScreen({ navigation }: Props) {
         busy={busy}
         activeTenantId={activeTenantId}
         onAssignToActive={assignUserToActiveBranch}
+        onAssignOperatorTag={openOperatorTagScanner}
+        onRemoveOperatorTag={removeOperatorTag}
         onDelete={deleteUser}
       />
     ));
-  }, [activeTenantId, allUsers, assignUserToActiveBranch, busy, deleteUser]);
+  }, [activeTenantId, allUsers, assignUserToActiveBranch, busy, deleteUser, openOperatorTagScanner, removeOperatorTag]);
 
   return (
     <Screen
@@ -897,6 +1035,11 @@ export function AdminBranchesScreen({ navigation }: Props) {
                 <>
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                     <AppButton title="Members" onPress={() => selectAdminTab("members")} variant={adminTab === "members" ? "primary" : "secondary"} />
+                    <AppButton
+                      title="Staff RFID cards"
+                      onPress={() => selectAdminTab("staffCards")}
+                      variant={adminTab === "staffCards" ? "primary" : "secondary"}
+                    />
                     <AppButton title="Add user" onPress={() => selectAdminTab("add")} variant={adminTab === "add" ? "primary" : "secondary"} />
                     <AppButton title="Active sessions" onPress={() => selectAdminTab("sessions")} variant={adminTab === "sessions" ? "primary" : "secondary"} />
                     {isSuperAdmin ? (
@@ -977,6 +1120,23 @@ export function AdminBranchesScreen({ navigation }: Props) {
                     </>
                   ) : null}
 
+                  {adminTab === "staffCards" ? (
+                    <>
+                      <View style={{ height: theme.spacing.md }} />
+                      <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Staff RFID cards</Text>
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+                        <Badge label={`Linked: ${staffCardStats.linked}`} tone="success" />
+                        <Badge label={`Unassigned: ${staffCardStats.unassigned}`} tone={staffCardStats.unassigned ? "warning" : "default"} />
+                      </View>
+                      <View style={{ height: 12 }} />
+                      <MutedText>Scan a staff card here so every hardware scan can be tied to the correct user.</MutedText>
+                      <View style={{ height: 12 }} />
+                      <View style={{ gap: 10 }}>
+                        {members.length ? staffOperatorCards : <MutedText>No members found.</MutedText>}
+                      </View>
+                    </>
+                  ) : null}
+
                   {adminTab === "sessions" ? (
                     <>
                       <View style={{ height: theme.spacing.md }} />
@@ -998,7 +1158,7 @@ export function AdminBranchesScreen({ navigation }: Props) {
                         <Badge label={`Unassigned: ${unassignedUsersCount}`} tone="warning" />
                       </View>
                       <View style={{ height: 12 }} />
-                      <MutedText>Select a role in Add user, then assign users to the active branch.</MutedText>
+                      <MutedText>Assign users to the active branch before linking their staff RFID card.</MutedText>
                       <View style={{ height: 12 }} />
                       <View style={{ gap: 10 }}>
                         {allUsers.length ? allUserCards : <MutedText>No users found.</MutedText>}

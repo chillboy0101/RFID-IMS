@@ -34,7 +34,7 @@ export type MoreStackParamList = {
   Receiving: undefined;
   Putaway: undefined;
   CycleCount: undefined;
-  Branches: undefined;
+  Branches: { initialTab?: "members" | "staffCards" } | undefined;
   Alerts: undefined;
   Reports: undefined;
   Feedback: undefined;
