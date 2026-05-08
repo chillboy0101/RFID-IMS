@@ -425,6 +425,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
       setWebStatus("Starting preview…");
       await (videoEl as any).play?.();
       setWebVideoReady((v) => v + 1);
+      setWebNeedsTap(false);
       setWebStatus("Camera ready");
     } catch (e) {
       setWebNeedsTap(true);
@@ -513,6 +514,12 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
         if (webHiddenRef.current) return;
         const videoEl = webVideoRef.current as any;
         if (!videoEl) return;
+        if (((videoEl.videoWidth ?? 0) > 0 || (videoEl.readyState ?? 0) >= 2) && !videoEl.paused) {
+          setWebVideoReady((v) => v || 1);
+          setWebNeedsTap(false);
+          setWebStatus("Camera ready");
+          return;
+        }
         setWebDiag((prev) => {
           const base = prev?.split(" | ")?.[0] ?? prev;
           const meta = `video:readyState:${String(videoEl.readyState)} w:${String(videoEl.videoWidth ?? 0)} h:${String(videoEl.videoHeight ?? 0)}`;
@@ -675,6 +682,21 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
               playsInline: true,
               muted: true,
               autoPlay: true,
+              onLoadedMetadata: () => {
+                setWebVideoReady((v) => v || 1);
+                setWebNeedsTap(false);
+                setWebStatus("Camera ready");
+              },
+              onCanPlay: () => {
+                setWebVideoReady((v) => v || 1);
+                setWebNeedsTap(false);
+                setWebStatus("Camera ready");
+              },
+              onPlaying: () => {
+                setWebVideoReady((v) => v || 1);
+                setWebNeedsTap(false);
+                setWebStatus("Camera ready");
+              },
               style: {
                 width: "100%",
                 height: "100%",
@@ -684,30 +706,6 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
                 opacity: webVideoReady ? 1 : 0.35,
               },
             })}
-            {!webVideoReady || webNeedsTap ? (
-              <View
-                pointerEvents="none"
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  right: 0,
-                  bottom: 0,
-                  left: 0,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: 20,
-                  gap: 10,
-                }}
-              >
-                <Badge label={webNeedsTap ? "Tap to start" : "Preparing camera"} tone="default" />
-                <Text style={{ color: "#fff", textAlign: "center", fontSize: 15, fontWeight: "700" }}>
-                  {webNeedsTap ? "Tap to start the camera, then point it at the barcode." : "Preparing camera preview..."}
-                </Text>
-                <MutedText style={{ color: "rgba(255,255,255,0.82)", textAlign: "center" }}>
-                  Scanning starts automatically when the code is in frame.
-                </MutedText>
-              </View>
-            ) : null}
           </Pressable>
         ) : (
           <CameraView
@@ -724,10 +722,7 @@ export function BarcodeScanModal({ visible, title = "Scan barcode", onClose, onS
             <Badge label={busy ? "Processing" : "Scanned"} tone={busy ? "warning" : "success"} />
             <MutedText>Value: {last}</MutedText>
           </View>
-        ) : (
-          <MutedText>Point the camera at the barcode/QR code. Scanning continues automatically.</MutedText>
-        )}
-        {isWeb && webStatus && !webVideoReady ? <MutedText>{webStatus}</MutedText> : null}
+        ) : null}
         {isWeb ? (
           <TextInput
             ref={manualInputRef}
