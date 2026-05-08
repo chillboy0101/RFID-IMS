@@ -32,7 +32,11 @@ function getDevBundleHost(): string | null {
 
 function getDefaultApiBaseUrl(): string {
   if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.hostname) {
-    return `http://${window.location.hostname}:4000`;
+    const webHost = window.location.hostname;
+    if (!isLanLikeHost(webHost)) {
+      return "https://rfid-ims.onrender.com";
+    }
+    return `http://${webHost}:4000`;
   }
 
   if (Platform.OS === "android") {
@@ -53,7 +57,9 @@ if (envUrl) {
 
   if (Platform.OS === "web") {
     const webHost = typeof window !== "undefined" ? window.location?.hostname : null;
-    if (envHost && webHost && isLanLikeHost(envHost) && envHost !== webHost) {
+    if (envHost && webHost && !isLanLikeHost(webHost) && isLanLikeHost(envHost)) {
+      resolved = DEFAULT_API_BASE_URL;
+    } else if (envHost && webHost && isLanLikeHost(envHost) && envHost !== webHost) {
       resolved = envUrl.replace(envHost, webHost);
     }
   } else {
