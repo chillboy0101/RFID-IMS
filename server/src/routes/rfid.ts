@@ -23,6 +23,7 @@ import { buildInventoryFlowSummaryMap } from "../utils/inventoryFlow.js";
 import { consumeExitAuthorization } from "../utils/orderFulfillment.js";
 
 const router = express.Router();
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function normalizeLocation(value: unknown, fallback = "EXIT_MAIN") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
@@ -33,6 +34,19 @@ function normalizeExternalEventId(req: express.Request, body: Record<string, unk
     .find((value) => typeof value === "string" && value.trim());
   const fromHeader = req.header("x-event-id") ?? req.header("x-idempotency-key") ?? "";
   return (typeof fromBody === "string" ? fromBody : fromHeader).trim();
+}
+
+function normalizeHardwareEventId(req: express.Request, body: Record<string, unknown>) {
+  const eventId = normalizeExternalEventId(req, body);
+  if (!eventId) {
+    return { ok: false as const, error: "eventId UUID is required" };
+  }
+
+  if (!uuidPattern.test(eventId)) {
+    return { ok: false as const, error: "eventId must be a UUID" };
+  }
+
+  return { ok: true as const, eventId: eventId.toLowerCase() };
 }
 
 function resolveHardwareLocation(req: GateRequest, body: Record<string, unknown>, fallback: string) {
@@ -53,13 +67,13 @@ function isExitLocation(value: string) {
   return /(^|[_\s-])(EXIT|GATE|LOADING|REAR)([_\s-]|$)/i.test(value);
 }
 
-function normalizeScan(body: Record<string, unknown>) {
+function normalizeScan(body: Record<string, unknown>, opts: { useServerObservedAt?: boolean } = {}) {
   const value = typeof body.value === "string" ? body.value.trim() : "";
   const tagId = typeof body.tagId === "string" ? body.tagId.trim() : "";
   const barcode = typeof body.barcode === "string" ? body.barcode.trim() : "";
   const source = typeof body.source === "string" && body.source.trim() ? body.source.trim() : "rfid";
   const parsedObservedAt = typeof body.observedAt === "string" && body.observedAt.trim() ? new Date(body.observedAt) : null;
-  const observedAt = parsedObservedAt && Number.isFinite(parsedObservedAt.getTime()) ? parsedObservedAt : new Date();
+  const observedAt = opts.useServerObservedAt || !parsedObservedAt || !Number.isFinite(parsedObservedAt.getTime()) ? new Date() : parsedObservedAt;
   return { value, tagId, barcode, source, observedAt };
 }
 
@@ -374,7 +388,6 @@ router.get("/meta", async (_req, res) => {
           operatorTagId: "string (required staff RFID card/tag EPC)",
           location: "string, optional when key is not bound to a location",
           source: "string, optional reader label",
-          observedAt: "ISO timestamp, optional",
         },
         response: {
           operatorSessionToken: "Short-lived token. Send as X-Operator-Session or Authorization: Bearer op_...",
@@ -388,16 +401,15 @@ router.get("/meta", async (_req, res) => {
           "X-Gate-Api-Key": "Required gate API key",
           "X-Operator-Session": "Required short-lived token from POST /rfid/operator-sessions",
           "X-Source": "Optional reader/source label",
-          "X-Event-ID": "Optional unique scan/read id for retry-safe idempotency",
+          "X-Event-ID": "Required UUID for retry-safe idempotency",
         },
         payload: {
           tagId: "string (recommended for RFID reads)",
           value: "string (single autonomous scan value; server auto-detects RFID vs barcode)",
           barcode: "string (optional barcode fallback)",
-          eventId: "string, optional unique scan/read id; recommended",
+          eventId: "UUID string; same value as X-Event-ID when sent in body",
           location: "string, optional when key is not bound to a location",
           source: "string, default rfid",
-          observedAt: "ISO timestamp, optional; server time is used for authorization decisions",
           itemId: "Mongo ObjectId, optional manual override",
         },
       },
@@ -407,18 +419,17 @@ router.get("/meta", async (_req, res) => {
           "X-Gate-Api-Key": "Required station API key",
           "X-Operator-Session": "Required short-lived token from POST /rfid/operator-sessions",
           "X-Source": "Optional reader/source label",
-          "X-Event-ID": "Optional unique scan/read id for retry-safe idempotency",
+          "X-Event-ID": "Required UUID for retry-safe idempotency",
         },
         payload: {
           tagId: "string (required RFID tag/EPC unless value is supplied)",
           value: "string (RFID tag/EPC fallback)",
-          eventId: "string, optional unique scan/read id; recommended",
+          eventId: "UUID string; same value as X-Event-ID when sent in body",
           itemId: "Mongo ObjectId, optional",
           itemBarcode: "string, product barcode/SKU scan from receiving workflow",
           sku: "string, optional item SKU fallback",
           location: "string, optional when key is not bound to a location",
           source: "string, default rfid",
-          observedAt: "ISO timestamp, optional",
         },
       },
       operatorExitSession: {
@@ -430,7 +441,6 @@ router.get("/meta", async (_req, res) => {
           token: "short-lived exit session token",
           tagId: "string (preferred)",
           barcode: "string (fallback)",
-          observedAt: "ISO timestamp, optional",
         },
       },
       tagRegistry: {
@@ -449,8 +459,7 @@ router.post("/operator-sessions", requireGateApiKey, requireGateTenant, async (r
   const tenantId = req.tenantId as string;
   const body = (req.body ?? {}) as Record<string, unknown>;
   const operatorTagId = normalizeOperatorTagId(body.operatorTagId ?? body.tagId ?? body.value);
-  const parsedObservedAt = typeof body.observedAt === "string" && body.observedAt.trim() ? new Date(body.observedAt) : null;
-  const observedAt = parsedObservedAt && Number.isFinite(parsedObservedAt.getTime()) ? parsedObservedAt : new Date();
+  const observedAt = new Date();
   const source = typeof body.source === "string" && body.source.trim()
     ? body.source.trim()
     : String(req.header("x-source") ?? "").trim() || "rfid";
@@ -585,10 +594,15 @@ router.delete("/operator-sessions/:token", requireGateApiKey, requireGateTenant,
 router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (req: GateRequest, res) => {
   const tenantId = req.tenantId as string;
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const { value, tagId: rawTagId, source: bodySource, observedAt } = normalizeScan(body);
+  const { value, tagId: rawTagId, source: bodySource, observedAt } = normalizeScan(body, { useServerObservedAt: true });
   const source = resolveHardwareSource(req, bodySource);
   const tagId = rawTagId || value;
-  const eventId = normalizeExternalEventId(req, body);
+  const eventIdResult = normalizeHardwareEventId(req, body);
+  if (!eventIdResult.ok) {
+    res.status(400).json({ ok: false, error: eventIdResult.error });
+    return;
+  }
+  const eventId = eventIdResult.eventId;
   const location = resolveHardwareLocation(req, body, "RECEIVING_STAGING");
 
   if (!tagId) {
@@ -614,12 +628,10 @@ router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (re
     return;
   }
 
-  if (eventId) {
-    const duplicate = await RfidEventModel.findOne({ tenantId, eventId }).exec();
-    if (duplicate) {
-      res.json({ ok: true, duplicate: true, processed: false, event: duplicate });
-      return;
-    }
+  const duplicate = await RfidEventModel.findOne({ tenantId, eventId }).exec();
+  if (duplicate) {
+    res.json({ ok: true, duplicate: true, processed: false, event: duplicate });
+    return;
   }
 
   let item: InventoryItemDocument | null = null;
@@ -648,7 +660,7 @@ router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (re
 
   const event = await RfidEventModel.create({
     tenantId,
-    eventId: eventId || undefined,
+    eventId,
     tagId,
     eventType: "scan",
     itemId: item._id,
@@ -691,7 +703,7 @@ router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (re
       tagId,
       unitId: unit._id.toString(),
       rfidEventId: event._id.toString(),
-      eventId: eventId || undefined,
+      eventId,
       operatorSessionId: operator.session._id.toString(),
       operatorTagId: operator.session.operatorTagId,
       gateKeyName: req.gateKeyName,
@@ -713,9 +725,14 @@ router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (re
 router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: GateRequest, res) => {
   const tenantId = req.tenantId as string;
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const { value, tagId: rawTagId, barcode: rawBarcode, source: bodySource, observedAt } = normalizeScan(body);
+  const { value, tagId: rawTagId, barcode: rawBarcode, source: bodySource, observedAt } = normalizeScan(body, { useServerObservedAt: true });
   const source = resolveHardwareSource(req, bodySource);
-  const eventId = normalizeExternalEventId(req, body);
+  const eventIdResult = normalizeHardwareEventId(req, body);
+  if (!eventIdResult.ok) {
+    res.status(400).json({ ok: false, error: eventIdResult.error });
+    return;
+  }
+  const eventId = eventIdResult.eventId;
   const location = resolveHardwareLocation(req, body, "EXIT_MAIN");
   const decisionAt = new Date();
 
@@ -731,12 +748,10 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
   }
   const operator = operatorResult.operator;
 
-  if (eventId) {
-    const duplicate = await RfidEventModel.findOne({ tenantId, eventId }).exec();
-    if (duplicate) {
-      res.json({ ok: true, duplicate: true, processed: false, event: duplicate });
-      return;
-    }
+  const duplicate = await RfidEventModel.findOne({ tenantId, eventId }).exec();
+  if (duplicate) {
+    res.json({ ok: true, duplicate: true, processed: false, event: duplicate });
+    return;
   }
 
   const { tagId, barcode, mode } = await resolveScanIdentity({
@@ -763,7 +778,7 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
 
   const event = await RfidEventModel.create({
     tenantId,
-    eventId: eventId || undefined,
+    eventId,
     tagId: tagId || barcode || value,
     eventType: "scan",
     itemId: item?._id,
