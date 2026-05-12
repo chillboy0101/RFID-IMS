@@ -468,8 +468,8 @@ const auditDescriptorMap: Record<string, AuditDescriptor> = {
     type: "tenants.user.operator_tag_remove",
     category: "tenants",
     entityType: "user",
-    successSummary: "Removed user staff RFID card",
-    failureSummary: "Failed to remove user staff RFID card",
+    successSummary: "Deleted user staff RFID card",
+    failureSummary: "Failed to delete user staff RFID card",
   },
   "POST /vendors": {
     type: "vendors.create",

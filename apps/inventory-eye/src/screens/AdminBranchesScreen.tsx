@@ -150,7 +150,7 @@ const MemberCard = React.memo(function MemberCard({
           />
           {operatorTagId ? (
             <AppButton
-              title="Remove card"
+              title="Delete card"
               onPress={() => onRemoveOperatorTag(member.userId, memberLabel)}
               variant="secondary"
               disabled={busy}
@@ -236,7 +236,7 @@ const StaffOperatorCard = React.memo(function StaffOperatorCard({ member, busy, 
           />
           {operatorTagId ? (
             <AppButton
-              title="Remove card"
+              title="Delete card"
               onPress={() => onRemoveOperatorTag(member.userId, memberLabel)}
               variant="secondary"
               disabled={busy}
@@ -432,7 +432,7 @@ const AllUserCard = React.memo(function AllUserCard({
           />
           {operatorTagId ? (
             <AppButton
-              title="Remove card"
+              title="Delete card"
               onPress={() => onRemoveOperatorTag(user.id, userLabel)}
               variant="secondary"
               disabled={busy || !isInActiveBranch}
@@ -830,7 +830,7 @@ export function AdminBranchesScreen({ navigation, route }: Props) {
 
   const removeOperatorTag = useCallback(async (userId: string, label: string) => {
     if (!token || !activeTenantId || busy) return;
-    const ok = await confirmAction("Remove staff RFID card", `Remove the staff RFID card from ${label}?`);
+    const ok = await confirmAction("Delete staff RFID card", `Delete the staff RFID card from ${label}?`);
     if (!ok) return;
 
     setBusy(true);
@@ -842,9 +842,9 @@ export function AdminBranchesScreen({ navigation, route }: Props) {
         token,
       });
       await Promise.all([loadMembers(activeTenantId), isSuperAdmin ? loadAllUsers() : Promise.resolve()]);
-      showNotice(`${label} staff RFID card removed.`);
+      showNotice(`${label} staff RFID card deleted.`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to remove staff RFID card");
+      setError(e instanceof Error ? e.message : "Failed to delete staff RFID card");
     } finally {
       setBusy(false);
     }

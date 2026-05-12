@@ -779,7 +779,7 @@ router.delete("/:id/users/:userId/operator-tag", requireTenant, requireRole("adm
     entityType: "user",
     entityId: targetUser._id.toString(),
     entityLabel: `${targetUser.name} (${targetUser.email})`,
-    summary: `Removed ${targetUser.name} staff RFID card`,
+    summary: `Deleted ${targetUser.name} staff RFID card`,
     targetUserId: targetUser._id.toString(),
     metadata: {
       tenantName: tenant.name,
