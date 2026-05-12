@@ -432,6 +432,22 @@ router.get("/meta", async (_req, res) => {
           source: "string, default rfid",
         },
       },
+      staffCardAssignmentScan: {
+        endpoint: "POST /rfid/staff-card-events",
+        headers: {
+          "X-Gate-Api-Key": "Required reader/station API key",
+          "X-Source": "Optional reader/source label",
+          "X-Event-ID": "Required UUID for retry-safe idempotency",
+        },
+        payload: {
+          operatorTagId: "string (required scanned staff RFID card/tag EPC)",
+          tagId: "string (alias for operatorTagId)",
+          value: "string (alias for operatorTagId)",
+          eventId: "UUID string; same value as X-Event-ID when sent in body",
+          location: "string, optional when key is not bound to a location",
+          source: "string, default rfid",
+        },
+      },
       operatorExitSession: {
         requestSession: "POST /rfid/exit-sessions",
         verifyScan: "POST /rfid/exit-sessions/verify",
@@ -589,6 +605,69 @@ router.delete("/operator-sessions/:token", requireGateApiKey, requireGateTenant,
   });
 
   res.json({ ok: true, ended: { id: session._id.toString(), endedAt: session.endedAt } });
+});
+
+router.post("/staff-card-events", requireGateApiKey, requireGateTenant, async (req: GateRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const operatorTagId = normalizeOperatorTagId(body.operatorTagId ?? body.tagId ?? body.value);
+  const eventIdResult = normalizeHardwareEventId(req, body);
+  if (!eventIdResult.ok) {
+    res.status(400).json({ ok: false, error: eventIdResult.error });
+    return;
+  }
+  const eventId = eventIdResult.eventId;
+  const source = typeof body.source === "string" && body.source.trim()
+    ? body.source.trim()
+    : String(req.header("x-source") ?? "").trim() || "rfid";
+  const location = resolveHardwareLocation(req, body, "STAFF_CARD_STATION");
+
+  if (!operatorTagId) {
+    res.status(400).json({ ok: false, error: "operatorTagId, tagId, or value is required" });
+    return;
+  }
+
+  const duplicate = await RfidEventModel.findOne({ tenantId, eventId }).exec();
+  if (duplicate) {
+    res.json({ ok: true, duplicate: true, processed: false, event: duplicate });
+    return;
+  }
+
+  const event = await RfidEventModel.create({
+    tenantId,
+    eventId,
+    tagId: operatorTagId,
+    eventType: "scan",
+    gateKeyName: req.gateKeyName,
+    location,
+    observedAt: new Date(),
+    source,
+    raw: {
+      purpose: "staff-card-assignment",
+      gateKeyId: req.gateKeyId,
+      gateKeyName: req.gateKeyName,
+      sourcePayload: redactHardwareRaw(body),
+    },
+  });
+
+  setAuditContext(res, {
+    actorSource: "hardware",
+    type: "rfid.staff_card_event.capture",
+    category: "rfid",
+    entityType: "rfid_event",
+    entityId: event._id.toString(),
+    entityLabel: `${operatorTagId} at ${location}`,
+    summary: "Captured staff RFID card assignment scan",
+    metadata: {
+      operatorTagId,
+      gateKeyName: req.gateKeyName,
+      location,
+      source,
+      eventId,
+    },
+  });
+
+  res.status(201).json({ ok: true, processed: true, event });
 });
 
 router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (req: GateRequest, res) => {
@@ -914,6 +993,23 @@ router.get("/events/latest", async (req: TenantRequest, res) => {
   const location = (req.query.location as string | undefined)?.trim();
   const filter: Record<string, unknown> = { tenantId };
   if (location) filter.location = location;
+
+  const event = await RfidEventModel.findOne(filter).sort({ observedAt: -1 }).limit(1).exec();
+  res.json({ ok: true, event: event ?? null });
+});
+
+router.get("/staff-card-events/latest", async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const sinceParam = (req.query.since as string | undefined)?.trim();
+  const since = sinceParam ? new Date(sinceParam) : null;
+  const filter: Record<string, unknown> = {
+    tenantId,
+    "raw.purpose": "staff-card-assignment",
+  };
+
+  if (since && Number.isFinite(since.getTime())) {
+    filter.observedAt = { $gte: since };
+  }
 
   const event = await RfidEventModel.findOne(filter).sort({ observedAt: -1 }).limit(1).exec();
   res.json({ ok: true, event: event ?? null });

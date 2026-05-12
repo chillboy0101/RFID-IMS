@@ -1,5 +1,6 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { Alert, Platform, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Alert, Modal, Platform, Text, View, useWindowDimensions } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -7,7 +8,7 @@ import { apiRequest } from "../api/client";
 import { AuthContext, type UserRole } from "../auth/AuthContext";
 import { goBackOrNavigate } from "../navigation/moreBack";
 import type { MoreStackParamList } from "../navigation/types";
-import { AppButton, Badge, BarcodeScanModal, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
+import { AppButton, Badge, Card, ErrorText, ListRow, MutedText, Screen, TextField, theme } from "../ui";
 
 type Props = NativeStackScreenProps<MoreStackParamList, "Branches">;
 
@@ -48,6 +49,12 @@ type OperatorTagTarget = {
   userId: string;
   label: string;
   currentTag?: string | null;
+  startedAt: string;
+};
+
+type StaffCardLatestResponse = {
+  ok: true;
+  event: { _id: string; tagId: string; observedAt: string } | null;
 };
 
 const roles: UserRole[] = ["inventory_staff", "manager", "admin"];
@@ -242,6 +249,89 @@ const StaffOperatorCard = React.memo(function StaffOperatorCard({ member, busy, 
   );
 });
 
+type StaffRfidCaptureModalProps = {
+  visible: boolean;
+  title: string;
+  targetLabel?: string;
+  busy: boolean;
+  error?: string | null;
+  onClose: () => void;
+};
+
+function StaffRfidCaptureModal({ visible, title, targetLabel, busy, error, onClose }: StaffRfidCaptureModalProps) {
+  return (
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(15, 23, 42, 0.56)",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 18,
+        }}
+      >
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 430,
+            borderRadius: theme.radius.lg,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            backgroundColor: theme.colors.surface,
+            padding: 18,
+            gap: 16,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={[theme.typography.h2, { color: theme.colors.text }]}>{title}</Text>
+              {targetLabel ? (
+                <Text style={[theme.typography.body, { color: theme.colors.textMuted, marginTop: 4 }]} numberOfLines={1}>
+                  {targetLabel}
+                </Text>
+              ) : null}
+            </View>
+            <AppButton title="Close" onPress={onClose} variant="secondary" disabled={busy} />
+          </View>
+
+          <View
+            style={{
+              minHeight: 260,
+              borderRadius: theme.radius.md,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surface2,
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 22,
+              gap: 14,
+            }}
+          >
+            <View
+              style={{
+                width: 96,
+                height: 96,
+                borderRadius: 48,
+                backgroundColor: theme.colors.primarySoft,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name="radio-outline" size={44} color={theme.colors.text} />
+            </View>
+            <Text style={[theme.typography.h3, { color: theme.colors.text, textAlign: "center" }]}>Waiting for staff RFID card</Text>
+            <Text style={[theme.typography.body, { color: theme.colors.textMuted, textAlign: "center", maxWidth: 290 }]}>
+              Scan the staff card on the RFID reader. The portal will link the next RFID staff-card event automatically.
+            </Text>
+            <ActivityIndicator color={theme.colors.primaryPressed} accessible accessibilityRole="progressbar" accessibilityLabel="Waiting for RFID card scan" />
+            {error ? <Text style={[theme.typography.body, { color: theme.colors.danger, textAlign: "center" }]}>{error}</Text> : null}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 type SessionCardProps = {
   session: TenantSessionRow;
   busy: boolean;
@@ -387,6 +477,7 @@ export function AdminBranchesScreen({ navigation, route }: Props) {
   const [createUserMakeSuperAdmin, setCreateUserMakeSuperAdmin] = useState(false);
   const [sessions, setSessions] = useState<TenantSessionRow[]>([]);
   const [operatorTagTarget, setOperatorTagTarget] = useState<OperatorTagTarget | null>(null);
+  const [operatorTagScanError, setOperatorTagScanError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -663,20 +754,22 @@ export function AdminBranchesScreen({ navigation, route }: Props) {
       return;
     }
     setError(null);
-    setOperatorTagTarget({ userId, label, currentTag });
+    setOperatorTagScanError(null);
+    setOperatorTagTarget({ userId, label, currentTag, startedAt: new Date().toISOString() });
   }, [activeTenantId]);
 
   const assignOperatorTagFromScan = useCallback(async (value: string) => {
     if (!token || !activeTenantId || !operatorTagTarget || busy) return;
     const operatorTagId = value.trim();
     if (!operatorTagId) {
-      setError("Scan a staff RFID card first.");
+      setOperatorTagScanError("Scan a staff RFID card first.");
       return;
     }
 
     setBusy(true);
     setError(null);
     setNotice(null);
+    setOperatorTagScanError(null);
     setOperatorTagTarget(null);
     try {
       await apiRequest<{ ok: true; user?: { operatorTagId?: string | null } }>(
@@ -695,6 +788,45 @@ export function AdminBranchesScreen({ navigation, route }: Props) {
       setBusy(false);
     }
   }, [activeTenantId, busy, isSuperAdmin, loadAllUsers, loadMembers, operatorTagTarget, showNotice, token]);
+
+  useEffect(() => {
+    if (!operatorTagTarget || !token || !activeTenantId) return;
+
+    let cancelled = false;
+    let inFlight = false;
+    const since = operatorTagTarget.startedAt;
+
+    const pollLatestStaffCardEvent = async () => {
+      if (cancelled || inFlight || busy) return;
+      inFlight = true;
+      try {
+        const res = await apiRequest<StaffCardLatestResponse>(
+          `/rfid/staff-card-events/latest?since=${encodeURIComponent(since)}`,
+          { method: "GET", token, timeoutMs: 8000 }
+        );
+        if (!cancelled && res.event?.tagId) {
+          cancelled = true;
+          await assignOperatorTagFromScan(res.event.tagId);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setOperatorTagScanError(e instanceof Error ? e.message : "Failed to read RFID staff-card scan");
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void pollLatestStaffCardEvent();
+    const pollId = setInterval(() => {
+      void pollLatestStaffCardEvent();
+    }, 1500);
+
+    return () => {
+      cancelled = true;
+      clearInterval(pollId);
+    };
+  }, [activeTenantId, assignOperatorTagFromScan, busy, operatorTagTarget, token]);
 
   const removeOperatorTag = useCallback(async (userId: string, label: string) => {
     if (!token || !activeTenantId || busy) return;
@@ -1171,12 +1303,15 @@ export function AdminBranchesScreen({ navigation, route }: Props) {
           </>
         ) : null}
       </View>
-      <BarcodeScanModal
+      <StaffRfidCaptureModal
         visible={Boolean(operatorTagTarget)}
         title={operatorTagTarget?.currentTag ? "Change staff RFID card" : "Assign staff RFID card"}
-        onClose={() => setOperatorTagTarget(null)}
-        onScanned={(value) => {
-          void assignOperatorTagFromScan(value);
+        targetLabel={operatorTagTarget?.label}
+        busy={busy}
+        error={operatorTagScanError}
+        onClose={() => {
+          setOperatorTagScanError(null);
+          setOperatorTagTarget(null);
         }}
       />
     </Screen>

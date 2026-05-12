@@ -310,6 +310,13 @@ const auditDescriptorMap: Record<string, AuditDescriptor> = {
     successSummary: "Captured RFID event",
     failureSummary: "Failed to capture RFID event",
   },
+  "POST /rfid/staff-card-events": {
+    type: "rfid.staff_card_event.capture",
+    category: "rfid",
+    entityType: "rfid_event",
+    successSummary: "Captured staff RFID card scan",
+    failureSummary: "Failed to capture staff RFID card scan",
+  },
   "POST /rfid/exit-authorizations": {
     type: "rfid.exit_authorization.create",
     category: "rfid",
