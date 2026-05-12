@@ -7,6 +7,7 @@ import { InventoryItemModel } from "../models/InventoryItem.js";
 import { InventoryLogModel } from "../models/InventoryLog.js";
 import { OrderModel } from "../models/Order.js";
 import { ReorderRequestModel } from "../models/ReorderRequest.js";
+import { generateInventorySku, isMongoDuplicateKeyError } from "../utils/inventorySku.js";
 
 const router = express.Router();
 
@@ -301,8 +302,8 @@ router.post(
     const nameIdx = idx.get("name");
     const qtyIdx = idx.get("quantity");
 
-    if (typeof skuIdx !== "number" || typeof nameIdx !== "number" || typeof qtyIdx !== "number") {
-      res.status(400).json({ ok: false, error: "CSV header must include sku, name, quantity" });
+    if (typeof nameIdx !== "number" || typeof qtyIdx !== "number") {
+      res.status(400).json({ ok: false, error: "CSV header must include name and quantity. sku is optional." });
       return;
     }
 
@@ -313,12 +314,12 @@ router.post(
     for (let r = 1; r < rows.length; r += 1) {
       scanned += 1;
       const line = rows[r];
-      const sku = String(line[skuIdx] ?? "").trim();
+      const explicitSku = typeof skuIdx === "number" ? String(line[skuIdx] ?? "").trim() : "";
       const name = String(line[nameIdx] ?? "").trim();
       const qtyRaw = String(line[qtyIdx] ?? "").trim();
 
-      if (!sku || !name || !qtyRaw) {
-        errors.push({ row: r + 1, error: "Missing required sku/name/quantity" });
+      if (!name || !qtyRaw) {
+        errors.push({ row: r + 1, error: "Missing required name/quantity" });
         continue;
       }
 
@@ -354,24 +355,39 @@ router.post(
         continue;
       }
 
-      const doc = await InventoryItemModel.findOneAndUpdate(
-        { tenantId, sku },
-        {
-          $set: {
-            name,
-            description: get("description") || undefined,
-            location: get("location") || undefined,
-            quantity,
-            reorderLevel: typeof reorderLevel === "number" ? reorderLevel : undefined,
-            expiryDate: expiry,
-            status: get("status") || undefined,
-            rfidTagId: get("rfidTagId") || undefined,
-            vendorId: vendorId || undefined,
-          },
-          $setOnInsert: { tenantId },
-        },
-        { upsert: true, new: true }
-      ).exec();
+      let doc = null;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const sku = explicitSku || (await generateInventorySku(tenantId, name));
+        try {
+          doc = await InventoryItemModel.findOneAndUpdate(
+            { tenantId, sku },
+            {
+              $set: {
+                name,
+                description: get("description") || undefined,
+                location: get("location") || undefined,
+                quantity,
+                reorderLevel: typeof reorderLevel === "number" ? reorderLevel : undefined,
+                expiryDate: expiry,
+                status: get("status") || undefined,
+                rfidTagId: get("rfidTagId") || undefined,
+                vendorId: vendorId || undefined,
+              },
+              $setOnInsert: { tenantId },
+            },
+            { upsert: true, new: true }
+          ).exec();
+          break;
+        } catch (error) {
+          if (isMongoDuplicateKeyError(error) && !explicitSku && attempt < 2) continue;
+          throw error;
+        }
+      }
+
+      if (!doc) {
+        errors.push({ row: r + 1, error: "Failed to import item" });
+        continue;
+      }
 
       await InventoryLogModel.create({
         tenantId,
@@ -413,8 +429,8 @@ router.post("/import/inventory", async (req, res) => {
 
   let upserted = 0;
   for (const i of items) {
-    if (!i.sku || !i.name || typeof i.quantity !== "number") {
-      res.status(400).json({ ok: false, error: "Each item must include sku, name, quantity" });
+    if (!i.name || typeof i.quantity !== "number") {
+      res.status(400).json({ ok: false, error: "Each item must include name and quantity. sku is optional." });
       return;
     }
 
@@ -424,24 +440,40 @@ router.post("/import/inventory", async (req, res) => {
       return;
     }
 
-    const doc = await InventoryItemModel.findOneAndUpdate(
-      { tenantId, sku: i.sku.trim() },
-      {
-        $set: {
-          name: i.name.trim(),
-          description: i.description,
-          location: i.location,
-          quantity: i.quantity,
-          reorderLevel: i.reorderLevel,
-          expiryDate: i.expiryDate ? new Date(i.expiryDate) : undefined,
-          rfidTagId: i.rfidTagId,
-          status: i.status,
-          vendorId: vendorId || undefined,
-        },
-        $setOnInsert: { tenantId },
-      },
-      { upsert: true, new: true }
-    ).exec();
+    const explicitSku = typeof i.sku === "string" && i.sku.trim() ? i.sku.trim() : "";
+    let doc = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const sku = explicitSku || (await generateInventorySku(tenantId, i.name.trim()));
+      try {
+        doc = await InventoryItemModel.findOneAndUpdate(
+          { tenantId, sku },
+          {
+            $set: {
+              name: i.name.trim(),
+              description: i.description,
+              location: i.location,
+              quantity: i.quantity,
+              reorderLevel: i.reorderLevel,
+              expiryDate: i.expiryDate ? new Date(i.expiryDate) : undefined,
+              rfidTagId: i.rfidTagId,
+              status: i.status,
+              vendorId: vendorId || undefined,
+            },
+            $setOnInsert: { tenantId },
+          },
+          { upsert: true, new: true }
+        ).exec();
+        break;
+      } catch (error) {
+        if (isMongoDuplicateKeyError(error) && !explicitSku && attempt < 2) continue;
+        throw error;
+      }
+    }
+
+    if (!doc) {
+      res.status(500).json({ ok: false, error: "Failed to import item" });
+      return;
+    }
 
     await InventoryLogModel.create({
       tenantId,

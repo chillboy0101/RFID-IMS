@@ -9,6 +9,7 @@ import { InventoryUnitModel } from "../models/InventoryUnit.js";
 import { VendorModel } from "../models/Vendor.js";
 import { upsertRfidTag } from "../models/RfidTag.js";
 import { buildInventoryFlowSummaryMap } from "../utils/inventoryFlow.js";
+import { generateInventorySku, isMongoDuplicateKeyError } from "../utils/inventorySku.js";
 import { getPagination } from "../utils/pagination.js";
 import { asEnum, asNumber, asObjectId, asString, asDateFromString } from "../utils/validate.js";
 
@@ -104,7 +105,7 @@ router.post("/items", async (req: TenantRequest, res) => {
     res.status(400).json({ ok: false, error: nameR.error });
     return;
   }
-  const skuR = asString(body.sku, { field: "sku", required: true, trim: true, maxLen: 80 });
+  const skuR = asString(body.sku, { field: "sku", trim: true, maxLen: 80 });
   if (!skuR.ok) {
     res.status(400).json({ ok: false, error: skuR.error });
     return;
@@ -168,20 +169,42 @@ router.post("/items", async (req: TenantRequest, res) => {
     }
   }
 
-  const item = await InventoryItemModel.create({
-    tenantId,
-    name: nameR.value,
-    sku: skuR.value,
-    barcode: barcodeR.value,
-    description: descriptionR.value,
-    location: locationR.value,
-    quantity: 0,
-    reorderLevel: reorderLevelR.value,
-    expiryDate: expiryDateR.value,
-    rfidTagId: rfidTagIdR.value,
-    vendorId,
-    status: statusR.value,
-  });
+  const explicitSku = typeof skuR.value === "string" && skuR.value.trim() ? skuR.value.trim() : "";
+  let item = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const sku = explicitSku || (await generateInventorySku(tenantId, nameR.value));
+    try {
+      item = await InventoryItemModel.create({
+        tenantId,
+        name: nameR.value,
+        sku,
+        barcode: barcodeR.value,
+        description: descriptionR.value,
+        location: locationR.value,
+        quantity: 0,
+        reorderLevel: reorderLevelR.value,
+        expiryDate: expiryDateR.value,
+        rfidTagId: rfidTagIdR.value,
+        vendorId,
+        status: statusR.value,
+      });
+      break;
+    } catch (error) {
+      if (isMongoDuplicateKeyError(error) && !explicitSku && attempt < 2) {
+        continue;
+      }
+      if (isMongoDuplicateKeyError(error)) {
+        res.status(409).json({ ok: false, error: "SKU or barcode already exists" });
+        return;
+      }
+      throw error;
+    }
+  }
+
+  if (!item) {
+    res.status(500).json({ ok: false, error: "Failed to create item" });
+    return;
+  }
 
   await InventoryLogModel.create({
     tenantId,

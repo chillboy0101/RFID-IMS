@@ -509,7 +509,7 @@ export function IntegrationsScreen({ navigation }: Props) {
                 label="CSV (paste from Excel)"
                 value={importCsv}
                 onChangeText={onPasteImportCsv}
-                placeholder="sku,name,quantity\nABC,Item,10"
+                placeholder="name,quantity\nItem,10"
                 autoCapitalize="none"
                 multiline
                 numberOfLines={10}
@@ -518,7 +518,7 @@ export function IntegrationsScreen({ navigation }: Props) {
                 label="Items JSON array (optional)"
                 value={importJson}
                 onChangeText={setImportJson}
-                placeholder='[{"sku":"ABC","name":"Item","quantity":10}]'
+                placeholder='[{"name":"Item","quantity":10}]'
                 autoCapitalize="none"
                 multiline
                 numberOfLines={8}

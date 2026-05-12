@@ -533,7 +533,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
   }, [vendorId, vendors]);
 
   const nameError = showValidation && !name.trim() ? "Name is required" : undefined;
-  const skuError = showValidation && !sku.trim() ? "SKU is required" : undefined;
+  const skuError = showValidation && id && !sku.trim() ? "SKU is required" : undefined;
 
   const quantityError = useMemo(() => {
     if (!showValidation) return undefined;
@@ -559,14 +559,15 @@ export function InventoryEditScreen({ navigation, route }: Props) {
   }, [expiryDate, parseDate, showValidation]);
 
   const canSubmit = useMemo(() => {
-    if (!name.trim() || !sku.trim()) return false;
+    if (!name.trim()) return false;
+    if (id && !sku.trim()) return false;
     const qty = Number(quantity);
     if (!Number.isFinite(qty) || qty < 0) return false;
     const reorder = reorderLevel.trim() ? Number(reorderLevel) : 0;
     if (!Number.isFinite(reorder) || reorder < 0) return false;
     if (expiryDate.trim() && !parseDate(expiryDate.trim())) return false;
     return true;
-  }, [expiryDate, name, parseDate, quantity, reorderLevel, sku]);
+  }, [expiryDate, id, name, parseDate, quantity, reorderLevel, sku]);
 
   const hasChanges = useMemo(() => {
     if (!id) {
@@ -641,7 +642,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
     try {
       const body: any = {
         name: name.trim(),
-        sku: sku.trim(),
+        sku: sku.trim() ? sku.trim() : undefined,
         barcode: barcode.trim() ? barcode.trim() : undefined,
         description: description.trim() ? description.trim() : undefined,
         location: location.trim() ? location.trim() : undefined,
@@ -724,10 +725,10 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                     label="SKU"
                     value={sku}
                     onChangeText={setSku}
-                    placeholder="BW-BLND-130"
+                    placeholder={id ? "BW-BLND-130" : "Generated automatically"}
                     icon="pricetag-outline"
                     autoCapitalize="characters"
-                    helperText="SKU must be unique across all items."
+                    helperText={id ? "SKU must be unique across all items." : "Leave blank and the backend will generate a unique SKU."}
                     errorText={skuError}
                   />
                 </View>
@@ -962,10 +963,10 @@ export function InventoryEditScreen({ navigation, route }: Props) {
             label="SKU"
             value={sku}
             onChangeText={setSku}
-            placeholder="BW-BLND-130"
+            placeholder={id ? "BW-BLND-130" : "Generated automatically"}
             icon="pricetag-outline"
             autoCapitalize="characters"
-            helperText="SKU must be unique across all items."
+            helperText={id ? "SKU must be unique across all items." : "Leave blank and the backend will generate a unique SKU."}
             errorText={skuError}
           />
           <IconField
