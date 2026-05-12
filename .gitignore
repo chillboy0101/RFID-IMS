@@ -13,3 +13,4 @@ yarn-error.log*
 .pnp.js
 .vercel
 .env*.local
+.codex-artifacts/
