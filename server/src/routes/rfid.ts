@@ -377,6 +377,8 @@ async function verifyExitScan(opts: {
 router.get("/meta", async (_req, res) => {
   res.json({
     ok: true,
+    keyLocationRule:
+      "If a gate key has a locationHint, the backend uses that location and ignores payload.location. Use a receiving-station key for /rfid/receiving-events and an exit-gate key for /rfid/gate-events. If one reader is used in multiple modes, use an unbound key and send location in the payload.",
     hardware: {
       staffAuthScan: {
         endpoint: "POST /rfid/operator-sessions",
@@ -696,7 +698,11 @@ router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (re
   const operator = operatorResult.operator;
 
   if (isExitLocation(location)) {
-    res.status(400).json({ ok: false, error: "Receiving events must use a receiving/storage location, not an exit gate" });
+    const boundLocation = req.gateKeyLocationHint?.trim();
+    const detail = boundLocation && isExitLocation(boundLocation)
+      ? ` This gate key is bound to ${boundLocation}, so it cannot be used for receiving. Use a receiving-station key or an unbound key for this endpoint.`
+      : "";
+    res.status(400).json({ ok: false, error: `Receiving events must use a receiving/storage location, not an exit gate.${detail}` });
     return;
   }
 
@@ -815,7 +821,11 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
   const decisionAt = new Date();
 
   if (!isExitLocation(location)) {
-    res.status(400).json({ ok: false, error: "Gate events must use an exit gate location" });
+    const boundLocation = req.gateKeyLocationHint?.trim();
+    const detail = boundLocation && !isExitLocation(boundLocation)
+      ? ` This gate key is bound to ${boundLocation}, so it cannot be used for exit scans. Use an exit-gate key for this endpoint.`
+      : "";
+    res.status(400).json({ ok: false, error: `Gate events must use an exit gate location.${detail}` });
     return;
   }
 

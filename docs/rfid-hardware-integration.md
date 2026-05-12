@@ -12,6 +12,9 @@ https://rfid-ims.onrender.com
 
 - Hardware uses `X-Gate-Api-Key`, not the normal portal Bearer JWT.
 - The gate key identifies the reader/station.
+- If a gate key has a `locationHint`, the backend uses that bound location and ignores `location` in the JSON payload.
+- Use a receiving-station key for `/rfid/receiving-events` and an exit-gate key for `/rfid/gate-events`.
+- If one reader is used in multiple modes, use an unbound key and send `location` in the payload.
 - The staff RFID card identifies the operator.
 - The backend generates and stores item SKUs. Hardware must not generate or send SKU values.
 - Hardware should send `itemId` first when assigning item tags. `itemBarcode` is allowed as a fallback item lookup.
@@ -75,6 +78,8 @@ Response:
 
 Use this endpoint when receiving/tagging stock. The reader sends the item RFID tag plus the item lookup value.
 
+Do not use an exit-gate key here. Use a key bound to `RECEIVING_STAGING`, another receiving/storage location, or an unbound key.
+
 ```http
 POST /rfid/receiving-events
 ```
@@ -123,6 +128,12 @@ Response:
   "unit": {}
 }
 ```
+
+Notes:
+
+- The payload must include `itemId` or `itemBarcode`; `tagId` alone does not tell the backend which product the RFID tag belongs to.
+- `itemId` is preferred. `itemBarcode` is the fallback.
+- The reader should not send SKU.
 
 ## 3. Authorize Orders To Leave
 
