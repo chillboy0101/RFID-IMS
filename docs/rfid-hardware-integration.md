@@ -1,157 +1,174 @@
 # RFID Hardware Integration
 
-This document is the handoff contract for RFID readers, barcode-capable middleware, and tag commissioning stations.
+This is the hardware-facing contract for RFID readers, staff cards, item tag assignment, and exit verification.
 
-Use the deployed API host in production. For local testing, use the backend host that the app points to, for example:
+Use the deployed backend in production:
 
 ```text
-http://localhost:4000
-http://<LAN-IP>:4000
+https://rfid-ims.onrender.com
 ```
 
-## Core Flow
+## Important Rules
 
-1. Create the item master record in the app or API. New items start with `quantity: 0`.
-2. Receive physical units through the RFID receiving station. Each successful tag read creates one inventory unit and increments stock.
-3. Create an order from available stock.
-4. Authorize the order for an exit gate.
-5. Fixed gate reader posts exit reads. The server returns `ALLOW` or `DENY` and records the event/audit trail.
+- Hardware uses `X-Gate-Api-Key`, not the normal portal Bearer JWT.
+- The gate key identifies the reader/station.
+- The staff RFID card identifies the operator.
+- The backend generates and stores item SKUs. Hardware must not generate or send SKU values.
+- Hardware should send `itemId` first when assigning item tags. `itemBarcode` is allowed as a fallback item lookup.
+- Every physical scan should use a UUID `eventId`.
+- Reuse the same UUID when retrying the same scan so the backend can safely detect duplicates.
+- Do not send `observedAt`; the backend records scan time on receipt.
 
-## Authentication
-
-Hardware endpoints use gate/station keys:
+## Common Headers
 
 ```http
-X-Gate-Api-Key: gate_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-X-Source: receiving-station-a1
-X-Event-ID: reader-a1-20260429-000001
 Content-Type: application/json
+X-Gate-Api-Key: <raw gate key>
+X-Source: rfid-reader-01
 ```
 
-Create keys from `RFID Hub -> Gate Keys`. A key can be bound to a location with `locationHint`; when it is bound, hardware does not need to send `location`.
+Receiving and exit scans also require the operator session token returned after staff card authorization:
 
 ```http
-POST /rfid/gate-keys
-Authorization: Bearer <jwt>
-X-Tenant-ID: <tenant-id>
-Content-Type: application/json
+X-Operator-Session: op_xxxxx
+X-Event-ID: 0f3f2cb3-1cc8-4e2f-a7d9-2c1bbfba0d41
+```
 
+## 1. Staff Card Authorization
+
+Scan the staff RFID card first. This returns a short-lived operator token that identifies which staff member is operating the reader.
+
+```http
+POST /rfid/operator-sessions
+```
+
+Payload:
+
+```json
 {
-  "name": "Main exit reader",
-  "locationHint": "EXIT_MAIN",
-  "minutes": 43200
+  "operatorTagId": "STAFF_CARD_TAG",
+  "location": "EXIT_MAIN",
+  "source": "rfid-reader-01"
 }
 ```
 
-For retry-safe hardware delivery, always send either the `X-Event-ID` header or `eventId` in the JSON body. Duplicate event IDs return `duplicate: true` without processing the scan twice.
+Response:
 
-## Receiving Reader
+```json
+{
+  "ok": true,
+  "operatorSession": {
+    "token": "op_xxxxx",
+    "operatorSessionToken": "op_xxxxx",
+    "expiresAt": "2026-05-09T12:30:00.000Z",
+    "operator": {
+      "id": "USER_ID",
+      "name": "Staff Name",
+      "email": "staff@example.com",
+      "role": "inventory_staff"
+    }
+  }
+}
+```
 
-Use this for receiving/tag assignment. This is the preferred hardware path for adding stock.
+## 2. Assign RFID Tag To Inventory Item
+
+Use this endpoint when receiving/tagging stock. The reader sends the item RFID tag plus the item lookup value.
 
 ```http
 POST /rfid/receiving-events
+```
+
+Headers:
+
+```http
 X-Gate-Api-Key: <raw gate key>
-X-Source: receiving-station-a1
-X-Event-ID: receiving-a1-000001
-Content-Type: application/json
+X-Operator-Session: op_xxxxx
+X-Source: rfid-reader-01
+X-Event-ID: 0f3f2cb3-1cc8-4e2f-a7d9-2c1bbfba0d41
 ```
 
 Preferred payload:
 
 ```json
 {
-  "eventId": "receiving-a1-000001",
-  "tagId": "E20034120123456789012345",
-  "itemBarcode": "BW-BLND-130",
+  "tagId": "ITEM_RFID_TAG",
+  "itemId": "ITEM_ID_FROM_PORTAL",
   "location": "RECEIVING_STAGING",
-  "observedAt": "2026-04-29T14:10:00.000Z"
+  "eventId": "0f3f2cb3-1cc8-4e2f-a7d9-2c1bbfba0d41",
+  "source": "rfid-reader-01"
 }
 ```
 
-Accepted item identifiers:
+Barcode fallback payload:
 
 ```json
 {
-  "tagId": "E20034120123456789012345",
-  "itemId": "68101234567890abcdef9999"
+  "tagId": "ITEM_RFID_TAG",
+  "itemBarcode": "PRODUCT_BARCODE",
+  "location": "RECEIVING_STAGING",
+  "eventId": "0f3f2cb3-1cc8-4e2f-a7d9-2c1bbfba0d41",
+  "source": "rfid-reader-01"
 }
 ```
 
-```json
-{
-  "tagId": "E20034120123456789012345",
-  "sku": "BW-BLND-130"
-}
-```
-
-Successful response:
+Response:
 
 ```json
 {
   "ok": true,
   "processed": true,
-  "event": {
-    "_id": "68101234567890abcdef5678",
-    "eventId": "receiving-a1-000001",
-    "tagId": "E20034120123456789012345"
-  },
-  "item": {
-    "_id": "68101234567890abcdef9999",
-    "name": "Brazilian wig",
-    "sku": "BW-BLND-130",
-    "quantity": 1
-  },
-  "unit": {
-    "_id": "68101234567890abcdef1111",
-    "tagId": "E20034120123456789012345",
-    "status": "in_stock",
-    "location": "RECEIVING_STAGING"
-  }
+  "event": {},
+  "item": {},
+  "unit": {}
 }
 ```
 
-Rules:
+## 3. Authorize Orders To Leave
 
-- One tag read creates one inventory unit.
-- Receiving locations must not be exit gates.
-- A tag can only be assigned once.
-- Inactive items cannot receive stock.
-- Stock quantity is incremented by the server after the read is accepted.
+This is handled in the portal UI:
 
-## Fixed Exit Gate Reader
+```text
+Orders -> Order Detail -> Authorize gate exit
+RFID Hub -> Authorize
+```
 
-Use this for autonomous exit verification at gate/portal readers.
+## 4. Confirm Item Is Authorized To Exit
+
+Use this for autonomous exit verification at the gate.
 
 ```http
 POST /rfid/gate-events
-X-Gate-Api-Key: <raw gate key>
-X-Source: fx9600-exit-main
-X-Event-ID: exit-main-000001
-Content-Type: application/json
 ```
 
-Preferred payload:
+Headers:
+
+```http
+X-Gate-Api-Key: <raw gate key>
+X-Operator-Session: op_xxxxx
+X-Source: rfid-reader-01
+X-Event-ID: 5b126e07-5d2f-47c2-b088-7be7b6c34f80
+```
+
+Payload:
 
 ```json
 {
-  "eventId": "exit-main-000001",
-  "tagId": "E20034120123456789012345",
+  "tagId": "ITEM_RFID_TAG",
   "location": "EXIT_MAIN",
-  "observedAt": "2026-04-29T14:20:00.000Z",
-  "readerId": "FX9600-EXIT-01",
-  "antenna": 2,
-  "rssi": -47
+  "eventId": "5b126e07-5d2f-47c2-b088-7be7b6c34f80",
+  "source": "rfid-reader-01"
 }
 ```
 
-Barcode fallback is supported when middleware reads a barcode instead of EPC:
+Barcode fallback payload:
 
 ```json
 {
-  "eventId": "exit-main-000002",
-  "barcode": "1234567890123",
-  "location": "EXIT_MAIN"
+  "barcode": "PRODUCT_BARCODE",
+  "location": "EXIT_MAIN",
+  "eventId": "5b126e07-5d2f-47c2-b088-7be7b6c34f80",
+  "source": "rfid-reader-01"
 }
 ```
 
@@ -160,24 +177,12 @@ Allowed response:
 ```json
 {
   "ok": true,
-  "mode": "tagId",
   "decision": "ALLOW",
   "authorized": true,
-  "authorizationId": "68101234567890abcdef1234",
-  "remainingAuthorizations": 3,
-  "event": {
-    "_id": "68101234567890abcdef5678"
-  },
-  "item": {
-    "_id": "68101234567890abcdef9999",
-    "name": "Brazilian wig",
-    "sku": "BW-BLND-130"
-  },
-  "order": {
-    "_id": "68101234567890abcdef7777",
-    "status": "authorized"
-  },
-  "alert": null
+  "authorizationId": "AUTHORIZATION_ID",
+  "operator": {},
+  "item": {},
+  "order": {}
 }
 ```
 
@@ -186,130 +191,51 @@ Denied response:
 ```json
 {
   "ok": true,
-  "mode": "tagId",
   "decision": "DENY",
   "authorized": false,
-  "remainingAuthorizations": 0,
-  "event": {
-    "_id": "68101234567890abcdef5678"
-  },
-  "item": {
-    "_id": "68101234567890abcdef9999",
-    "name": "Brazilian wig",
-    "sku": "BW-BLND-130"
-  },
-  "order": null,
-  "alert": {
-    "_id": "68101234567890abcdefaaaa",
-    "status": "open",
-    "severity": "critical",
-    "message": "Unauthorized exit detection"
+  "alert": {}
+}
+```
+
+## 5. RFID Device Logout
+
+Use this when the reader needs to close the current staff/operator session.
+
+```http
+DELETE /rfid/operator-sessions/op_xxxxx
+X-Gate-Api-Key: <raw gate key>
+```
+
+Response:
+
+```json
+{
+  "ok": true,
+  "ended": {
+    "id": "OPERATOR_SESSION_ID",
+    "endedAt": "2026-05-09T12:20:00.000Z"
   }
 }
 ```
 
-Rules:
+## Staff Card Management UI
 
-- Exit gate locations must be exit locations, for example `EXIT_MAIN`.
-- Authorization decisions use server time, not reader time.
-- `ALLOW` consumes one active authorization.
-- `DENY` records a security alert.
+Staff RFID cards are managed in:
 
-## Operator Exit Session
-
-This remains available for handheld/scanner flows that require a signed-in operator token.
-
-```http
-POST /rfid/exit-sessions
-Authorization: Bearer <jwt>
-X-Tenant-ID: <tenant-id>
-Content-Type: application/json
-
-{
-  "location": "EXIT_MAIN",
-  "minutes": 5,
-  "orderId": "68101234567890abcdef7777"
-}
+```text
+People & Data -> Branches & Users -> Staff RFID cards
 ```
 
-Verify scan:
+Available actions:
 
-```http
-POST /rfid/exit-sessions/verify
-Authorization: Bearer <jwt>
-X-Tenant-ID: <tenant-id>
-X-Event-ID: handheld-exit-000001
-Content-Type: application/json
-
-{
-  "token": "exit_abcdef0123456789abcdef01",
-  "tagId": "E20034120123456789012345",
-  "eventId": "handheld-exit-000001"
-}
-```
-
-## Item and Order API Notes
-
-Create item master data:
-
-```http
-POST /inventory/items
-Authorization: Bearer <jwt>
-X-Tenant-ID: <tenant-id>
-Content-Type: application/json
-
-{
-  "name": "Brazilian wig",
-  "sku": "BW-BLND-130",
-  "barcode": "BW-BLND-130",
-  "location": "RECEIVING_STAGING",
-  "quantity": 0,
-  "reorderLevel": 10,
-  "status": "active"
-}
-```
-
-Create order:
-
-```http
-POST /orders
-Authorization: Bearer <jwt>
-X-Tenant-ID: <tenant-id>
-Content-Type: application/json
-
-{
-  "items": [
-    {
-      "itemId": "68101234567890abcdef9999",
-      "quantity": 2
-    }
-  ],
-  "notes": "Customer pickup"
-}
-```
-
-Authorize order exit:
-
-```http
-POST /orders/:id/authorize-exit
-Authorization: Bearer <jwt>
-X-Tenant-ID: <tenant-id>
-Content-Type: application/json
-
-{
-  "location": "EXIT_MAIN",
-  "minutes": 10
-}
-```
-
-The server rejects orders that request more units than are currently available after reserved/picked/packed units are considered.
+- Assign card
+- Change card
+- Remove card
 
 ## Meta Endpoint
 
-Hardware can inspect the current contract with:
+Hardware can inspect the current live contract with:
 
 ```http
 GET /rfid/meta
 ```
-
-This returns fixed gate, receiving reader, exit session, and tag registry endpoint information.
