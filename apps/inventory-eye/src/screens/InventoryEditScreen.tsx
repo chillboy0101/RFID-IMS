@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Alert, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -323,7 +323,6 @@ function StartingStockNotice() {
           <Text style={{ color: theme.colors.text, fontWeight: "800" }}>Stock starts at 0</Text>
           <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>RFID receiving updates quantity.</Text>
         </View>
-        <Badge label="RFID" tone="primary" />
       </View>
     </View>
   );
@@ -358,43 +357,61 @@ function StatusSelect({ value, onChange }: { value: string; onChange: (value: st
         <Text style={{ color: theme.colors.text, fontSize: 15, textTransform: "capitalize" }}>{normalized}</Text>
         <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color={theme.colors.textMuted} />
       </Pressable>
-      {open ? (
-        <View
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable
+          onPress={() => setOpen(false)}
           style={{
-            borderWidth: 1,
-            borderColor: theme.colors.border,
-            borderRadius: theme.radius.sm,
-            overflow: "hidden",
-            backgroundColor: theme.colors.surface,
+            flex: 1,
+            backgroundColor: "rgba(15, 23, 42, 0.18)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: theme.spacing.lg,
           }}
         >
-          {options.map((option, index) => {
-            const selected = normalized === option.key;
-            return (
-              <Pressable
-                key={option.key}
-                onPress={() => {
-                  onChange(option.key);
-                  setOpen(false);
-                }}
-                style={({ pressed }) => ({
-                  minHeight: 44,
-                  paddingHorizontal: 14,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  borderTopWidth: index === 0 ? 0 : 1,
-                  borderTopColor: theme.colors.border,
-                  backgroundColor: selected ? theme.colors.primarySoft : pressed ? theme.colors.surface2 : theme.colors.surface,
-                })}
-              >
-                <Text style={{ color: theme.colors.text, fontWeight: selected ? "800" : "600" }}>{option.label}</Text>
-                {selected ? <Ionicons name="checkmark" size={18} color={theme.colors.primary} /> : null}
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
+          <View
+            style={{
+              width: "100%",
+              maxWidth: 360,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              borderRadius: theme.radius.md,
+              overflow: "hidden",
+              backgroundColor: theme.colors.surface,
+              ...shadow(2),
+            }}
+          >
+            <View style={{ paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+              <Text style={[theme.typography.h3, { color: theme.colors.text }]}>Operational status</Text>
+            </View>
+            {options.map((option, index) => {
+              const selected = normalized === option.key;
+              return (
+                <Pressable
+                  key={option.key}
+                  onPress={() => {
+                    onChange(option.key);
+                    setOpen(false);
+                  }}
+                  style={({ pressed }) => ({
+                    minHeight: 44,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    borderTopWidth: index === 0 ? 0 : 1,
+                    borderTopColor: theme.colors.border,
+                    backgroundColor: selected ? theme.colors.primarySoft : pressed ? theme.colors.surface2 : theme.colors.surface,
+                  })}
+                >
+                  <Text style={{ color: theme.colors.text, fontWeight: selected ? "800" : "600" }}>{option.label}</Text>
+                  {selected ? <Ionicons name="checkmark" size={18} color={theme.colors.primary} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
