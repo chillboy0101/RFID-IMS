@@ -488,6 +488,7 @@ function ReceiveMode({ token, stationConfig, initialItemId }: { token: string; s
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const initialItemLoadedRef = useRef(false);
 
   useEffect(() => {
     if (stationConfig.receiveLocations.includes(location)) return;
@@ -539,7 +540,8 @@ function ReceiveMode({ token, stationConfig, initialItemId }: { token: string; s
   }, [loadActiveContext]);
 
   useEffect(() => {
-    if (!initialItemId || context) return;
+    if (!initialItemId || context || initialItemLoadedRef.current) return;
+    initialItemLoadedRef.current = true;
     apiRequest<{ ok: true; item: InventoryItem }>(`/inventory/items/${encodeURIComponent(initialItemId)}`, { method: "GET", token })
       .then((res) => {
         setActiveItem(res.item);

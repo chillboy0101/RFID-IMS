@@ -422,6 +422,31 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
   const flowBoardRows = useMemo<FlowBoardRow[]>(() => {
     if (!item || !flow) return [];
 
+    if (quantity <= 0) {
+      return [
+        {
+          key: "next-step",
+          label: "Next step",
+          value: flow.nextStep || "Receive stock",
+          secondary: "Open RFID Hub, arm this item, then scan the first product tag.",
+          chips: [
+            { label: "Qty 0" },
+            { label: "Awaiting RFID", tone: "warning" as const },
+          ] satisfies FlowChip[],
+        },
+        {
+          key: "receiving-state",
+          label: "Receiving state",
+          value: "Waiting for first tag",
+          secondary: "Stock will appear here only after hardware sends a product RFID tag.",
+          chips: [
+            { label: "No units yet" },
+            { label: "No tag assigned" },
+          ] satisfies FlowChip[],
+        },
+      ];
+    }
+
     const taggedSecondary = flow.barcodeReady
       ? `${taggedUnits}/${quantity} tagged | barcode enabled`
       : `${taggedUnits}/${quantity} tagged | barcode missing`;
@@ -723,7 +748,7 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
         right={
           flow ? (
             <Text style={[theme.typography.label, { color: exitReadyUnits >= quantity && quantity > 0 ? theme.colors.success : theme.colors.textMuted }]}>
-              {quantity > 0 ? `${exitReadyUnits}/${quantity} ready` : "No stock"}
+              {quantity > 0 ? `${exitReadyUnits}/${quantity} ready` : "Awaiting receipt"}
             </Text>
           ) : null
         }
