@@ -59,10 +59,6 @@ function buildCartLine(item: InventoryItem, quantity: number): CartLine {
   };
 }
 
-function ribbonMetric(value: number, label: string) {
-  return `${value} ${label}`;
-}
-
 function SearchDock({
   inputRef,
   value,
@@ -267,11 +263,6 @@ export function OrderCreateScreen({ navigation }: Props) {
     }
     navigation.navigate("OrdersList");
   }, [isDesktopWeb, navigation]);
-
-  const openRfidHub = useCallback(() => {
-    const parent = navigation.getParent();
-    (parent as any)?.navigate?.("More", { screen: "RfidHub" });
-  }, [navigation]);
 
   const loadItems = useCallback(
     async (queryValue?: string) => {
@@ -714,59 +705,28 @@ export function OrderCreateScreen({ navigation }: Props) {
     </View>
   ) : null;
 
+  const headerRight = isDesktopWeb ? (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <View style={{ width: width >= 1260 ? 360 : 300 }}>
+        <SearchDock
+          inputRef={searchRef}
+          value={query}
+          onChangeText={setQuery}
+          onScan={() => setScanOpen(true)}
+          loading={loading}
+          placeholder="Search by name, SKU, barcode, location"
+        />
+      </View>
+      <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly />
+      <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />
+    </View>
+  ) : (
+    <AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />
+  );
+
   const desktopContent = (
     <View style={{ flex: 1, flexDirection: "row", gap: theme.spacing.md, minHeight: 0 }}>
       <Card style={{ flex: 1, padding: 0, minHeight: 0 }}>
-        <View
-          style={{
-            padding: theme.spacing.md,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.colors.border,
-            gap: 12,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View style={{ flex: 1 }}>
-              <SearchDock
-                inputRef={searchRef}
-                value={query}
-                onChangeText={setQuery}
-                onScan={() => setScanOpen(true)}
-                loading={loading}
-                placeholder="Search by name, SKU, barcode, location"
-              />
-            </View>
-          </View>
-        </View>
-
-        <View
-          style={{
-            paddingHorizontal: theme.spacing.md,
-            paddingVertical: 12,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.colors.border,
-            backgroundColor: theme.colors.surface2,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-            <Text style={[theme.typography.h3, { color: theme.colors.text }]} numberOfLines={1}>
-              {ribbonMetric(selectedItemCount, "items selected")}
-            </Text>
-            <Text style={[theme.typography.body, { color: theme.colors.textMuted }]} numberOfLines={1}>
-              {ribbonMetric(totalUnits, "units total")}
-            </Text>
-            <Text style={[theme.typography.body, { color: theme.colors.textMuted }]} numberOfLines={1}>
-              Tap a line to add it
-            </Text>
-            {loading ? <MutedText>Updating inventory...</MutedText> : null}
-          </View>
-          <AppButton title="RFID Hub" onPress={openRfidHub} variant="secondary" iconName="radio-outline" />
-        </View>
-
         <View
           style={{
             paddingHorizontal: theme.spacing.md,
@@ -913,7 +873,6 @@ export function OrderCreateScreen({ navigation }: Props) {
               <View>
                 <Text style={[theme.typography.h2, { color: theme.colors.text }]}>Order summary</Text>
               </View>
-              <AppButton title="RFID Hub" onPress={openRfidHub} variant="secondary" iconName="radio-outline" />
             </View>
 
             <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ padding: theme.spacing.md, gap: 12 }}>
@@ -941,7 +900,7 @@ export function OrderCreateScreen({ navigation }: Props) {
   return (
     <Screen
       title="New order"
-      right={<AppButton title="Back" onPress={onBack} variant="secondary" iconName="arrow-back" iconOnly />}
+      right={headerRight}
       scroll={false}
       tabBarPadding={isDesktopWeb}
     >
