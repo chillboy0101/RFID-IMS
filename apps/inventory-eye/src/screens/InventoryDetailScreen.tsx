@@ -7,7 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import type { InventoryStackParamList } from "../navigation/types";
-import { GLOBAL_AUTO_REFRESH_MS, AppButton, Badge, Card, ErrorText, MutedText, Screen, theme } from "../ui";
+import { GLOBAL_AUTO_REFRESH_MS, AppButton, Badge, Card, ErrorText, MutedText, Screen, shadow, theme } from "../ui";
 
 declare const require: undefined | ((id: string) => any);
 
@@ -189,22 +189,23 @@ function SectionLabel({ label, right }: { label: string; right?: React.ReactNode
 }
 
 function FlowStepper({ stages, compact }: { stages: StepStage[]; compact: boolean }) {
-  const size = compact ? 34 : 38;
-  const labelSize = compact ? 11 : 12;
+  const size = compact ? 10 : 12;
+  const labelSize = compact ? 10 : 11;
 
   return (
     <View
       style={{
         paddingHorizontal: theme.spacing.md,
         paddingBottom: theme.spacing.md,
+        paddingTop: 2,
         flexDirection: "row",
         alignItems: "flex-start",
         gap: 0,
       }}
     >
       {stages.map((stage, index) => {
-        const fg = stage.complete ? theme.colors.success : stage.active ? theme.colors.text : theme.colors.textMuted;
-        const bg = stage.complete ? "rgba(34, 197, 94, 0.16)" : stage.active ? theme.colors.primarySoft : theme.colors.surface2;
+        const bg = stage.complete ? theme.colors.success : stage.active ? theme.colors.primary : theme.colors.surface2;
+        const border = stage.complete || stage.active ? bg : theme.colors.border;
 
         return (
           <React.Fragment key={stage.label}>
@@ -214,24 +215,16 @@ function FlowStepper({ stages, compact }: { stages: StepStage[]; compact: boolea
                   width: size,
                   height: size,
                   borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: theme.colors.border,
+                  borderWidth: stage.active && !stage.complete ? 2 : 1,
+                  borderColor: border,
                   backgroundColor: bg,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
-              >
-                {stage.complete ? (
-                  <Ionicons name="checkmark" size={compact ? 16 : 18} color={fg} />
-                ) : stage.active ? (
-                  <Ionicons name="arrow-forward" size={compact ? 16 : 18} color={fg} />
-                ) : (
-                  <Text style={{ color: fg, fontWeight: "800", fontSize: compact ? 12 : 13 }}>{index + 1}</Text>
-                )}
-              </View>
+              />
               <Text
                 style={{
-                  marginTop: 8,
+                  marginTop: 7,
                   color: stage.active || stage.complete ? theme.colors.text : theme.colors.textMuted,
                   fontWeight: stage.active ? "800" : "700",
                   fontSize: labelSize,
@@ -258,6 +251,49 @@ function FlowStepper({ stages, compact }: { stages: StepStage[]; compact: boolea
         );
       })}
     </View>
+  );
+}
+
+function HeaderSignal({ label, tone = "default" }: { label: string; tone?: "default" | "success" | "warning" | "danger" }) {
+  const color =
+    tone === "success" ? theme.colors.success : tone === "warning" ? theme.colors.warning : tone === "danger" ? theme.colors.danger : theme.colors.textMuted;
+
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+      <View style={{ width: 7, height: 7, borderRadius: 999, backgroundColor: color }} />
+      <Text style={{ color: theme.colors.textMuted, fontSize: 12, fontWeight: "800" }}>{label}</Text>
+    </View>
+  );
+}
+
+function MenuAction({
+  label,
+  danger,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  danger?: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        minHeight: 42,
+        paddingHorizontal: 14,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        backgroundColor: pressed && !disabled ? theme.colors.surface2 : theme.colors.surface,
+        opacity: disabled ? 0.45 : 1,
+      })}
+    >
+      <Text style={{ color: danger ? theme.colors.danger : theme.colors.text, fontWeight: "800" }}>{label}</Text>
+      <Ionicons name="chevron-forward" size={15} color={danger ? theme.colors.danger : theme.colors.textMuted} />
+    </Pressable>
   );
 }
 
@@ -652,6 +688,11 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
     ]);
   }
 
+  const runMenuAction = (action: () => void) => {
+    setActionMenuOpen(false);
+    action();
+  };
+
   const headerActions = (
     <View
       style={{
@@ -659,11 +700,16 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
         alignItems: "center",
         gap: 10,
         alignSelf: isDesktopWeb ? "auto" : "stretch",
+        position: "relative",
+        zIndex: 50,
       }}
     >
       <AppButton
         title="Open RFID Hub"
-        onPress={openRfidHub}
+        onPress={() => {
+          setActionMenuOpen(false);
+          openRfidHub();
+        }}
         variant="secondary"
         iconName="radio-outline"
         style={!isDesktopWeb ? { flex: 1 } : undefined}
@@ -675,12 +721,34 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
         iconName="ellipsis-horizontal"
         iconOnly
       />
+      {actionMenuOpen ? (
+        <View
+          style={{
+            position: "absolute",
+            top: 52,
+            right: 0,
+            width: 220,
+            borderRadius: theme.radius.sm,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            backgroundColor: theme.colors.surface,
+            overflow: "hidden",
+            zIndex: 60,
+            ...shadow(2),
+          }}
+        >
+          <MenuAction label="Edit" onPress={() => runMenuAction(() => navigation.navigate("InventoryEdit", { id }))} />
+          <MenuAction label="Adjust quantity" onPress={() => runMenuAction(() => navigation.navigate("InventoryAdjust", { id }))} />
+          <MenuAction label="View logs" onPress={() => runMenuAction(() => navigation.navigate("InventoryLogs", { id }))} />
+          <MenuAction label="Delete" danger disabled={!canDelete} onPress={() => runMenuAction(() => void onDelete())} />
+        </View>
+      ) : null}
     </View>
   );
 
   const headerCard = (
-    <Card style={{ padding: 0 }}>
-      <View style={{ padding: theme.spacing.md, gap: 16 }}>
+    <Card style={{ padding: 0, overflow: "visible", zIndex: actionMenuOpen ? 20 : 1 }}>
+      <View style={{ padding: theme.spacing.md, gap: 14 }}>
         <View
           style={{
             flexDirection: isDesktopWeb ? "row" : "column",
@@ -690,27 +758,27 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
           }}
         >
           <View style={{ flex: 1, minWidth: 0 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               <Text style={[theme.typography.title, { color: theme.colors.text, flexShrink: 1 }]} numberOfLines={isDesktopWeb ? 1 : 2}>
                 {item?.name ?? "Inventory item"}
               </Text>
-              <Badge label={formatStatusLabel(item?.status)} tone={(item?.status ?? "active").toLowerCase() === "inactive" ? "warning" : "success"} size="header" responsive={false} />
-              <Badge label={stockBadge.label} tone={stockBadge.tone} size="header" responsive={false} />
-              <Badge
-                label={quantity > 0 ? `Exit ready ${exitReadyUnits}/${quantity}` : "No stock"}
-                tone={quantity > 0 && exitReadyUnits >= quantity ? "success" : quantity > 0 ? "warning" : "default"}
-                size="header"
-                responsive={false}
-              />
             </View>
 
-            <Text style={[theme.typography.h3, { color: theme.colors.textMuted, marginTop: 10 }]} numberOfLines={1}>
+            <Text style={[theme.typography.h3, { color: theme.colors.textMuted, marginTop: 8 }]} numberOfLines={1}>
               {item?.sku ?? "-"}
             </Text>
 
-            <MutedText style={{ marginTop: 8 }}>
-              {`ID ${compactId(item?._id)} | RFID ${item?.rfidTagId ? compactId(item.rfidTagId) : "None"} | Barcode ${item?.barcode ? compactId(item.barcode) : "None"}`}
-            </MutedText>
+            <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 14, marginTop: 10 }}>
+              <HeaderSignal
+                label={formatStatusLabel(item?.status)}
+                tone={(item?.status ?? "active").toLowerCase() === "inactive" ? "warning" : "success"}
+              />
+              <HeaderSignal label={stockBadge.label} tone={stockBadge.tone === "danger" ? "danger" : stockBadge.tone === "warning" ? "warning" : "success"} />
+              <HeaderSignal
+                label={quantity > 0 ? `${exitReadyUnits}/${quantity} exit ready` : "Qty 0"}
+                tone={quantity > 0 && exitReadyUnits >= quantity ? "success" : quantity > 0 ? "warning" : "default"}
+              />
+            </View>
           </View>
 
           {isDesktopWeb ? headerActions : null}
@@ -720,24 +788,6 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
       </View>
 
       <FlowStepper stages={stages} compact={!isDesktopWeb} />
-
-      {actionMenuOpen ? (
-        <View
-          style={{
-            borderTopWidth: 1,
-            borderTopColor: theme.colors.border,
-            padding: theme.spacing.md,
-            gap: 10,
-            backgroundColor: theme.colors.surface,
-          }}
-        >
-          <AppButton title="Edit" onPress={() => navigation.navigate("InventoryEdit", { id })} variant="secondary" style={{ width: "100%" }} />
-          <AppButton title="Adjust quantity" onPress={() => navigation.navigate("InventoryAdjust", { id })} variant="secondary" style={{ width: "100%" }} />
-          <AppButton title="View logs" onPress={() => navigation.navigate("InventoryLogs", { id })} variant="secondary" style={{ width: "100%" }} />
-          <AppButton title="Delete" onPress={() => void onDelete()} variant="danger" disabled={!canDelete} style={{ width: "100%" }} />
-          {!canDelete ? <MutedText>Delete requires manager or admin access.</MutedText> : null}
-        </View>
-      ) : null}
     </Card>
   );
 
