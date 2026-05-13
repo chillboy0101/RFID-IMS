@@ -1553,6 +1553,12 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
     try {
       if (action === "remove") {
         await apiRequest(`/rfid/tags/${encodeURIComponent(tagId)}`, { method: "DELETE", token });
+        setMessage(`${tagId} unassigned`);
+        setSelectedTagId("");
+        setSelectedTag(null);
+        successFeedback();
+        await loadTags();
+        return;
       } else {
         await apiRequest(`/rfid/tags/${encodeURIComponent(tagId)}/${action}`, { method: "POST", token });
       }
@@ -1747,7 +1753,7 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
                   ) : (
                     <AppButton title="Activate" onPress={() => void runTagAction("activate", selectedTag.tagId)} variant="secondary" disabled={saving} loading={saving} />
                   )}
-                  <AppButton title="Remove assignment" onPress={() => void runTagAction("remove", selectedTag.tagId)} variant="danger" disabled={saving} loading={saving} />
+                  <AppButton title="Unassign" onPress={() => void runTagAction("remove", selectedTag.tagId)} variant="danger" disabled={saving} loading={saving} />
                 </View>
               </Card>
             ) : null}
@@ -1838,7 +1844,7 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
             ) : (
               <AppButton title="Activate" onPress={() => void runTagAction("activate", selectedTag.tagId)} variant="secondary" disabled={saving} loading={saving} />
             )}
-            <AppButton title="Remove assignment" onPress={() => void runTagAction("remove", selectedTag.tagId)} variant="danger" disabled={saving} loading={saving} />
+            <AppButton title="Unassign" onPress={() => void runTagAction("remove", selectedTag.tagId)} variant="danger" disabled={saving} loading={saving} />
           </View>
 
           <View style={{ height: 16 }} />

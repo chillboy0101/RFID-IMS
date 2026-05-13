@@ -490,7 +490,7 @@ router.get("/meta", async (_req, res) => {
         reassign: "PATCH /rfid/tags/:tagId",
         activate: "POST /rfid/tags/:tagId/activate",
         deactivate: "POST /rfid/tags/:tagId/deactivate",
-        removeAssignment: "DELETE /rfid/tags/:tagId",
+        unassign: "DELETE /rfid/tags/:tagId",
       },
     },
   });
@@ -1724,21 +1724,84 @@ router.delete("/tags/:tagId", requireRole("admin"), async (req: TenantRequest, r
   const tenantId = req.tenantId as string;
   const { tagId } = req.params;
 
-  const doc = await RfidTagModel.findOneAndUpdate(
-    { tenantId, tagId },
-    {
-      $set: { status: "inactive", deactivatedAt: new Date() },
-      $unset: { itemId: "", itemBarcode: "", itemName: "", itemSku: "", assignedAt: "" },
-    },
-    { new: true }
-  ).exec();
-
+  const doc = await RfidTagModel.findOne({ tenantId, tagId }).exec();
   if (!doc) {
     res.status(404).json({ ok: false, error: "Tag not found" });
     return;
   }
 
-  res.json({ ok: true });
+  const liveAuthorizationCount = await ExitAuthorizationModel.countDocuments({
+    tenantId,
+    tagId,
+    status: "active",
+    expiresAt: { $gt: new Date() },
+  }).exec();
+  if (liveAuthorizationCount > 0) {
+    res.status(409).json({ ok: false, error: "Cannot unassign a tag with active gate authorization" });
+    return;
+  }
+
+  const units = await InventoryUnitModel.find({ tenantId, tagId }).exec();
+  const lockedUnit = units.find((unit) => ["reserved", "picked", "packed", "dispatched"].includes(String(unit.status)));
+  if (lockedUnit) {
+    res.status(409).json({ ok: false, error: "Cannot unassign a tag that is already reserved, picked, packed, or dispatched" });
+    return;
+  }
+
+  const unitCountsByItemId = new Map<string, number>();
+  for (const unit of units) {
+    const itemId = unit.itemId?.toString();
+    if (!itemId) continue;
+    unitCountsByItemId.set(itemId, (unitCountsByItemId.get(itemId) ?? 0) + 1);
+  }
+
+  await InventoryUnitModel.deleteMany({ tenantId, tagId }).exec();
+  await RfidTagModel.deleteOne({ tenantId, tagId }).exec();
+
+  const affectedItemIds = new Set<string>([...unitCountsByItemId.keys()]);
+  const linkedItemId = doc.itemId?.toString();
+  if (linkedItemId) affectedItemIds.add(linkedItemId);
+
+  for (const itemId of affectedItemIds) {
+    const item = await InventoryItemModel.findOne({ _id: itemId, tenantId }).exec();
+    if (!item) continue;
+
+    const removedUnits = unitCountsByItemId.get(itemId) ?? 0;
+    const previousQuantity = item.quantity;
+    if (removedUnits > 0) {
+      item.quantity = Math.max(0, previousQuantity - removedUnits);
+    }
+    if (item.rfidTagId === tagId) {
+      item.rfidTagId = undefined;
+    }
+
+    await item.save();
+
+    await InventoryLogModel.create({
+      tenantId,
+      itemId: item._id,
+      action: "update",
+      delta: removedUnits > 0 ? -removedUnits : 0,
+      previousQuantity,
+      newQuantity: item.quantity,
+      actorUserId: req.auth?.id,
+      reason: "RFID tag unassigned",
+      meta: {
+        tagId,
+        deletedUnits: removedUnits,
+        deletedTag: true,
+      },
+    });
+  }
+
+  res.json({
+    ok: true,
+    unassigned: true,
+    deletedTag: true,
+    tagId,
+    deletedUnits: units.length,
+    affectedItems: affectedItemIds.size,
+  });
 });
 
 router.post("/tags/migrate", requireRole("admin"), async (req: TenantRequest, res) => {
