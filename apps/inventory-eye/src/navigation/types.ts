@@ -49,7 +49,7 @@ export type MoreStackParamList = {
   PeopleData: undefined;
   AdminHub: undefined;
   Audit: undefined;
-  RfidHub: undefined;
+  RfidHub: { initialMode?: "assign" | "authorize" | "exit" | "tags"; itemId?: string } | undefined;
   RfidScanner: undefined;
   GateKeys: undefined;
   Integrations: undefined;

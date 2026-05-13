@@ -12,12 +12,11 @@ https://rfid-ims.onrender.com
 
 - Hardware uses `X-Gate-Api-Key`, not the normal portal Bearer JWT.
 - The gate key identifies the reader/station.
-- If a gate key has a `locationHint`, the backend uses that bound location and ignores `location` in the JSON payload.
-- Use a receiving-station key for `/rfid/receiving-events` and an exit-gate key for `/rfid/gate-events`.
-- If one reader is used in multiple modes, use an unbound key and send `location` in the payload.
+- The staff RFID card creates a branch-wide operator session token. The same token can be used for receiving/tag assignment and exit scans until it expires or is logged out.
+- For exit scans, a bound gate key supplies the exit location.
+- For receiving blank tags, the portal must first arm the item and location in `RFID Hub -> Receive`; hardware then sends only the blank tag ID.
 - The staff RFID card identifies the operator.
 - The backend generates and stores item SKUs. Hardware must not generate or send SKU values.
-- Hardware should send `itemId` first when assigning item tags. `itemBarcode` is allowed as a fallback item lookup.
 - Every physical scan should use a UUID `eventId`.
 - Reuse the same UUID when retrying the same scan so the backend can safely detect duplicates.
 - Do not send `observedAt`; the backend records scan time on receipt.
@@ -76,9 +75,7 @@ Response:
 
 ## 2. Assign RFID Tag To Inventory Item
 
-Use this endpoint when receiving/tagging stock. The reader sends the item RFID tag plus the item lookup value.
-
-Do not use an exit-gate key here. Use a key bound to `RECEIVING_STAGING`, another receiving/storage location, or an unbound key.
+Use this endpoint when receiving/tagging stock. Because the RFID tags are blank, the reader only sends the scanned tag ID. The portal supplies the product details by arming an item/location in `RFID Hub -> Receive` before the scan.
 
 ```http
 POST /rfid/receiving-events
@@ -98,20 +95,6 @@ Preferred payload:
 ```json
 {
   "tagId": "ITEM_RFID_TAG",
-  "itemId": "ITEM_ID_FROM_PORTAL",
-  "location": "RECEIVING_STAGING",
-  "eventId": "0f3f2cb3-1cc8-4e2f-a7d9-2c1bbfba0d41",
-  "source": "rfid-reader-01"
-}
-```
-
-Barcode fallback payload:
-
-```json
-{
-  "tagId": "ITEM_RFID_TAG",
-  "itemBarcode": "PRODUCT_BARCODE",
-  "location": "RECEIVING_STAGING",
   "eventId": "0f3f2cb3-1cc8-4e2f-a7d9-2c1bbfba0d41",
   "source": "rfid-reader-01"
 }
@@ -131,9 +114,10 @@ Response:
 
 Notes:
 
-- The payload must include `itemId` or `itemBarcode`; `tagId` alone does not tell the backend which product the RFID tag belongs to.
-- `itemId` is preferred. `itemBarcode` is the fallback.
-- The reader should not send SKU.
+- Before this call, the portal must have an active receiving item in `RFID Hub -> Receive`.
+- `tagId` alone is enough after the item/location has been armed in the portal.
+- If no item is armed, the backend returns an error asking the user to select an item in RFID Hub Receive first.
+- The reader should not send SKU, item ID, or product barcode for normal receiving scans.
 
 ## 3. Authorize Orders To Leave
 

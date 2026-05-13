@@ -549,8 +549,8 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
 
   const openRfidHub = useCallback(() => {
     const parent = navigation.getParent();
-    (parent as any)?.navigate?.("More", { screen: "RfidHub" });
-  }, [navigation]);
+    (parent as any)?.navigate?.("More", { screen: "RfidHub", params: { initialMode: "assign", itemId: id } });
+  }, [id, navigation]);
 
   async function copyText(value: string) {
     if (!value || value === "-") return;

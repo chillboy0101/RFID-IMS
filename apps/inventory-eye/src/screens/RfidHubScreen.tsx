@@ -116,6 +116,19 @@ type StationConfigResponse = {
   stations: StationConfig;
 };
 
+type ReceivingContext = {
+  id: string;
+  itemId: string;
+  location: string;
+  source?: string;
+  status: "active" | "released";
+  receivedCount: number;
+  lastTagId?: string | null;
+  lastScanAt?: string | null;
+  expiresAt: string;
+  item: InventoryItem | null;
+};
+
 type Props = NativeStackScreenProps<MoreStackParamList, "RfidHub">;
 
 const DEFAULT_STATION_CONFIG: StationConfig = {
@@ -465,101 +478,141 @@ function PassiveScanDock({
   );
 }
 
-function ReceiveMode({ token, stationConfig }: { token: string; stationConfig: StationConfig }) {
+function ReceiveMode({ token, stationConfig, initialItemId }: { token: string; stationConfig: StationConfig; initialItemId?: string }) {
+  const [items, setItems] = useState<InventoryItem[]>([]);
   const [activeItem, setActiveItem] = useState<InventoryItem | null>(null);
-  const [location, setLocation] = useState<string | null>(null);
+  const [context, setContext] = useState<ReceivingContext | null>(null);
+  const [location, setLocation] = useState<string>(stationConfig.defaults.receiveLocation || DEFAULT_STATION_CONFIG.defaults.receiveLocation);
+  const [query, setQuery] = useState("");
+  const [loadingItems, setLoadingItems] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [receivedCount, setReceivedCount] = useState(0);
-  const [lastCapture, setLastCapture] = useState<StationCapture | null>(null);
-  const [lastLinkedTag, setLastLinkedTag] = useState<string | null>(null);
-  const [flashVisible, setFlashVisible] = useState(false);
-
-  const clearSku = useCallback(() => {
-    setActiveItem(null);
-    setLocation(null);
-    setMessage(null);
-    setLastLinkedTag(null);
-    setReceivedCount(0);
-  }, []);
 
   useEffect(() => {
-    if (!activeItem || !location || stationConfig.receiveLocations.includes(location)) return;
-    setLocation(null);
+    if (stationConfig.receiveLocations.includes(location)) return;
+    setLocation(stationConfig.defaults.receiveLocation || stationConfig.receiveLocations[0] || DEFAULT_STATION_CONFIG.defaults.receiveLocation);
   }, [location, stationConfig]);
 
-  const lookupItem = useCallback(
-    async (value: string) => {
-      setError(null);
-      try {
-        const res = await apiRequest<{ ok: true; item: InventoryItem }>(`/inventory/lookup?barcode=${encodeURIComponent(value)}`, { method: "GET", token });
+  const hydrateContext = useCallback((nextContext: ReceivingContext | null) => {
+    setContext(nextContext);
+    if (nextContext?.item) {
+      setActiveItem(nextContext.item);
+      setLocation(nextContext.location);
+      return;
+    }
+    if (!nextContext) return;
+    setLocation(nextContext.location);
+  }, []);
+
+  const loadItems = useCallback(async () => {
+    setLoadingItems(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("limit", "80");
+      if (query.trim()) params.set("q", query.trim());
+      const res = await apiRequest<{ ok: true; items: InventoryItem[] }>(`/inventory/items?${params.toString()}`, { method: "GET", token });
+      setItems(res.items);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load inventory");
+    } finally {
+      setLoadingItems(false);
+    }
+  }, [query, token]);
+
+  const loadActiveContext = useCallback(async (silent = false) => {
+    if (!silent) setError(null);
+    try {
+      const res = await apiRequest<{ ok: true; context: ReceivingContext | null }>("/rfid/receiving-contexts/active", { method: "GET", token });
+      hydrateContext(res.context);
+    } catch (e) {
+      if (!silent) setError(e instanceof Error ? e.message : "Failed to load receiving state");
+    }
+  }, [hydrateContext, token]);
+
+  useEffect(() => {
+    void loadItems();
+  }, [loadItems]);
+
+  useEffect(() => {
+    void loadActiveContext(true);
+  }, [loadActiveContext]);
+
+  useEffect(() => {
+    if (!initialItemId || context) return;
+    apiRequest<{ ok: true; item: InventoryItem }>(`/inventory/items/${encodeURIComponent(initialItemId)}`, { method: "GET", token })
+      .then((res) => {
         setActiveItem(res.item);
-        setLocation(null);
-        setReceivedCount(0);
-        setLastLinkedTag(null);
-        setLastCapture({ value, label: "SKU barcode", at: new Date() });
         setMessage(`${res.item.name} selected`);
-        successFeedback();
-      } catch (e) {
-        setActiveItem(null);
-        setLocation(null);
-        setError(e instanceof Error ? e.message : "Item not found");
-        errorFeedback();
-      }
-    },
-    [token]
-  );
+      })
+      .catch(() => undefined);
+  }, [context, initialItemId, token]);
 
-  const assignTag = useCallback(
-    async (value: string) => {
-      if (!activeItem?._id || saving) return;
-      if (!location) {
-        setError("Choose a location first");
-        errorFeedback();
-        return;
-      }
-      setSaving(true);
-      setError(null);
-      try {
-        await apiRequest("/inventory/receiving/units", {
-          method: "POST",
-          token,
-          body: JSON.stringify({
-            itemId: activeItem._id,
-            tagId: value,
-            location,
-            quantity: 1,
-          }),
-        });
-        setLastLinkedTag(value);
-        setLastCapture({ value, label: "RFID tag", at: new Date() });
-        setReceivedCount((count) => count + 1);
-        setMessage(`${activeItem.name} linked to ${value}`);
-        successFeedback();
-        setFlashVisible(true);
-        setTimeout(() => setFlashVisible(false), 1400);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to assign tag");
-        errorFeedback();
-      } finally {
-        setSaving(false);
-      }
-    },
-    [activeItem?._id, activeItem?.name, location, saving, token]
-  );
+  useEffect(() => {
+    if (!context) return;
+    const timer = setInterval(() => {
+      void loadActiveContext(true);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [context, loadActiveContext]);
 
-  const handleScan = useCallback(
-    async (value: string) => {
-      if (!value.trim() || saving) return;
-      if (!activeItem) {
-        await lookupItem(value);
-        return;
-      }
-      await assignTag(value);
-    },
-    [activeItem, assignTag, lookupItem, saving]
-  );
+  const filteredItems = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const source = needle
+      ? items.filter((item) => `${item.name} ${item.sku} ${item.barcode ?? ""} ${item.location ?? ""}`.toLowerCase().includes(needle))
+      : items;
+    return source.slice(0, 12);
+  }, [items, query]);
+
+  const armContext = useCallback(async () => {
+    if (!activeItem?._id || saving) return;
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await apiRequest<{ ok: true; context: ReceivingContext }>("/rfid/receiving-contexts", {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          itemId: activeItem._id,
+          location,
+        }),
+      });
+      hydrateContext(res.context);
+      setMessage(`${res.context.item?.name ?? activeItem.name} is armed for RFID receiving`);
+      successFeedback();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to arm receiving");
+      errorFeedback();
+    } finally {
+      setSaving(false);
+    }
+  }, [activeItem, hydrateContext, location, saving, token]);
+
+  const releaseContext = useCallback(async () => {
+    if (!context || saving) {
+      setContext(null);
+      setActiveItem(null);
+      setMessage(null);
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await apiRequest(`/rfid/receiving-contexts/${encodeURIComponent(context.id)}`, { method: "DELETE", token });
+      setContext(null);
+      setActiveItem(null);
+      setMessage("Receiving item released");
+      successFeedback();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to release receiving item");
+      errorFeedback();
+    } finally {
+      setSaving(false);
+    }
+  }, [context, saving, token]);
+
+  const selectedIsArmed = Boolean(context && activeItem && context.itemId === activeItem._id);
 
   return (
     <View style={{ gap: 14 }}>
@@ -568,63 +621,149 @@ function ReceiveMode({ token, stationConfig }: { token: string; stationConfig: S
 
       <PassiveScanDock
         title="Receive"
-        detail={!activeItem ? "Waiting for RFID scan" : !location ? "Choose location" : "Scan RFID tag"}
-        enabled
+        detail={selectedIsArmed ? "Waiting for RFID tag scan" : "Select item and location to arm receiving"}
+        enabled={false}
         busy={saving}
-        lastCapture={lastCapture}
-        statusLabel={!activeItem ? "Waiting" : !location ? "Choose location" : "Ready"}
+        lastCapture={
+          context?.lastTagId
+            ? { value: context.lastTagId, label: "Last RFID tag", at: context.lastScanAt ? new Date(context.lastScanAt) : new Date() }
+            : null
+        }
+        statusLabel={selectedIsArmed ? "Waiting for RFID scan" : "Not armed"}
         minimal
-        onScan={(value) => void handleScan(value)}
+        onScan={() => undefined}
       />
 
-      {activeItem ? (
-        <Card>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text style={[theme.typography.h3, { color: theme.colors.text }]}>{activeItem.name}</Text>
-              <MutedText>{activeItem.sku}</MutedText>
+      <Card>
+        <View style={{ gap: 12 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <View style={{ flex: 1, minWidth: 220 }}>
+              <Text style={[theme.typography.h3, { color: theme.colors.text }]}>Receiving item</Text>
+              <MutedText>{selectedIsArmed ? "Hardware can now send tagId only." : "Choose the product these blank tags belong to."}</MutedText>
             </View>
-            <AppButton title="Release" onPress={clearSku} variant="secondary" />
+            <Badge label={selectedIsArmed ? `Received ${context?.receivedCount ?? 0}` : "Idle"} tone={selectedIsArmed ? "success" : "default"} />
           </View>
 
-          <View style={{ height: 12 }} />
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {stationConfig.receiveLocations.map((station) => {
-              const active = location === station;
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              borderRadius: theme.radius.md,
+              backgroundColor: theme.colors.surface2,
+              paddingHorizontal: 12,
+              minHeight: 48,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Ionicons name="search-outline" size={18} color={theme.colors.textMuted} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search item, SKU, barcode"
+              placeholderTextColor={theme.colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={{ flex: 1, color: theme.colors.text, fontSize: 14, minHeight: 46 }}
+            />
+            {loadingItems ? <ActivityIndicator color={theme.colors.primary} /> : null}
+          </View>
+
+          {activeItem ? (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: selectedIsArmed ? theme.colors.success : theme.colors.border,
+                borderRadius: theme.radius.md,
+                backgroundColor: selectedIsArmed ? theme.colors.success + "12" : theme.colors.surface,
+                padding: 14,
+                gap: 10,
+              }}
+            >
+              <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={{ color: theme.colors.text, fontWeight: "800", fontSize: 16 }}>{activeItem.name}</Text>
+                  <MutedText>{`${activeItem.sku} | Qty ${activeItem.quantity}`}</MutedText>
+                </View>
+                <Badge label={selectedIsArmed ? "Armed" : "Selected"} tone={selectedIsArmed ? "success" : "primary"} />
+              </View>
+
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {stationConfig.receiveLocations.map((station) => {
+                  const active = location === station;
+                  return (
+                    <Pressable
+                      key={station}
+                      disabled={selectedIsArmed || saving}
+                      onPress={() => setLocation(station)}
+                      style={{
+                        paddingVertical: 8,
+                        paddingHorizontal: 14,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: active ? theme.colors.primary : theme.colors.border,
+                        backgroundColor: active ? theme.colors.primarySoft : theme.colors.surface2,
+                        opacity: selectedIsArmed && !active ? 0.55 : 1,
+                      }}
+                    >
+                      <Text style={{ color: theme.colors.text, fontWeight: "700", fontSize: 12 }}>{formatStationLabel(station)}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+                <AppButton
+                  title={selectedIsArmed ? "Receiving armed" : "Arm receiving"}
+                  onPress={armContext}
+                  disabled={selectedIsArmed || saving}
+                  loading={saving && !selectedIsArmed}
+                  iconName="radio-outline"
+                />
+                <AppButton title={selectedIsArmed ? "Release" : "Clear"} onPress={releaseContext} variant="secondary" disabled={saving} />
+              </View>
+            </View>
+          ) : null}
+        </View>
+      </Card>
+
+      {!selectedIsArmed ? (
+        <Card>
+          <View style={{ gap: 8 }}>
+            <Text style={[theme.typography.h3, { color: theme.colors.text }]}>Items</Text>
+            {filteredItems.length === 0 ? <MutedText>No items found.</MutedText> : null}
+            {filteredItems.map((item) => {
+              const selected = activeItem?._id === item._id;
               return (
                 <Pressable
-                  key={station}
-                  onPress={() => setLocation(station)}
+                  key={item._id}
+                  onPress={() => {
+                    setActiveItem(item);
+                    setMessage(null);
+                    setError(null);
+                  }}
                   style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 14,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: active ? theme.colors.primary : theme.colors.border,
-                    backgroundColor: theme.colors.surface,
+                    paddingVertical: 12,
+                    borderBottomWidth: 1,
+                    borderBottomColor: theme.colors.border,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
                   }}
                 >
-                  <Text style={{ color: active ? theme.colors.text : theme.colors.textMuted, fontWeight: "700", fontSize: 12 }}>
-                    {formatStationLabel(station)}
-                  </Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ color: theme.colors.text, fontWeight: "800" }} numberOfLines={1}>{item.name}</Text>
+                    <Text style={{ color: theme.colors.textMuted, fontSize: 13 }} numberOfLines={1}>{`${item.sku} | ${item.location || "No location"}`}</Text>
+                  </View>
+                  <Badge label={selected ? "Selected" : `Qty ${item.quantity}`} tone={selected ? "primary" : "default"} />
                 </Pressable>
               );
             })}
           </View>
-          <View style={{ height: 12 }} />
-          <MutedText>
-            {location ? `Next RFID tag will be received into ${formatStationLabel(location)}.` : "Choose where the scanned unit should be stored."}
-          </MutedText>
-          {receivedCount > 0 || lastLinkedTag ? (
-            <View style={{ marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              <Badge label={`Received ${receivedCount}`} tone="success" />
-              {lastLinkedTag ? <Badge label={`Last ${truncateValue(lastLinkedTag, 10, 4)}`} tone="default" /> : null}
-            </View>
-          ) : null}
         </Card>
       ) : null}
-
-      <ResultFlash visible={flashVisible} success title="TAG ASSIGNED" subtitle={message ?? undefined} />
     </View>
   );
 }
@@ -1731,10 +1870,10 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
   );
 }
 
-export function RfidHubScreen({ navigation }: Props) {
+export function RfidHubScreen({ navigation, route }: Props) {
   const { token, effectiveRole } = useContext(AuthContext);
   const isDesktopWeb = useIsDesktopWeb();
-  const [mode, setMode] = useState<Mode>("assign");
+  const [mode, setMode] = useState<Mode>(route.params?.initialMode ?? "assign");
   const [stationConfig, setStationConfig] = useState<StationConfig>(DEFAULT_STATION_CONFIG);
   const [stationsLoading, setStationsLoading] = useState(false);
   const [stationsError, setStationsError] = useState<string | null>(null);
@@ -1770,6 +1909,12 @@ export function RfidHubScreen({ navigation }: Props) {
     setMode(allowedModes[0] ?? "assign");
   }, [allowedModes, mode]);
 
+  useEffect(() => {
+    const requestedMode = route.params?.initialMode;
+    if (!requestedMode || !allowedModes.includes(requestedMode)) return;
+    setMode(requestedMode);
+  }, [allowedModes, route.params?.initialMode]);
+
   if (!token) {
     return (
       <Screen
@@ -1794,7 +1939,7 @@ export function RfidHubScreen({ navigation }: Props) {
 
         {stationsLoading ? <ActivityIndicator color={theme.colors.primary} /> : null}
 
-        {mode === "assign" ? <ReceiveMode token={token} stationConfig={stationConfig} /> : null}
+        {mode === "assign" ? <ReceiveMode token={token} stationConfig={stationConfig} initialItemId={route.params?.itemId} /> : null}
         {mode === "authorize" ? <AuthorizationMode token={token} onSwitchMode={setMode} stationConfig={stationConfig} isDesktopWeb={isDesktopWeb} /> : null}
         {mode === "exit" ? <ExitMode token={token} stationConfig={stationConfig} isDesktopWeb={isDesktopWeb} /> : null}
         {mode === "tags" ? <TagsMode token={token} isDesktopWeb={isDesktopWeb} /> : null}

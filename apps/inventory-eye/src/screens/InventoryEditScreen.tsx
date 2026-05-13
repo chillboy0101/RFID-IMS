@@ -485,8 +485,8 @@ export function InventoryEditScreen({ navigation, route }: Props) {
 
   const openRfidHub = useCallback(() => {
     const parent = navigation.getParent();
-    (parent as any)?.navigate?.("More", { screen: "RfidHub" });
-  }, [navigation]);
+    (parent as any)?.navigate?.("More", { screen: "RfidHub", params: { initialMode: "assign", itemId: id } });
+  }, [id, navigation]);
 
   const load = useCallback(async () => {
     if (!token || !id) return;

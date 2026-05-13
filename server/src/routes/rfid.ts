@@ -15,6 +15,7 @@ import { InventoryUnitModel } from "../models/InventoryUnit.js";
 import { OperatorSessionModel, type OperatorSessionDocument } from "../models/OperatorSession.js";
 import { OrderModel } from "../models/Order.js";
 import { RfidEventModel, rfidEventTypes, type RfidEventType } from "../models/RfidEvent.js";
+import { RfidReceivingContextModel, type RfidReceivingContextDocument } from "../models/RfidReceivingContext.js";
 import { RfidTagModel, upsertRfidTag } from "../models/RfidTag.js";
 import { SecurityAlertModel } from "../models/SecurityAlert.js";
 import { TenantMembershipModel, type TenantMembershipDocument } from "../models/TenantMembership.js";
@@ -141,10 +142,6 @@ async function resolveHardwareOperator(
     return { ok: false, status: 401, error: "Invalid or expired operator session" };
   }
 
-  if (req.gateKeyId && String(session.gateKeyId) !== String(req.gateKeyId)) {
-    return { ok: false, status: 403, error: "Operator session belongs to a different RFID reader" };
-  }
-
   const [user, membership] = await Promise.all([
     UserModel.findOne({ _id: session.userId, operatorTagId: session.operatorTagId }).exec() as Promise<UserDocument | null>,
     TenantMembershipModel.findOne({ tenantId, userId: session.userId }).exec() as Promise<TenantMembershipDocument | null>,
@@ -172,10 +169,44 @@ function setHardwareOperatorAudit(res: express.Response, operator: HardwareOpera
     metadata: {
       operatorTagId: operator.session.operatorTagId,
       operatorSessionId: operator.session._id.toString(),
-      gateKeyName: operator.session.gateKeyName,
+      operatorSessionGateKeyName: operator.session.gateKeyName,
       ...(metadata ?? {}),
     },
   });
+}
+
+async function findActiveReceivingContext(tenantId: string) {
+  return (await RfidReceivingContextModel.findOne({
+    tenantId,
+    status: "active",
+    expiresAt: { $gt: new Date() },
+  })
+    .sort({ updatedAt: -1 })
+    .exec()) as RfidReceivingContextDocument | null;
+}
+
+function serializeReceivingContext(context: RfidReceivingContextDocument, item?: InventoryItemDocument | null) {
+  return {
+    id: context._id.toString(),
+    itemId: context.itemId.toString(),
+    location: context.location,
+    source: context.source,
+    status: context.status,
+    receivedCount: context.receivedCount ?? 0,
+    lastTagId: context.lastTagId ?? null,
+    lastScanAt: context.lastScanAt ?? null,
+    expiresAt: context.expiresAt,
+    item: item
+      ? {
+          _id: item._id.toString(),
+          name: item.name,
+          sku: item.sku,
+          barcode: item.barcode,
+          quantity: item.quantity,
+          location: item.location,
+        }
+      : null,
+  };
 }
 
 async function resolveItem(tenantId: string, identifiers: { itemId?: unknown; tagId?: string; barcode?: string }) {
@@ -215,11 +246,6 @@ async function resolveReceivingItem(tenantId: string, body: Record<string, unkno
         : "";
   if (itemBarcode) {
     return (await InventoryItemModel.findOne({ tenantId, barcode: itemBarcode }).exec()) as InventoryItemDocument | null;
-  }
-
-  const sku = typeof body.sku === "string" ? body.sku.trim() : "";
-  if (sku) {
-    return (await InventoryItemModel.findOne({ tenantId, sku }).exec()) as InventoryItemDocument | null;
   }
 
   return null;
@@ -378,7 +404,7 @@ router.get("/meta", async (_req, res) => {
   res.json({
     ok: true,
     keyLocationRule:
-      "If a gate key has a locationHint, the backend uses that location and ignores payload.location. Use a receiving-station key for /rfid/receiving-events and an exit-gate key for /rfid/gate-events. If one reader is used in multiple modes, use an unbound key and send location in the payload.",
+      "For exit scans, a bound gate key supplies the exit location. For receiving blank tags, the portal-armed receiving context supplies the item and receiving/storage location, so hardware only sends tagId.",
     hardware: {
       staffAuthScan: {
         endpoint: "POST /rfid/operator-sessions",
@@ -392,7 +418,7 @@ router.get("/meta", async (_req, res) => {
           source: "string, optional reader label",
         },
         response: {
-          operatorSessionToken: "Short-lived token. Send as X-Operator-Session or Authorization: Bearer op_...",
+          operatorSessionToken: "Short-lived branch-wide token. Send as X-Operator-Session or Authorization: Bearer op_... for receiving and exit scans.",
           expiresAt: "ISO timestamp",
           operator: "Matched system user for the scanned staff card",
         },
@@ -412,7 +438,6 @@ router.get("/meta", async (_req, res) => {
           eventId: "UUID string; same value as X-Event-ID when sent in body",
           location: "string, optional when key is not bound to a location",
           source: "string, default rfid",
-          itemId: "Mongo ObjectId, optional manual override",
         },
       },
       receivingReader: {
@@ -424,14 +449,13 @@ router.get("/meta", async (_req, res) => {
           "X-Event-ID": "Required UUID for retry-safe idempotency",
         },
         payload: {
-          tagId: "string (required RFID tag/EPC unless value is supplied)",
+          tagId: "string (required blank inventory RFID tag/EPC unless value is supplied)",
           value: "string (RFID tag/EPC fallback)",
           eventId: "UUID string; same value as X-Event-ID when sent in body",
-          itemId: "Mongo ObjectId, preferred item lookup from the portal",
-          itemBarcode: "string, optional product barcode lookup",
-          location: "string, optional when key is not bound to a location",
+          location: "Optional; active RFID Hub Receive context controls the final item/location assignment.",
           source: "string, default rfid",
         },
+        portalRequirement: "Arm an item and location first in RFID Hub -> Receive. The backend then handles product details from the active portal context.",
       },
       staffCardAssignmentScan: {
         endpoint: "POST /rfid/staff-card-events",
@@ -470,6 +494,131 @@ router.get("/meta", async (_req, res) => {
       },
     },
   });
+});
+
+router.get("/receiving-contexts/active", requireAuth, requireTenant, async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const context = await findActiveReceivingContext(tenantId);
+  if (!context) {
+    res.json({ ok: true, context: null });
+    return;
+  }
+
+  const item = (await InventoryItemModel.findOne({ _id: context.itemId, tenantId }).exec()) as InventoryItemDocument | null;
+  if (!item) {
+    context.status = "released";
+    context.releasedAt = new Date();
+    await context.save();
+    res.json({ ok: true, context: null });
+    return;
+  }
+
+  res.json({ ok: true, context: serializeReceivingContext(context, item) });
+});
+
+router.post("/receiving-contexts", requireAuth, requireTenant, requireRole("inventory_staff", "manager", "admin"), async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const itemId = typeof body.itemId === "string" ? body.itemId.trim() : "";
+  const location = normalizeLocation(body.location, "RECEIVING_STAGING");
+  const source = typeof body.source === "string" && body.source.trim()
+    ? body.source.trim()
+    : String(req.header("x-source") ?? "").trim() || "rfid";
+  const minutes = Math.min(720, Math.max(5, typeof body.minutes === "number" ? Math.floor(body.minutes) : 240));
+
+  if (!itemId || !mongoose.isValidObjectId(itemId)) {
+    res.status(400).json({ ok: false, error: "Valid itemId is required" });
+    return;
+  }
+  if (isExitLocation(location)) {
+    res.status(400).json({ ok: false, error: "Receiving context must use a receiving/storage location, not an exit gate" });
+    return;
+  }
+
+  const item = (await InventoryItemModel.findOne({ _id: itemId, tenantId }).exec()) as InventoryItemDocument | null;
+  if (!item) {
+    res.status(404).json({ ok: false, error: "Item not found" });
+    return;
+  }
+  if ((item.status ?? "active").trim().toLowerCase() === "inactive") {
+    res.status(409).json({ ok: false, error: "Cannot arm receiving for an inactive item" });
+    return;
+  }
+
+  const now = new Date();
+  await RfidReceivingContextModel.updateMany(
+    { tenantId, status: "active" },
+    { $set: { status: "released", releasedAt: now } }
+  ).exec();
+
+  const context = await RfidReceivingContextModel.create({
+    tenantId,
+    itemId: item._id,
+    armedByUserId: auth.id,
+    location,
+    source,
+    expiresAt: new Date(now.getTime() + minutes * 60 * 1000),
+  });
+
+  setAuditContext(res, {
+    type: "rfid.receiving_context.arm",
+    category: "rfid",
+    entityType: "rfid_receiving_context",
+    entityId: context._id.toString(),
+    entityLabel: `${item.name} at ${location}`,
+    summary: "Armed RFID receiving item",
+    metadata: {
+      itemId: item._id.toString(),
+      itemSku: item.sku,
+      location,
+      source,
+      expiresAt: context.expiresAt,
+    },
+  });
+
+  res.status(201).json({ ok: true, context: serializeReceivingContext(context, item) });
+});
+
+router.delete("/receiving-contexts/:id", requireAuth, requireTenant, requireRole("inventory_staff", "manager", "admin"), async (req: TenantRequest, res) => {
+  const tenantId = req.tenantId as string;
+  const contextId = String(req.params.id ?? "").trim();
+  if (!mongoose.isValidObjectId(contextId)) {
+    res.status(400).json({ ok: false, error: "Invalid receiving context id" });
+    return;
+  }
+
+  const context = await RfidReceivingContextModel.findOneAndUpdate(
+    { _id: contextId, tenantId, status: "active" },
+    { $set: { status: "released", releasedAt: new Date() } },
+    { new: true }
+  ).exec();
+
+  if (!context) {
+    res.status(404).json({ ok: false, error: "Active receiving context not found" });
+    return;
+  }
+
+  setAuditContext(res, {
+    type: "rfid.receiving_context.release",
+    category: "rfid",
+    entityType: "rfid_receiving_context",
+    entityId: context._id.toString(),
+    summary: "Released RFID receiving item",
+    metadata: {
+      itemId: context.itemId.toString(),
+      location: context.location,
+      source: context.source,
+      receivedCount: context.receivedCount ?? 0,
+    },
+  });
+
+  res.json({ ok: true, context: serializeReceivingContext(context, null) });
 });
 
 router.post("/operator-sessions", requireGateApiKey, requireGateTenant, async (req: GateRequest, res) => {
@@ -578,7 +727,6 @@ router.delete("/operator-sessions/:token", requireGateApiKey, requireGateTenant,
       tenantId,
       tokenPrefix: rawToken.slice(0, 12),
       tokenHash: hashKey(rawToken),
-      ...(req.gateKeyId ? { gateKeyId: req.gateKeyId } : {}),
       $or: [{ endedAt: { $exists: false } }, { endedAt: null }],
     },
     { $set: { endedAt: new Date(), lastSeenAt: new Date() } },
@@ -683,7 +831,7 @@ router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (re
     return;
   }
   const eventId = eventIdResult.eventId;
-  const location = resolveHardwareLocation(req, body, "RECEIVING_STAGING");
+  const requestedLocation = resolveHardwareLocation(req, body, "RECEIVING_STAGING");
 
   if (!tagId) {
     res.status(400).json({ ok: false, error: "tagId or value is required" });
@@ -696,15 +844,6 @@ router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (re
     return;
   }
   const operator = operatorResult.operator;
-
-  if (isExitLocation(location)) {
-    const boundLocation = req.gateKeyLocationHint?.trim();
-    const detail = boundLocation && isExitLocation(boundLocation)
-      ? ` This gate key is bound to ${boundLocation}, so it cannot be used for receiving. Use a receiving-station key or an unbound key for this endpoint.`
-      : "";
-    res.status(400).json({ ok: false, error: `Receiving events must use a receiving/storage location, not an exit gate.${detail}` });
-    return;
-  }
 
   const staffCardConflict = await UserModel.exists({ operatorTagId: tagId }).exec();
   if (staffCardConflict) {
@@ -719,6 +858,7 @@ router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (re
   }
 
   let item: InventoryItemDocument | null = null;
+  let receivingContext: RfidReceivingContextDocument | null = null;
   try {
     item = await resolveReceivingItem(tenantId, body);
   } catch (error) {
@@ -727,7 +867,30 @@ router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (re
   }
 
   if (!item) {
-    res.status(404).json({ ok: false, error: "Receiving item not found. Send itemId or itemBarcode." });
+    receivingContext = await findActiveReceivingContext(tenantId);
+    if (receivingContext) {
+      item = (await InventoryItemModel.findOne({ _id: receivingContext.itemId, tenantId }).exec()) as InventoryItemDocument | null;
+      if (!item) {
+        receivingContext.status = "released";
+        receivingContext.releasedAt = new Date();
+        await receivingContext.save();
+        receivingContext = null;
+      }
+    }
+  }
+
+  const location = receivingContext?.location ?? requestedLocation;
+  if (isExitLocation(location)) {
+    const boundLocation = req.gateKeyLocationHint?.trim();
+    const detail = boundLocation && isExitLocation(boundLocation)
+      ? " Select and arm a receiving item in the portal, or use an unbound/receiving reader key for direct item lookup."
+      : "";
+    res.status(400).json({ ok: false, error: `Receiving events must use a receiving/storage location, not an exit gate.${detail}` });
+    return;
+  }
+
+  if (!item) {
+    res.status(404).json({ ok: false, error: "No active receiving item. Select an item and location in RFID Hub Receive before scanning blank tags." });
     return;
   }
 
@@ -791,8 +954,16 @@ router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (re
       operatorSessionId: operator.session._id.toString(),
       operatorTagId: operator.session.operatorTagId,
       gateKeyName: req.gateKeyName,
+      receivingContextId: receivingContext?._id.toString(),
     },
   });
+
+  if (receivingContext) {
+    receivingContext.receivedCount = (receivingContext.receivedCount ?? 0) + 1;
+    receivingContext.lastTagId = tagId;
+    receivingContext.lastScanAt = observedAt;
+    await receivingContext.save();
+  }
 
   setHardwareOperatorAudit(res, operator, "Captured receiving reader event", {
     itemId: item._id.toString(),
@@ -800,6 +971,8 @@ router.post("/receiving-events", requireGateApiKey, requireGateTenant, async (re
     tagId,
     location,
     rfidEventId: event._id.toString(),
+    gateKeyName: req.gateKeyName,
+    receivingContextId: receivingContext?._id.toString(),
   });
 
   const flow = (await buildInventoryFlowSummaryMap(tenantId, [item])).get(item._id.toString());
@@ -917,6 +1090,7 @@ router.post("/gate-events", requireGateApiKey, requireGateTenant, async (req: Ga
     barcode: barcode || undefined,
     location,
     rfidEventId: event._id.toString(),
+    gateKeyName: req.gateKeyName,
   });
 
   res.json({

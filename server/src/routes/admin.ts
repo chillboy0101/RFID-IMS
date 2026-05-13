@@ -16,6 +16,7 @@ import { OrderModel } from "../models/Order.js";
 import { PasswordResetTokenModel } from "../models/PasswordResetToken.js";
 import { ReorderRequestModel } from "../models/ReorderRequest.js";
 import { RfidEventModel } from "../models/RfidEvent.js";
+import { RfidReceivingContextModel } from "../models/RfidReceivingContext.js";
 import { RfidTagModel } from "../models/RfidTag.js";
 import { SecurityAlertModel } from "../models/SecurityAlert.js";
 import { TaskSessionModel } from "../models/TaskSession.js";
@@ -385,6 +386,7 @@ router.post("/clear-inventory-data", requireRole("admin"), async (req: AuthReque
     inventoryLogs,
     rfidTags,
     rfidEvents,
+    rfidReceivingContexts,
     orders,
     reorders,
     exitAuthorizations,
@@ -396,6 +398,7 @@ router.post("/clear-inventory-data", requireRole("admin"), async (req: AuthReque
     InventoryLogModel.deleteMany({ tenantId }).exec(),
     RfidTagModel.deleteMany({ tenantId }).exec(),
     RfidEventModel.deleteMany({ tenantId }).exec(),
+    RfidReceivingContextModel.deleteMany({ tenantId }).exec(),
     OrderModel.deleteMany({ tenantId }).exec(),
     ReorderRequestModel.deleteMany({ tenantId }).exec(),
     ExitAuthorizationModel.deleteMany({ tenantId }).exec(),
@@ -409,6 +412,7 @@ router.post("/clear-inventory-data", requireRole("admin"), async (req: AuthReque
     inventoryLogs: (inventoryLogs as any).deletedCount ?? 0,
     rfidTags: (rfidTags as any).deletedCount ?? 0,
     rfidEvents: (rfidEvents as any).deletedCount ?? 0,
+    rfidReceivingContexts: (rfidReceivingContexts as any).deletedCount ?? 0,
     orders: (orders as any).deletedCount ?? 0,
     reorders: (reorders as any).deletedCount ?? 0,
     exitAuthorizations: (exitAuthorizations as any).deletedCount ?? 0,
