@@ -36,14 +36,6 @@ type Vendor = {
 
 type Props = NativeStackScreenProps<InventoryStackParamList, "InventoryEdit" | "InventoryCreate">;
 
-function toneForStock(quantity: string, reorderLevel: string) {
-  const qty = Number(quantity) || 0;
-  const reorder = Number(reorderLevel) || 0;
-  if (qty <= 0) return { label: "Out", tone: "danger" as const };
-  if (qty <= reorder) return { label: "Low", tone: "warning" as const };
-  return { label: "In stock", tone: "success" as const };
-}
-
 function sectionDivider() {
   return <View style={{ height: 1, backgroundColor: theme.colors.border, marginVertical: theme.spacing.lg }} />;
 }
@@ -310,29 +302,99 @@ function StartingStockNotice() {
         borderColor: theme.colors.border,
         borderRadius: theme.radius.sm,
         backgroundColor: theme.colors.surface2,
-        padding: 14,
-        gap: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
       }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
         <View
           style={{
-            width: 34,
-            height: 34,
+            width: 30,
+            height: 30,
             borderRadius: 999,
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: theme.colors.primarySoft,
           }}
         >
-          <Ionicons name="radio-outline" size={17} color={theme.colors.primary} />
+          <Ionicons name="radio-outline" size={15} color={theme.colors.primary} />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[theme.typography.h3, { color: theme.colors.text }]}>Stock starts at 0</Text>
-          <MutedText>Receive physical units through RFID after saving this item.</MutedText>
+          <Text style={{ color: theme.colors.text, fontWeight: "800" }}>Stock starts at 0</Text>
+          <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>RFID receiving updates quantity.</Text>
         </View>
+        <Badge label="RFID" tone="primary" />
       </View>
-      <Badge label="RFID receiving controls quantity" tone="primary" />
+    </View>
+  );
+}
+
+function StatusSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const normalized = value.trim().toLowerCase() === "inactive" ? "inactive" : "active";
+  const options = [
+    { key: "active", label: "Active" },
+    { key: "inactive", label: "Inactive" },
+  ];
+
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={[theme.typography.label, { color: theme.colors.text }]}>Operational status</Text>
+      <Pressable
+        onPress={() => setOpen((current) => !current)}
+        style={({ pressed }) => ({
+          minHeight: 52,
+          borderRadius: theme.radius.sm,
+          borderWidth: 1,
+          borderColor: open ? theme.colors.primary : theme.colors.border,
+          backgroundColor: pressed ? theme.colors.surface : theme.colors.surface2,
+          paddingHorizontal: 14,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        })}
+      >
+        <Text style={{ color: theme.colors.text, fontSize: 15, textTransform: "capitalize" }}>{normalized}</Text>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color={theme.colors.textMuted} />
+      </Pressable>
+      {open ? (
+        <View
+          style={{
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            borderRadius: theme.radius.sm,
+            overflow: "hidden",
+            backgroundColor: theme.colors.surface,
+          }}
+        >
+          {options.map((option, index) => {
+            const selected = normalized === option.key;
+            return (
+              <Pressable
+                key={option.key}
+                onPress={() => {
+                  onChange(option.key);
+                  setOpen(false);
+                }}
+                style={({ pressed }) => ({
+                  minHeight: 44,
+                  paddingHorizontal: 14,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  borderTopWidth: index === 0 ? 0 : 1,
+                  borderTopColor: theme.colors.border,
+                  backgroundColor: selected ? theme.colors.primarySoft : pressed ? theme.colors.surface2 : theme.colors.surface,
+                })}
+              >
+                <Text style={{ color: theme.colors.text, fontWeight: selected ? "800" : "600" }}>{option.label}</Text>
+                {selected ? <Ionicons name="checkmark" size={18} color={theme.colors.primary} /> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -629,8 +691,6 @@ export function InventoryEditScreen({ navigation, route }: Props) {
     resetDraft();
   }, [confirmDiscard, hasChanges, loading, resetDraft]);
 
-  const stockTone = toneForStock(quantity, reorderLevel);
-
   async function save() {
     if (!token || loading) return;
     setShowValidation(true);
@@ -701,7 +761,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
               padding: theme.spacing.lg,
             }}
           >
-            <FormSection title="General details" subtitle="Core item identity shown across inventory and order flows.">
+            <FormSection title="General details">
               <FormField
                 label="Item name"
                 value={name}
@@ -728,7 +788,6 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                     placeholder={id ? "BW-BLND-130" : "Generated automatically"}
                     icon="pricetag-outline"
                     autoCapitalize="characters"
-                    helperText={id ? "SKU must be unique across all items." : "Leave blank and the backend will generate a unique SKU."}
                     errorText={skuError}
                   />
                 </View>
@@ -740,7 +799,6 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                     placeholder="Scan or enter"
                     icon="barcode-outline"
                     autoCapitalize="none"
-                    helperText="Add a barcode if untagged units should still clear the gate."
                     inputRef={barcodeRef}
                     onIconPress={() => setBarcodeScanOpen(true)}
                   />
@@ -750,7 +808,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
 
             {sectionDivider()}
 
-            <FormSection title="Location & handling" subtitle="Where the item lives and how warehouse staff will recognize it.">
+            <FormSection title="Location & handling">
               <View style={{ flexDirection: "row", gap: 14, alignItems: "flex-start" }}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <FormField
@@ -762,14 +820,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                   />
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <FormField
-                    label="Operational status"
-                    value={status}
-                    onChangeText={setStatus}
-                    placeholder="active"
-                    autoCapitalize="none"
-                    helperText="Use active or inactive unless you have a branch-specific workflow."
-                  />
+                  <StatusSelect value={status} onChange={setStatus} />
                 </View>
               </View>
             </FormSection>
@@ -790,49 +841,16 @@ export function InventoryEditScreen({ navigation, route }: Props) {
               keyboardType="numeric"
               errorText={reorderError}
               placeholder="e.g. 10"
-              helperText="Alert when quantity falls below this level."
             />
-            <Badge label={stockTone.label} tone={stockTone.tone} />
           </SurfaceCard>
 
-          <SurfaceCard title="Status">
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-              {[
-                { key: "active", label: "Active" },
-                { key: "inactive", label: "Inactive" },
-              ].map((option) => {
-                const selected = status.trim().toLowerCase() === option.key;
-                return (
-                  <Pressable
-                    key={option.key}
-                    onPress={() => setStatus(option.key)}
-                    style={{
-                      minHeight: 42,
-                      paddingHorizontal: 14,
-                      borderRadius: 999,
-                      borderWidth: 1,
-                      borderColor: selected ? theme.colors.primary : theme.colors.border,
-                      backgroundColor: selected ? theme.colors.primarySoft : theme.colors.surface,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Text style={{ color: selected ? theme.colors.text : theme.colors.textMuted, fontWeight: "800" }}>{option.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </SurfaceCard>
+          {id ? (
+            <SurfaceCard title="RFID">
+              <MetaButton title="Open RFID Hub" subtitle={rfidTagId ? `Current tag ${rfidTagId}` : "Ready after save"} onPress={openRfidHub} loading={loading} />
+            </SurfaceCard>
+          ) : null}
 
-          <SurfaceCard title="RFID">
-            <MetaButton title="Assign via RFID hub" subtitle={rfidTagId ? `Current tag ${rfidTagId}` : "No tag assigned yet"} onPress={openRfidHub} loading={loading} />
-            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-              <Badge label="SKU master" tone="default" />
-              <Badge label="Live hub" tone="primary" />
-            </View>
-          </SurfaceCard>
-
-          <SurfaceCard title="Vendor">
+          <SurfaceCard title="Supplier & expiry">
             <FormField
               label="Vendor / supplier"
               value={vendorSearch}
@@ -842,7 +860,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
               }}
               placeholder="e.g. Lagos Hair Co."
               autoCapitalize="sentences"
-              helperText={selectedVendor ? `Selected vendor: ${selectedVendor.name}` : "Search by vendor name to attach supplier metadata."}
+              helperText={selectedVendor ? `Selected vendor: ${selectedVendor.name}` : undefined}
             />
             {vendorPickerOpen && filteredVendors.length ? (
               <View style={{ gap: 10 }}>
@@ -874,9 +892,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                 ))}
               </View>
             ) : null}
-          </SurfaceCard>
 
-          <SurfaceCard title="Expiry">
             {DateTimePicker ? (
               <>
                 <Text style={[theme.typography.label, { color: theme.colors.text }]}>Expiry date</Text>
@@ -897,7 +913,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                   <Text style={{ color: expiryDate ? theme.colors.text : theme.colors.textMuted, fontSize: 15 }}>{expiryDate || "Select date"}</Text>
                   <Ionicons name="calendar-outline" size={18} color={theme.colors.textMuted} />
                 </Pressable>
-                {expiryError ? <ErrorText>{expiryError}</ErrorText> : <MutedText>Leave blank if the item is not perishable.</MutedText>}
+                {expiryError ? <ErrorText>{expiryError}</ErrorText> : null}
                 {showExpiryPicker ? (
                   <View style={{ paddingTop: 8 }}>
                     <DateTimePicker
@@ -922,7 +938,6 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                 onChangeText={setExpiryDate}
                 placeholder="YYYY-MM-DD"
                 errorText={expiryError}
-                helperText="Leave blank if the item is not perishable."
                 autoCapitalize="none"
               />
             )}
@@ -941,7 +956,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
       >
         {error ? <ErrorText>{error}</ErrorText> : null}
 
-        <AccordionSection title="General details" subtitle="Name, description, SKU, and barcode" defaultOpen>
+        <AccordionSection title="General details" defaultOpen>
           <FormField
             label="Item name"
             value={name}
@@ -966,7 +981,6 @@ export function InventoryEditScreen({ navigation, route }: Props) {
             placeholder={id ? "BW-BLND-130" : "Generated automatically"}
             icon="pricetag-outline"
             autoCapitalize="characters"
-            helperText={id ? "SKU must be unique across all items." : "Leave blank and the backend will generate a unique SKU."}
             errorText={skuError}
           />
           <IconField
@@ -975,13 +989,12 @@ export function InventoryEditScreen({ navigation, route }: Props) {
             onChangeText={setBarcode}
             placeholder="Scan or enter"
             icon="barcode-outline"
-            helperText="Use this for untagged fallback scans."
             inputRef={barcodeRef}
             onIconPress={() => setBarcodeScanOpen(true)}
           />
         </AccordionSection>
 
-        <AccordionSection title="Stock & status" subtitle="Quantity, alerts, and visibility" defaultOpen>
+        <AccordionSection title="Stock & status" defaultOpen>
           {id ? (
             <FormField label={stockLabel} value={quantity} onChangeText={setQuantity} keyboardType="numeric" errorText={quantityError} placeholder="0" />
           ) : (
@@ -994,7 +1007,6 @@ export function InventoryEditScreen({ navigation, route }: Props) {
             keyboardType="numeric"
             errorText={reorderError}
             placeholder="e.g. 10"
-            helperText="Alert when quantity falls below this level."
           />
           <FormField
             label="Location"
@@ -1003,40 +1015,11 @@ export function InventoryEditScreen({ navigation, route }: Props) {
             placeholder="e.g. Aisle 4, Shelf B"
             autoCapitalize="characters"
           />
-          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-            <Badge label={stockTone.label} tone={stockTone.tone} />
-            <Badge label={status || "active"} tone={status.trim().toLowerCase() === "inactive" ? "warning" : "default"} />
-          </View>
-          <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-            {[
-              { key: "active", label: "Active" },
-              { key: "inactive", label: "Inactive" },
-            ].map((option) => {
-              const selected = status.trim().toLowerCase() === option.key;
-              return (
-                <Pressable
-                  key={option.key}
-                  onPress={() => setStatus(option.key)}
-                  style={{
-                    minHeight: 42,
-                    paddingHorizontal: 14,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: selected ? theme.colors.primary : theme.colors.border,
-                    backgroundColor: selected ? theme.colors.primarySoft : theme.colors.surface,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text style={{ color: selected ? theme.colors.text : theme.colors.textMuted, fontWeight: "800" }}>{option.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <StatusSelect value={status} onChange={setStatus} />
         </AccordionSection>
 
-        <AccordionSection title="RFID, vendor & expiry" subtitle="Secondary operational details">
-          <MetaButton title="Assign via RFID hub" subtitle={rfidTagId ? `Current tag ${rfidTagId}` : "No tag assigned yet"} onPress={openRfidHub} loading={loading} />
+        <AccordionSection title={id ? "RFID, supplier & expiry" : "Supplier & expiry"}>
+          {id ? <MetaButton title="Open RFID Hub" subtitle={rfidTagId ? `Current tag ${rfidTagId}` : "Ready after save"} onPress={openRfidHub} loading={loading} /> : null}
           <FormField
             label="Vendor / supplier"
             value={vendorSearch}
@@ -1098,7 +1081,7 @@ export function InventoryEditScreen({ navigation, route }: Props) {
                 <Text style={{ color: expiryDate ? theme.colors.text : theme.colors.textMuted, fontSize: 15 }}>{expiryDate || "Select date"}</Text>
                 <Ionicons name="calendar-outline" size={18} color={theme.colors.textMuted} />
               </Pressable>
-              {expiryError ? <ErrorText>{expiryError}</ErrorText> : <MutedText>Leave blank if this item is not perishable.</MutedText>}
+              {expiryError ? <ErrorText>{expiryError}</ErrorText> : null}
               {showExpiryPicker ? (
                 <View style={{ paddingTop: 8 }}>
                   <DateTimePicker
@@ -1123,7 +1106,6 @@ export function InventoryEditScreen({ navigation, route }: Props) {
               onChangeText={setExpiryDate}
               placeholder="YYYY-MM-DD"
               errorText={expiryError}
-              helperText="Leave blank if this item is not perishable."
               autoCapitalize="none"
             />
           )}
