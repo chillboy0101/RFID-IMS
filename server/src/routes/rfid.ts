@@ -1724,27 +1724,14 @@ router.delete("/tags/:tagId", requireRole("admin"), async (req: TenantRequest, r
   const tenantId = req.tenantId as string;
   const { tagId } = req.params;
 
-  const doc = await RfidTagModel.findOne({ tenantId, tagId }).exec();
-  if (!doc) {
+  const [doc, units, authorizations] = await Promise.all([
+    RfidTagModel.findOne({ tenantId, tagId }).exec(),
+    InventoryUnitModel.find({ tenantId, tagId }).exec(),
+    ExitAuthorizationModel.find({ tenantId, tagId }).select({ _id: 1 }).exec(),
+  ]);
+
+  if (!doc && units.length === 0 && authorizations.length === 0) {
     res.status(404).json({ ok: false, error: "Tag not found" });
-    return;
-  }
-
-  const liveAuthorizationCount = await ExitAuthorizationModel.countDocuments({
-    tenantId,
-    tagId,
-    status: "active",
-    expiresAt: { $gt: new Date() },
-  }).exec();
-  if (liveAuthorizationCount > 0) {
-    res.status(409).json({ ok: false, error: "Cannot unassign a tag with active gate authorization" });
-    return;
-  }
-
-  const units = await InventoryUnitModel.find({ tenantId, tagId }).exec();
-  const lockedUnit = units.find((unit) => ["reserved", "picked", "packed", "dispatched"].includes(String(unit.status)));
-  if (lockedUnit) {
-    res.status(409).json({ ok: false, error: "Cannot unassign a tag that is already reserved, picked, packed, or dispatched" });
     return;
   }
 
@@ -1755,12 +1742,27 @@ router.delete("/tags/:tagId", requireRole("admin"), async (req: TenantRequest, r
     unitCountsByItemId.set(itemId, (unitCountsByItemId.get(itemId) ?? 0) + 1);
   }
 
-  await InventoryUnitModel.deleteMany({ tenantId, tagId }).exec();
-  await RfidTagModel.deleteOne({ tenantId, tagId }).exec();
+  await Promise.all([
+    InventoryUnitModel.deleteMany({ tenantId, tagId }).exec(),
+    RfidTagModel.deleteMany({ tenantId, tagId }).exec(),
+    ExitAuthorizationModel.deleteMany({ tenantId, tagId }).exec(),
+    SecurityAlertModel.updateMany(
+      { tenantId, tagId, status: "open" },
+      {
+        $set: {
+          status: "resolved",
+          "meta.resolvedBy": "rfid_tag_unassign",
+          "meta.unassignedAt": new Date().toISOString(),
+        },
+      }
+    ).exec(),
+  ]);
 
   const affectedItemIds = new Set<string>([...unitCountsByItemId.keys()]);
-  const linkedItemId = doc.itemId?.toString();
+  const linkedItemId = doc?.itemId?.toString();
   if (linkedItemId) affectedItemIds.add(linkedItemId);
+  const linkedItems = await InventoryItemModel.find({ tenantId, rfidTagId: tagId }).select({ _id: 1 }).exec();
+  for (const item of linkedItems) affectedItemIds.add(item._id.toString());
 
   for (const itemId of affectedItemIds) {
     const item = await InventoryItemModel.findOne({ _id: itemId, tenantId }).exec();
@@ -1800,6 +1802,7 @@ router.delete("/tags/:tagId", requireRole("admin"), async (req: TenantRequest, r
     deletedTag: true,
     tagId,
     deletedUnits: units.length,
+    deletedAuthorizations: authorizations.length,
     affectedItems: affectedItemIds.size,
   });
 });
