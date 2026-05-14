@@ -64,7 +64,6 @@ function SearchDock({
   value,
   onChangeText,
   onScan,
-  loading,
   placeholder,
   showScanButton = true,
 }: {
@@ -72,7 +71,6 @@ function SearchDock({
   value: string;
   onChangeText: (value: string) => void;
   onScan: () => void;
-  loading?: boolean;
   placeholder: string;
   showScanButton?: boolean;
 }) {
@@ -109,7 +107,6 @@ function SearchDock({
           ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null),
         }}
       />
-      {loading ? <ActivityIndicator size="small" color={theme.colors.textMuted} /> : null}
       {showScanButton ? (
         <Pressable
           onPress={onScan}
@@ -127,6 +124,31 @@ function SearchDock({
           <Ionicons name="barcode-outline" size={18} color={theme.colors.textMuted} />
         </Pressable>
       ) : null}
+    </View>
+  );
+}
+
+function TableLoadingState() {
+  return (
+    <View style={{ minHeight: 260, alignItems: "center", justifyContent: "center", padding: theme.spacing.lg }}>
+      <View
+        style={{
+          backgroundColor: theme.colors.surfaceGlass,
+          borderWidth: 1,
+          borderColor: theme.colors.border,
+          padding: 16,
+          borderRadius: theme.radius.lg,
+        }}
+      >
+        <ActivityIndicator
+          color={theme.colors.text}
+          size="large"
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel="Loading inventory"
+          style={{ transform: [{ scale: 1.25 }] }}
+        />
+      </View>
     </View>
   );
 }
@@ -717,7 +739,6 @@ export function OrderCreateScreen({ navigation }: Props) {
           value={query}
           onChangeText={setQuery}
           onScan={() => setScanOpen(true)}
-          loading={loading}
           placeholder="Search by name, SKU, barcode, location"
           showScanButton={false}
         />
@@ -773,7 +794,9 @@ export function OrderCreateScreen({ navigation }: Props) {
         ) : null}
 
         <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
-          {items.length ? (
+          {loading && !items.length ? (
+            <TableLoadingState />
+          ) : items.length ? (
             items.map((item) => renderDesktopRow(item))
           ) : (
             <View style={{ padding: theme.spacing.lg }}>
@@ -806,17 +829,20 @@ export function OrderCreateScreen({ navigation }: Props) {
               value={query}
               onChangeText={setQuery}
               onScan={() => setScanOpen(true)}
-              loading={loading}
               placeholder="Search by name, SKU, barcode"
             />
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <MutedText>{loading ? "Updating inventory..." : "Tap an item to add it"}</MutedText>
+              <MutedText>Tap an item to add it</MutedText>
               {selectedItemCount ? <Badge label={`${selectedItemCount} added`} tone="success" /> : null}
             </View>
           </View>
         </Card>
 
-        {items.length ? (
+        {loading && !items.length ? (
+          <Card style={{ padding: 0 }}>
+            <TableLoadingState />
+          </Card>
+        ) : items.length ? (
           items.map((item) => renderMobileCard(item))
         ) : (
           <Card>

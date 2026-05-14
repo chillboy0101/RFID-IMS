@@ -7,7 +7,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { apiRequest } from "../api/client";
 import { AuthContext } from "../auth/AuthContext";
 import type { OrdersStackParamList } from "../navigation/types";
-import { AppButton, Badge, Card, ErrorText, MutedText, Screen, theme } from "../ui";
+import { AppButton, Badge, Card, ErrorText, MutedText, Screen, shadow, theme } from "../ui";
 
 type OrderStatus = "created" | "picking" | "authorized" | "fulfilled" | "cancelled";
 
@@ -269,6 +269,38 @@ function MetaRow({ label, value, accent }: { label: string; value: string; accen
   );
 }
 
+function MenuAction({
+  label,
+  danger,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  danger?: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        minHeight: 42,
+        paddingHorizontal: 14,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        backgroundColor: pressed && !disabled ? theme.colors.surface2 : theme.colors.surface,
+        opacity: disabled ? 0.45 : 1,
+        ...(Platform.OS === "web" && !disabled ? ({ cursor: "pointer" } as any) : null),
+      })}
+    >
+      <Text style={{ color: danger ? theme.colors.danger : theme.colors.text, fontWeight: "800" }}>{label}</Text>
+      <Ionicons name="chevron-forward" size={15} color={danger ? theme.colors.danger : theme.colors.textMuted} />
+    </Pressable>
+  );
+}
+
 function buildTagDots(line: OrderWorkflowLine) {
   const readyUnits = Math.min(line.requestedQuantity, line.taggedReservedUnits + line.barcodeFallbackUnits + line.dispatchedUnits);
   const dotCount = Math.max(1, Math.min(line.requestedQuantity, 8));
@@ -427,8 +459,51 @@ export function OrderDetailScreen({ navigation, route }: Props) {
       ]
     : [];
 
+  const runMenuAction = (action: () => void) => {
+    setActionMenuOpen(false);
+    action();
+  };
+
+  const actionMenu = actionMenuOpen ? (
+    <View
+      style={{
+        position: "absolute",
+        top: isDesktopWeb ? 66 : 128,
+        right: theme.spacing.md,
+        left: isDesktopWeb ? undefined : theme.spacing.md,
+        width: isDesktopWeb ? 240 : undefined,
+        borderRadius: theme.radius.sm,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.surface,
+        overflow: "hidden",
+        zIndex: 10000,
+        elevation: 40,
+        ...shadow(2),
+      }}
+    >
+      {canUpdateStatus ? (
+        isClosed ? (
+          <MenuAction label="Order is closed" disabled onPress={() => undefined} />
+        ) : (
+          actions.map((action) => (
+            <MenuAction
+              key={action.title}
+              label={action.title}
+              danger={action.variant === "danger"}
+              disabled={saving}
+              onPress={() => runMenuAction(action.onPress)}
+            />
+          ))
+        )
+      ) : (
+        <MenuAction label="View only" disabled onPress={() => undefined} />
+      )}
+    </View>
+  ) : null;
+
   const overviewHeader = (
-    <Card style={{ padding: 0 }}>
+    <Card style={{ padding: 0, overflow: "visible", zIndex: actionMenuOpen ? 20 : 1 }}>
       <View
         style={{
           paddingHorizontal: theme.spacing.md,
@@ -460,7 +535,15 @@ export function OrderDetailScreen({ navigation, route }: Props) {
         </View>
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <AppButton title="Open RFID Hub" onPress={openRfidHub} variant="secondary" iconName="radio-outline" />
+          <AppButton
+            title="Open RFID Hub"
+            onPress={() => {
+              setActionMenuOpen(false);
+              openRfidHub();
+            }}
+            variant="secondary"
+            iconName="radio-outline"
+          />
           <AppButton
             title="More"
             onPress={() => setActionMenuOpen((current) => !current)}
@@ -551,38 +634,7 @@ export function OrderDetailScreen({ navigation, route }: Props) {
         </View>
       ) : null}
 
-      {actionMenuOpen ? (
-        <View
-          style={{
-            borderTopWidth: 1,
-            borderTopColor: theme.colors.border,
-            padding: theme.spacing.md,
-            gap: 10,
-            backgroundColor: theme.colors.surface,
-          }}
-        >
-          <Badge label={canUpdateStatus ? "Manager/Admin" : "View only"} tone={canUpdateStatus ? "primary" : "default"} />
-          {canUpdateStatus ? (
-            <>
-              {isClosed ? <MutedText>Order is closed.</MutedText> : null}
-              {!isClosed
-                ? actions.map((action) => (
-                    <AppButton
-                      key={action.title}
-                      title={action.title}
-                      onPress={action.onPress}
-                      variant={action.variant}
-                      disabled={saving}
-                      loading={saving}
-                    />
-                  ))
-                : null}
-            </>
-          ) : (
-            <MutedText>Status changes require manager or admin access.</MutedText>
-          )}
-        </View>
-      ) : null}
+      {actionMenu}
     </Card>
   );
 
