@@ -194,6 +194,7 @@ function FlowStepper({ stages, compact }: { stages: StepStage[]; compact: boolea
 
   return (
     <View
+      pointerEvents="none"
       style={{
         paddingHorizontal: theme.spacing.md,
         paddingBottom: theme.spacing.md,
@@ -201,6 +202,8 @@ function FlowStepper({ stages, compact }: { stages: StepStage[]; compact: boolea
         flexDirection: "row",
         alignItems: "flex-start",
         gap: 0,
+        position: "relative",
+        zIndex: 0,
       }}
     >
       {stages.map((stage, index) => {
@@ -733,7 +736,8 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
             borderColor: theme.colors.border,
             backgroundColor: theme.colors.surface,
             overflow: "hidden",
-            zIndex: 60,
+            zIndex: 1000,
+            elevation: 24,
             ...shadow(2),
           }}
         >
@@ -755,6 +759,8 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
             alignItems: isDesktopWeb ? "flex-start" : "stretch",
             justifyContent: "space-between",
             gap: 16,
+            position: "relative",
+            zIndex: actionMenuOpen ? 200 : 1,
           }}
         >
           <View style={{ flex: 1, minWidth: 0 }}>

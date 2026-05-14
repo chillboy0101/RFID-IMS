@@ -1722,7 +1722,12 @@ router.post("/tags/:tagId/deactivate", requireRole("admin"), async (req: TenantR
 
 router.delete("/tags/:tagId", requireRole("admin"), async (req: TenantRequest, res) => {
   const tenantId = req.tenantId as string;
-  const { tagId } = req.params;
+  const tagId = (req.params.tagId ?? "").trim();
+
+  if (!tagId) {
+    res.status(400).json({ ok: false, error: "tagId is required" });
+    return;
+  }
 
   const [doc, units, authorizations] = await Promise.all([
     RfidTagModel.findOne({ tenantId, tagId }).exec(),
@@ -1744,7 +1749,7 @@ router.delete("/tags/:tagId", requireRole("admin"), async (req: TenantRequest, r
 
   await Promise.all([
     InventoryUnitModel.deleteMany({ tenantId, tagId }).exec(),
-    RfidTagModel.deleteMany({ tenantId, tagId }).exec(),
+    doc ? RfidTagModel.deleteOne({ _id: doc._id, tenantId }).exec() : RfidTagModel.deleteMany({ tenantId, tagId }).exec(),
     ExitAuthorizationModel.deleteMany({ tenantId, tagId }).exec(),
     SecurityAlertModel.updateMany(
       { tenantId, tagId, status: "open" },
@@ -1774,7 +1779,15 @@ router.delete("/tags/:tagId", requireRole("admin"), async (req: TenantRequest, r
       item.quantity = Math.max(0, previousQuantity - removedUnits);
     }
     if (item.rfidTagId === tagId) {
-      item.rfidTagId = undefined;
+      const replacementUnit = await InventoryUnitModel.findOne({
+        tenantId,
+        itemId: item._id,
+        tagId: { $exists: true, $ne: "" },
+      })
+        .sort({ createdAt: -1 })
+        .select({ tagId: 1 })
+        .exec();
+      item.rfidTagId = replacementUnit?.tagId || undefined;
     }
 
     await item.save();
