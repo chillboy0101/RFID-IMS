@@ -1,5 +1,5 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Platform, Pressable, ScrollView, Text, TextInput, Vibration, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, FlatList, Modal, Platform, Pressable, ScrollView, Text, TextInput, Vibration, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
@@ -1487,6 +1487,7 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
   const [inventoryCatalog, setInventoryCatalog] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [changeProductOpen, setChangeProductOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -1554,6 +1555,7 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
       if (action === "remove") {
         await apiRequest(`/rfid/tags/${encodeURIComponent(tagId)}`, { method: "DELETE", token });
         setMessage(`${tagId} unassigned`);
+        setChangeProductOpen(false);
         setSelectedTagId("");
         setSelectedTag(null);
         successFeedback();
@@ -1585,6 +1587,7 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
         body: JSON.stringify({ itemId }),
       });
       setMessage(`${tagId} reassigned`);
+      setChangeProductOpen(false);
       successFeedback();
       await loadTags();
       await loadSelectedTag();
@@ -1753,36 +1756,14 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
                   ) : (
                     <AppButton title="Activate" onPress={() => void runTagAction("activate", selectedTag.tagId)} variant="secondary" disabled={saving} loading={saving} />
                   )}
+                  <AppButton
+                    title={selectedTag.itemId ? "Change product" : "Assign product"}
+                    onPress={() => setChangeProductOpen(true)}
+                    variant="secondary"
+                    disabled={saving}
+                  />
                   <AppButton title="Unassign" onPress={() => void runTagAction("remove", selectedTag.tagId)} variant="danger" disabled={saving} loading={saving} />
                 </View>
-              </Card>
-            ) : null}
-
-            {selectedTag ? (
-              <Card>
-                <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Reassign</Text>
-                {reassignmentCandidates.length > 0 ? (
-                  <View style={{ gap: 8 }}>
-                    {reassignmentCandidates.map((item) => (
-                      <Pressable
-                        key={item._id}
-                        onPress={() => void reassignTag(selectedTag.tagId, item._id)}
-                        style={{
-                          borderWidth: 1,
-                          borderColor: theme.colors.border,
-                          borderRadius: theme.radius.md,
-                          padding: 12,
-                          backgroundColor: theme.colors.surface2,
-                        }}
-                      >
-                        <Text style={{ color: theme.colors.text, fontWeight: "700" }}>{item.name}</Text>
-                        <MutedText>{item.sku}</MutedText>
-                      </Pressable>
-                    ))}
-                  </View>
-                ) : (
-                  <MutedText>No inventory candidates loaded.</MutedText>
-                )}
               </Card>
             ) : null}
           </View>
@@ -1844,36 +1825,84 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
             ) : (
               <AppButton title="Activate" onPress={() => void runTagAction("activate", selectedTag.tagId)} variant="secondary" disabled={saving} loading={saving} />
             )}
+            <AppButton
+              title={selectedTag.itemId ? "Change product" : "Assign product"}
+              onPress={() => setChangeProductOpen(true)}
+              variant="secondary"
+              disabled={saving}
+            />
             <AppButton title="Unassign" onPress={() => void runTagAction("remove", selectedTag.tagId)} variant="danger" disabled={saving} loading={saving} />
           </View>
-
-          <View style={{ height: 16 }} />
-          <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 8 }]}>Reassign</Text>
-          {reassignmentCandidates.length > 0 ? (
-            <View style={{ gap: 8 }}>
-              {reassignmentCandidates.map((item) => (
-                <Pressable
-                  key={item._id}
-                  onPress={() => void reassignTag(selectedTag.tagId, item._id)}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.colors.border,
-                    borderRadius: theme.radius.md,
-                    padding: 12,
-                    backgroundColor: theme.colors.surface2,
-                  }}
-                >
-                  <Text style={{ color: theme.colors.text, fontWeight: "700" }}>{item.name}</Text>
-                  <MutedText>{item.sku}</MutedText>
-                  <MutedText>{item.barcode ? `Barcode ${item.barcode}` : "No barcode fallback"}</MutedText>
-                </Pressable>
-              ))}
-            </View>
-          ) : (
-            <MutedText>No inventory candidates loaded.</MutedText>
-          )}
         </Card>
       ) : null}
+
+      <Modal visible={!!selectedTag && changeProductOpen} transparent animationType="fade" onRequestClose={() => setChangeProductOpen(false)}>
+        <View
+          style={{
+            flex: 1,
+            padding: isDesktopWeb ? 24 : 16,
+            backgroundColor: "rgba(15, 23, 42, 0.48)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <View
+            style={{
+              width: "100%",
+              maxWidth: 560,
+              maxHeight: "82%",
+              borderRadius: theme.radius.lg,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surface,
+              padding: 16,
+              gap: 12,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[theme.typography.h3, { color: theme.colors.text }]}>{selectedTag?.itemId ? "Change product" : "Assign product"}</Text>
+                <MutedText>{selectedTag ? truncateValue(selectedTag.tagId, 18, 6) : ""}</MutedText>
+              </View>
+              <AppButton title="Close" onPress={() => setChangeProductOpen(false)} variant="secondary" disabled={saving} />
+            </View>
+
+            {reassignmentCandidates.length > 0 ? (
+              <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator>
+                <View style={{ gap: 8 }}>
+                  {reassignmentCandidates.map((item) => (
+                    <Pressable
+                      key={item._id}
+                      disabled={saving || !selectedTag}
+                      onPress={() => {
+                        if (!selectedTag) return;
+                        void reassignTag(selectedTag.tagId, item._id);
+                      }}
+                      style={({ pressed }) => ({
+                        borderWidth: 1,
+                        borderColor: theme.colors.border,
+                        borderRadius: theme.radius.md,
+                        padding: 12,
+                        backgroundColor: pressed ? theme.colors.surface : theme.colors.surface2,
+                        opacity: saving ? 0.55 : 1,
+                        gap: 4,
+                      })}
+                    >
+                      <Text style={{ color: theme.colors.text, fontWeight: "800" }}>{item.name}</Text>
+                      <MutedText>{item.sku}</MutedText>
+                      <MutedText>{item.barcode ? `Barcode ${item.barcode}` : "No barcode fallback"}</MutedText>
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
+            ) : (
+              <View style={{ borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, padding: 14, backgroundColor: theme.colors.surface2 }}>
+                <MutedText>No inventory products loaded.</MutedText>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
