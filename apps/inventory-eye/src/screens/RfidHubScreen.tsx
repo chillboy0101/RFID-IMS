@@ -1487,6 +1487,7 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
   const [inventoryCatalog, setInventoryCatalog] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [tagDetailOpen, setTagDetailOpen] = useState(false);
   const [changeProductOpen, setChangeProductOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -1499,15 +1500,12 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
       if (statusFilter !== "all") params.set("status", statusFilter);
       const res = await apiRequest<{ ok: true; tags: TagRecord[] }>(`/rfid/tags?${params.toString()}`, { method: "GET", token });
       setTags(res.tags);
-      if (!selectedTagId && res.tags[0]) {
-        setSelectedTagId(res.tags[0].tagId);
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load tags");
     } finally {
       setLoading(false);
     }
-  }, [selectedTagId, statusFilter, token]);
+  }, [statusFilter, token]);
 
   const loadSelectedTag = useCallback(async () => {
     if (!selectedTagId) {
@@ -1518,6 +1516,7 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
       const res = await apiRequest<{ ok: true; tag: TagRecord }>(`/rfid/tags/${encodeURIComponent(selectedTagId)}`, { method: "GET", token });
       setSelectedTag(res.tag);
     } catch (e) {
+      setSelectedTag(null);
       setError(e instanceof Error ? e.message : "Failed to load tag details");
     }
   }, [selectedTagId, token]);
@@ -1555,6 +1554,7 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
       if (action === "remove") {
         await apiRequest(`/rfid/tags/${encodeURIComponent(tagId)}`, { method: "DELETE", token });
         setMessage(`${tagId} unassigned`);
+        setTagDetailOpen(false);
         setChangeProductOpen(false);
         setSelectedTagId("");
         setSelectedTag(null);
@@ -1606,6 +1606,13 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
     if (!selectedTag) return inventoryCatalog.slice(0, 10);
     return inventoryCatalog.filter((item) => item._id !== selectedTag.itemId).slice(0, 10);
   }, [inventoryCatalog, selectedTag]);
+  const openTagDetail = useCallback((tagId: string) => {
+    if (tagId !== selectedTagId) {
+      setSelectedTag(null);
+    }
+    setSelectedTagId(tagId);
+    setTagDetailOpen(true);
+  }, [selectedTagId]);
 
   return (
     <View style={{ gap: 14 }}>
@@ -1679,77 +1686,153 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
         </View>
       </Card>
 
-      {isDesktopWeb ? (
-        <View style={{ flexDirection: "row", gap: 14, alignItems: "flex-start" }}>
-          <View style={{ flex: 1 }}>
-            <Card>
-              <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Tags</Text>
-              {loading ? (
+      <Card>
+        <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Tags</Text>
+        {loading ? (
+          <ActivityIndicator color={theme.colors.primary} />
+        ) : tags.length === 0 ? (
+          <MutedText>No tags found.</MutedText>
+        ) : isDesktopWeb ? (
+          <View>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderBottomWidth: 1,
+                borderBottomColor: theme.colors.border,
+                backgroundColor: theme.colors.surface2,
+              }}
+            >
+              <Text style={{ flex: 1, color: theme.colors.textMuted, fontSize: 11, fontWeight: "700", textTransform: "uppercase" }}>Tag ID</Text>
+              <Text style={{ width: 140, color: theme.colors.textMuted, fontSize: 11, fontWeight: "700", textTransform: "uppercase" }}>Status</Text>
+              <Text style={{ width: 160, color: theme.colors.textMuted, fontSize: 11, fontWeight: "700", textTransform: "uppercase" }}>Assignment</Text>
+            </View>
+            {tags.map((item) => (
+              <Pressable
+                key={item._id}
+                onPress={() => openTagDetail(item.tagId)}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingHorizontal: 14,
+                  paddingVertical: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: theme.colors.border,
+                  backgroundColor: pressed ? theme.colors.surface2 : theme.colors.surface,
+                })}
+              >
+                <Text style={{ flex: 1, color: theme.colors.text, fontWeight: "800" }} numberOfLines={1} selectable>
+                  {item.tagId}
+                </Text>
+                <View style={{ width: 140, alignItems: "flex-start" }}>
+                  <Badge label={item.status} tone={toneForStatus(item.status)} />
+                </View>
+                <View style={{ width: 160, alignItems: "flex-start" }}>
+                  <Badge label={item.itemId ? "Assigned" : "Unassigned"} tone={item.itemId ? "success" : "warning"} />
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <FlatList
+            data={tags}
+            keyExtractor={(item) => item._id}
+            scrollEnabled={false}
+            renderItem={({ item }) => (
+              <Pressable
+                onPress={() => openTagDetail(item.tagId)}
+                style={({ pressed }) => ({
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  backgroundColor: pressed ? theme.colors.surface2 : theme.colors.surface,
+                  borderRadius: theme.radius.md,
+                  padding: 12,
+                  marginBottom: 8,
+                  gap: 8,
+                })}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <Text style={{ color: theme.colors.text, fontWeight: "800", flex: 1 }} numberOfLines={1}>{truncateValue(item.tagId, 16, 6)}</Text>
+                  <Badge label={item.status} tone={toneForStatus(item.status)} />
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <Badge label={item.itemId ? "Assigned" : "Unassigned"} tone={item.itemId ? "success" : "warning"} />
+                  <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
+                </View>
+              </Pressable>
+            )}
+          />
+        )}
+      </Card>
+
+      <Modal
+        visible={tagDetailOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setTagDetailOpen(false);
+          setChangeProductOpen(false);
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            padding: isDesktopWeb ? 24 : 16,
+            backgroundColor: "rgba(15, 23, 42, 0.48)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <View
+            style={{
+              width: "100%",
+              maxWidth: 620,
+              maxHeight: "86%",
+              borderRadius: theme.radius.lg,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surface,
+              padding: 16,
+              gap: 14,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+              <View style={{ flex: 1, gap: 8 }}>
+                <Text style={[theme.typography.h3, { color: theme.colors.text }]} selectable>
+                  {selectedTag?.tagId ?? selectedTagId}
+                </Text>
+                {selectedTag ? <Badge label={selectedTag.status} tone={toneForStatus(selectedTag.status)} /> : null}
+              </View>
+              <AppButton
+                title="Close"
+                onPress={() => {
+                  setTagDetailOpen(false);
+                  setChangeProductOpen(false);
+                }}
+                variant="secondary"
+                disabled={saving}
+              />
+            </View>
+
+            {!selectedTag && selectedTagId ? (
+              <View style={{ minHeight: 160, alignItems: "center", justifyContent: "center" }}>
                 <ActivityIndicator color={theme.colors.primary} />
-              ) : tags.length === 0 ? (
-                <MutedText>No tags found.</MutedText>
-              ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View style={{ minWidth: 820 }}>
-                    <View style={{ flexDirection: "row", paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.colors.border, backgroundColor: theme.colors.surface2 }}>
-                      {[
-                        { label: "Tag", width: 200 },
-                        { label: "Product", width: 220 },
-                        { label: "SKU", width: 140 },
-                        { label: "Status", width: 120 },
-                        { label: "Queued", width: 90 },
-                      ].map((column) => (
-                        <Text key={column.label} style={{ width: column.width, color: theme.colors.textMuted, fontSize: 11, fontWeight: "700", textTransform: "uppercase" }}>
-                          {column.label}
-                        </Text>
-                      ))}
-                    </View>
-                    {tags.map((item) => {
-                      const active = selectedTagId === item.tagId;
-                      return (
-                        <Pressable
-                          key={item._id}
-                          onPress={() => setSelectedTagId(item.tagId)}
-                          style={{
-                            flexDirection: "row",
-                            paddingHorizontal: 12,
-                            paddingVertical: 12,
-                            borderBottomWidth: 1,
-                            borderBottomColor: theme.colors.border,
-                            backgroundColor: active ? theme.colors.surface2 : theme.colors.surface,
-                          }}
-                        >
-                          <Text style={{ width: 200, color: theme.colors.text, fontWeight: "700" }}>{truncateValue(item.tagId, 16, 6)}</Text>
-                          <Text style={{ width: 220, color: theme.colors.textMuted }}>{item.itemName || "Unassigned"}</Text>
-                          <Text style={{ width: 140, color: theme.colors.textMuted }}>{item.itemSku || "-"}</Text>
-                          <View style={{ width: 120 }}>
-                            <Badge label={item.status} tone={toneForStatus(item.status)} />
-                          </View>
-                          <Text style={{ width: 90, color: theme.colors.textMuted }}>{item.activeExitAuthorizations ?? 0}</Text>
-                        </Pressable>
-                      );
-                    })}
+              </View>
+            ) : selectedTag ? (
+              <>
+                <ScrollView style={{ maxHeight: isDesktopWeb ? 430 : 480 }} showsVerticalScrollIndicator>
+                  <View style={{ borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, overflow: "hidden" }}>
+                    <ListRow title="Product" subtitle={selectedTag.itemName || "Unassigned"} />
+                    <ListRow title="SKU" subtitle={selectedTag.itemSku || "-"} />
+                    <ListRow title="Barcode" subtitle={selectedTag.itemBarcode || "-"} />
+                    <ListRow title="Queued exits" subtitle={String(selectedTag.activeExitAuthorizations ?? 0)} />
+                    <ListRow title="Assigned" subtitle={selectedTag.assignedAt ? new Date(selectedTag.assignedAt).toLocaleString() : "-"} />
+                    <ListRow title="Updated" subtitle={new Date(selectedTag.updatedAt).toLocaleString()} />
                   </View>
                 </ScrollView>
-              )}
-            </Card>
-          </View>
 
-          <View style={{ width: 340, gap: 14 }}>
-            {selectedTag ? (
-              <Card>
-                <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Selected tag</Text>
-                <View style={{ gap: 8 }}>
-                  <Badge label={truncateValue(selectedTag.tagId, 14, 6)} tone="primary" />
-                  <ListRow title="Product" subtitle={selectedTag.itemName || "Unassigned"} />
-                  <ListRow title="SKU" subtitle={selectedTag.itemSku || "-"} />
-                  <ListRow title="Barcode" subtitle={selectedTag.itemBarcode || "-"} />
-                  <ListRow title="Queued exits" subtitle={String(selectedTag.activeExitAuthorizations ?? 0)} />
-                  <ListRow title="Assigned" subtitle={selectedTag.assignedAt ? new Date(selectedTag.assignedAt).toLocaleString() : "-"} />
-                  <ListRow title="Updated" subtitle={new Date(selectedTag.updatedAt).toLocaleString()} />
-                </View>
-
-                <View style={{ height: 12 }} />
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                   {selectedTag.status === "active" ? (
                     <AppButton title="Deactivate" onPress={() => void runTagAction("deactivate", selectedTag.tagId)} variant="secondary" disabled={saving} loading={saving} />
@@ -1764,77 +1847,15 @@ function TagsMode({ token, isDesktopWeb }: { token: string; isDesktopWeb: boolea
                   />
                   <AppButton title="Unassign" onPress={() => void runTagAction("remove", selectedTag.tagId)} variant="danger" disabled={saving} loading={saving} />
                 </View>
-              </Card>
-            ) : null}
+              </>
+            ) : (
+              <View style={{ minHeight: 120, alignItems: "center", justifyContent: "center" }}>
+                <MutedText>Select a tag.</MutedText>
+              </View>
+            )}
           </View>
         </View>
-      ) : (
-        <Card>
-          <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Tags</Text>
-          {loading ? (
-            <ActivityIndicator color={theme.colors.primary} />
-          ) : tags.length === 0 ? (
-            <MutedText>No tags found.</MutedText>
-          ) : (
-            <FlatList
-              data={tags}
-              keyExtractor={(item) => item._id}
-              renderItem={({ item }) => (
-                <Pressable
-                  onPress={() => setSelectedTagId(item.tagId)}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: selectedTagId === item.tagId ? theme.colors.primary : theme.colors.border,
-                    backgroundColor: theme.colors.surface,
-                    borderRadius: theme.radius.md,
-                    padding: 12,
-                    marginBottom: 8,
-                    gap: 6,
-                  }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                    <Text style={{ color: theme.colors.text, fontWeight: "700" }}>{truncateValue(item.tagId, 12, 6)}</Text>
-                    <Badge label={item.status} tone={toneForStatus(item.status)} />
-                  </View>
-                  <MutedText>{item.itemName || "Unassigned"}</MutedText>
-                  <MutedText>{`Queued ${item.activeExitAuthorizations ?? 0}`}</MutedText>
-                </Pressable>
-              )}
-            />
-          )}
-        </Card>
-      )}
-
-      {!isDesktopWeb && selectedTag ? (
-        <Card>
-          <Text style={[theme.typography.h3, { color: theme.colors.text, marginBottom: 10 }]}>Selected tag</Text>
-          <View style={{ gap: 8 }}>
-            <Badge label={truncateValue(selectedTag.tagId, 14, 6)} tone="primary" />
-            <ListRow title="Product" subtitle={selectedTag.itemName || "Unassigned"} />
-            <ListRow title="SKU" subtitle={selectedTag.itemSku || "-"} />
-            <ListRow title="Barcode" subtitle={selectedTag.itemBarcode || "-"} />
-            <ListRow title="Queued exits" subtitle={String(selectedTag.activeExitAuthorizations ?? 0)} />
-            <ListRow title="Assigned" subtitle={selectedTag.assignedAt ? new Date(selectedTag.assignedAt).toLocaleString() : "-"} />
-            <ListRow title="Updated" subtitle={new Date(selectedTag.updatedAt).toLocaleString()} />
-          </View>
-
-          <View style={{ height: 12 }} />
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            {selectedTag.status === "active" ? (
-              <AppButton title="Deactivate" onPress={() => void runTagAction("deactivate", selectedTag.tagId)} variant="secondary" disabled={saving} loading={saving} />
-            ) : (
-              <AppButton title="Activate" onPress={() => void runTagAction("activate", selectedTag.tagId)} variant="secondary" disabled={saving} loading={saving} />
-            )}
-            <AppButton
-              title={selectedTag.itemId ? "Change product" : "Assign product"}
-              onPress={() => setChangeProductOpen(true)}
-              variant="secondary"
-              disabled={saving}
-            />
-            <AppButton title="Unassign" onPress={() => void runTagAction("remove", selectedTag.tagId)} variant="danger" disabled={saving} loading={saving} />
-          </View>
-        </Card>
-      ) : null}
+      </Modal>
 
       <Modal visible={!!selectedTag && changeProductOpen} transparent animationType="fade" onRequestClose={() => setChangeProductOpen(false)}>
         <View
