@@ -241,7 +241,7 @@ app.get("/", (req: Request, res: Response) => {
       isProd,
       uptimeMs: Date.now() - metrics.startedAtMs,
       requestCount: metrics.httpRequestsTotal,
-      version: process.env.npm_package_version ?? "0.1.0",
+      version: process.env.npm_package_version ?? "0.2.0",
     })
   );
 });

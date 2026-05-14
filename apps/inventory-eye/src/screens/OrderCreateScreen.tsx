@@ -66,6 +66,7 @@ function SearchDock({
   onScan,
   loading,
   placeholder,
+  showScanButton = true,
 }: {
   inputRef?: React.RefObject<TextInput | null>;
   value: string;
@@ -73,6 +74,7 @@ function SearchDock({
   onScan: () => void;
   loading?: boolean;
   placeholder: string;
+  showScanButton?: boolean;
 }) {
   return (
     <View
@@ -108,21 +110,23 @@ function SearchDock({
         }}
       />
       {loading ? <ActivityIndicator size="small" color={theme.colors.textMuted} /> : null}
-      <Pressable
-        onPress={onScan}
-        style={({ pressed }) => ({
-          width: 40,
-          height: 40,
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: theme.colors.border,
-          backgroundColor: pressed ? theme.colors.surface : theme.colors.surface,
-          alignItems: "center",
-          justifyContent: "center",
-        })}
-      >
-        <Ionicons name="barcode-outline" size={18} color={theme.colors.textMuted} />
-      </Pressable>
+      {showScanButton ? (
+        <Pressable
+          onPress={onScan}
+          style={({ pressed }) => ({
+            width: 40,
+            height: 40,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            backgroundColor: pressed ? theme.colors.surface : theme.colors.surface,
+            alignItems: "center",
+            justifyContent: "center",
+          })}
+        >
+          <Ionicons name="barcode-outline" size={18} color={theme.colors.textMuted} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -715,6 +719,7 @@ export function OrderCreateScreen({ navigation }: Props) {
           onScan={() => setScanOpen(true)}
           loading={loading}
           placeholder="Search by name, SKU, barcode, location"
+          showScanButton={false}
         />
       </View>
       <AppButton title="Scan barcode" onPress={() => setScanOpen(true)} variant="secondary" iconName="barcode-outline" iconOnly />

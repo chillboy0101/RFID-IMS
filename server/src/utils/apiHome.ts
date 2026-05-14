@@ -39,7 +39,7 @@ function dbStateLabel(readyState: number): string {
 }
 
 function endpointLink(label: string, path: string): string {
-  return `<a class="endpoint" href="${escapeHtml(path)}"><span>${escapeHtml(label)}</span><code>${escapeHtml(path)}</code></a>`;
+  return `<a class="endpoint" href="${escapeHtml(path)}"><span>${escapeHtml(label)}</span></a>`;
 }
 
 export function renderApiHome(options: ApiHomeOptions): string {
@@ -221,14 +221,6 @@ export function renderApiHome(options: ApiHomeOptions): string {
         letter-spacing: -0.065em;
       }
 
-      .lead {
-        max-width: 620px;
-        margin: 16px 0 0;
-        color: var(--muted);
-        font-size: 16px;
-        line-height: 1.65;
-      }
-
       .hero-side {
         display: grid;
         align-content: center;
@@ -249,12 +241,6 @@ export function renderApiHome(options: ApiHomeOptions): string {
         font-size: 34px;
         font-weight: 900;
         letter-spacing: -0.05em;
-      }
-
-      .timer-note {
-        color: var(--muted);
-        font-size: 13px;
-        line-height: 1.5;
       }
 
       .grid {
@@ -300,7 +286,7 @@ export function renderApiHome(options: ApiHomeOptions): string {
       .endpoint {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        justify-content: center;
         gap: 12px;
         min-height: 56px;
         padding: 0 16px;
@@ -316,28 +302,9 @@ export function renderApiHome(options: ApiHomeOptions): string {
       }
 
       .endpoint span {
-        font-size: 14px;
+        font-size: 15px;
         font-weight: 900;
-      }
-
-      .endpoint code {
-        color: var(--muted);
-        font-size: 12px;
-      }
-
-      .footer {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        margin-top: 18px;
-        color: var(--muted);
-        font-size: 13px;
-      }
-
-      .footer code {
-        color: var(--ink);
-        font-weight: 800;
+        text-align: center;
       }
 
       @media (max-width: 820px) {
@@ -346,8 +313,7 @@ export function renderApiHome(options: ApiHomeOptions): string {
           padding: 20px 0 28px;
         }
 
-        .topbar,
-        .footer {
+        .topbar {
           align-items: flex-start;
           flex-direction: column;
         }
@@ -385,12 +351,10 @@ export function renderApiHome(options: ApiHomeOptions): string {
       <section class="hero">
         <div class="hero-main">
           <h1>Backend service is online.</h1>
-          <p class="lead">A minimal status surface for uptime, health checks, database state, and runtime readiness.</p>
         </div>
         <aside class="hero-side">
           <div class="timer-label">Live uptime</div>
           <div id="uptime" class="timer" data-uptime-ms="${Math.max(0, Math.floor(options.uptimeMs))}">${escapeHtml(uptime)}</div>
-          <div class="timer-note">Counting from the current process start.</div>
         </aside>
       </section>
 
@@ -417,11 +381,6 @@ export function renderApiHome(options: ApiHomeOptions): string {
         ${endpointLink("Health", "/health")}
         ${endpointLink("Status JSON", "/status.json")}
       </section>
-
-      <footer class="footer">
-        <span>Machine-readable checks stay on <code>/health</code>.</span>
-        <span>VDL Fulfilment Ops</span>
-      </footer>
     </main>
 
     <script>
