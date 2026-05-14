@@ -1,6 +1,6 @@
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Animated, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -74,7 +74,7 @@ const GATE_PRESETS = ["EXIT_MAIN", "EXIT_LOADING_BAY", "EXIT_REAR"] as const;
 const WINDOW_PRESETS = [5, 10, 15] as const;
 const DESKTOP_LINE_QTY_WIDTH = 60;
 const DESKTOP_LINE_PROGRESS_WIDTH = 184;
-const DESKTOP_LINE_STATE_WIDTH = 170;
+const DESKTOP_LINE_STATE_WIDTH = 130;
 
 function toneForStatus(status?: OrderStatus) {
   if (status === "fulfilled") return "success" as const;
@@ -103,64 +103,6 @@ function formatGateLabel(value?: string | null) {
 function formatDateTime(value?: string | null) {
   if (!value) return "-";
   return new Date(value).toLocaleString();
-}
-
-function PulseDot({ active }: { active: boolean }) {
-  const pulse = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (!active) {
-      pulse.stopAnimation();
-      pulse.setValue(0);
-      return;
-    }
-
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1200, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 1200, useNativeDriver: true }),
-      ])
-    );
-
-    loop.start();
-    return () => loop.stop();
-  }, [active, pulse]);
-
-  return (
-    <View style={{ width: 12, height: 12, alignItems: "center", justifyContent: "center" }}>
-      {active ? (
-        <Animated.View
-          style={{
-            position: "absolute",
-            width: 12,
-            height: 12,
-            borderRadius: 999,
-            backgroundColor: "rgba(34, 197, 94, 0.22)",
-            transform: [
-              {
-                scale: pulse.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [1, 1.9],
-                }),
-              },
-            ],
-            opacity: pulse.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0.45, 0],
-            }),
-          }}
-        />
-      ) : null}
-      <View
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: 999,
-          backgroundColor: active ? theme.colors.success : theme.colors.border,
-        }}
-      />
-    </View>
-  );
 }
 
 function SectionLabel({ label, right }: { label: string; right?: React.ReactNode }) {
@@ -301,27 +243,16 @@ function MenuAction({
   );
 }
 
-function buildTagDots(line: OrderWorkflowLine) {
+function lineState(line: OrderWorkflowLine): {
+  label: string;
+  tone: "default" | "primary" | "success" | "warning" | "danger";
+} {
   const readyUnits = Math.min(line.requestedQuantity, line.taggedReservedUnits + line.barcodeFallbackUnits + line.dispatchedUnits);
-  const dotCount = Math.max(1, Math.min(line.requestedQuantity, 8));
-  const filledDots = Math.round((readyUnits / Math.max(1, line.requestedQuantity)) * dotCount);
-
-  return Array.from({ length: dotCount }).map((_, index) => {
-    const filled = index < filledDots;
-    return (
-      <View
-        key={`${line.itemId}-${index}`}
-        style={{
-          width: 10,
-          height: 10,
-          borderRadius: 999,
-          backgroundColor: filled ? theme.colors.success : theme.colors.surface2,
-          borderWidth: 1,
-          borderColor: filled ? "rgba(34, 197, 94, 0.22)" : theme.colors.border,
-        }}
-      />
-    );
-  });
+  if (line.requestedQuantity <= 0) return { label: "No units", tone: "default" };
+  if (line.dispatchedUnits >= line.requestedQuantity) return { label: "Exited", tone: "success" };
+  if (line.activeAuthorizations > 0) return { label: "Gate live", tone: "primary" };
+  if (readyUnits >= line.requestedQuantity) return { label: "Ready", tone: "success" };
+  return { label: "Pending", tone: "warning" };
 }
 
 export function OrderDetailScreen({ navigation, route }: Props) {
@@ -693,25 +624,15 @@ export function OrderDetailScreen({ navigation, route }: Props) {
                   <Text style={[theme.typography.label, { color: theme.colors.textMuted }]}>Progress</Text>
                 </View>
                 <View style={{ width: DESKTOP_LINE_STATE_WIDTH, flexShrink: 0 }}>
-                  <Text style={[theme.typography.label, { color: theme.colors.textMuted }]}>Tag status</Text>
+                  <Text style={[theme.typography.label, { color: theme.colors.textMuted }]}>State</Text>
                 </View>
               </View>
 
               <View style={{ paddingBottom: 8 }}>
                 {workflow.lines.map((line, index) => {
                   const taggedUnits = Math.min(line.requestedQuantity, line.taggedReservedUnits + line.dispatchedUnits);
-                  const readyUnits = Math.min(line.requestedQuantity, line.taggedReservedUnits + line.barcodeFallbackUnits + line.dispatchedUnits);
                   const progressRatio = taggedUnits / Math.max(1, line.requestedQuantity);
-                  const lineReady = readyUnits >= line.requestedQuantity;
-                  const gateLive = line.activeAuthorizations > 0;
-                  const exited = line.dispatchedUnits >= line.requestedQuantity;
-                  const stateLabel = exited
-                    ? "Exited"
-                    : gateLive
-                      ? `${line.activeAuthorizations} gate live`
-                      : lineReady
-                        ? "Ready to authorize"
-                        : `${Math.max(0, line.requestedQuantity - readyUnits)} pending`;
+                  const state = lineState(line);
 
                   return (
                     <View
@@ -752,7 +673,7 @@ export function OrderDetailScreen({ navigation, route }: Props) {
                         >
                           <View
                             style={{
-                              width: `${Math.max(6, progressRatio * 100)}%`,
+                              width: `${progressRatio <= 0 ? 0 : Math.max(6, progressRatio * 100)}%`,
                               height: "100%",
                               borderRadius: 999,
                               backgroundColor: theme.colors.success,
@@ -765,19 +686,8 @@ export function OrderDetailScreen({ navigation, route }: Props) {
                         ) : null}
                       </View>
 
-                      <View style={{ width: DESKTOP_LINE_STATE_WIDTH, flexShrink: 0, gap: 10 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>{buildTagDots(line)}</View>
-                          <PulseDot active={lineReady && !exited} />
-                        </View>
-                        <Text
-                          style={[
-                            theme.typography.caption,
-                            { color: lineReady || gateLive || exited ? theme.colors.text : theme.colors.textMuted },
-                          ]}
-                        >
-                          {stateLabel}
-                        </Text>
+                      <View style={{ width: DESKTOP_LINE_STATE_WIDTH, flexShrink: 0, alignItems: "flex-start" }}>
+                        <Badge label={state.label} tone={state.tone} responsive={false} />
                       </View>
                     </View>
                   );
@@ -788,10 +698,8 @@ export function OrderDetailScreen({ navigation, route }: Props) {
             <View style={{ padding: theme.spacing.md, gap: 12 }}>
               {workflow.lines.map((line) => {
                 const taggedUnits = Math.min(line.requestedQuantity, line.taggedReservedUnits + line.dispatchedUnits);
-                const readyUnits = Math.min(line.requestedQuantity, line.taggedReservedUnits + line.barcodeFallbackUnits + line.dispatchedUnits);
                 const progressRatio = taggedUnits / Math.max(1, line.requestedQuantity);
-                const lineReady = readyUnits >= line.requestedQuantity;
-                const exited = line.dispatchedUnits >= line.requestedQuantity;
+                const state = lineState(line);
 
                 return (
                   <View
@@ -827,7 +735,7 @@ export function OrderDetailScreen({ navigation, route }: Props) {
                     >
                       <View
                         style={{
-                          width: `${Math.max(6, progressRatio * 100)}%`,
+                          width: `${progressRatio <= 0 ? 0 : Math.max(6, progressRatio * 100)}%`,
                           height: "100%",
                           borderRadius: 999,
                           backgroundColor: theme.colors.success,
@@ -838,20 +746,8 @@ export function OrderDetailScreen({ navigation, route }: Props) {
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                       <View>
                         <Text style={[theme.typography.body, { color: theme.colors.text }]}>{`${taggedUnits}/${line.requestedQuantity} tagged`}</Text>
-                        <MutedText>
-                          {exited
-                            ? "Exited"
-                            : line.activeAuthorizations > 0
-                              ? `${line.activeAuthorizations} gate live`
-                              : lineReady
-                                ? "Ready to authorize"
-                                : `${Math.max(0, line.requestedQuantity - readyUnits)} pending`}
-                        </MutedText>
                       </View>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>{buildTagDots(line)}</View>
-                        <PulseDot active={lineReady && !exited} />
-                      </View>
+                      <Badge label={state.label} tone={state.tone} responsive={false} />
                     </View>
                   </View>
                 );
