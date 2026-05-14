@@ -465,41 +465,55 @@ export function OrderDetailScreen({ navigation, route }: Props) {
   };
 
   const actionMenu = actionMenuOpen ? (
-    <View
-      style={{
-        position: "absolute",
-        top: isDesktopWeb ? 66 : 128,
-        right: theme.spacing.md,
-        left: isDesktopWeb ? undefined : theme.spacing.md,
-        width: isDesktopWeb ? 240 : undefined,
-        borderRadius: theme.radius.sm,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
-        backgroundColor: theme.colors.surface,
-        overflow: "hidden",
-        zIndex: 10000,
-        elevation: 40,
-        ...shadow(2),
-      }}
-    >
-      {canUpdateStatus ? (
-        isClosed ? (
-          <MenuAction label="Order is closed" disabled onPress={() => undefined} />
+    <>
+      <Pressable
+        accessible={false}
+        onPress={() => setActionMenuOpen(false)}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: -4000,
+          right: -4000,
+          bottom: -4000,
+          zIndex: 9999,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          top: isDesktopWeb ? 66 : 128,
+          right: theme.spacing.md,
+          left: isDesktopWeb ? undefined : theme.spacing.md,
+          width: isDesktopWeb ? 240 : undefined,
+          borderRadius: theme.radius.sm,
+          borderWidth: 1,
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.surface,
+          overflow: "hidden",
+          zIndex: 10000,
+          elevation: 40,
+          ...shadow(2),
+        }}
+      >
+        {canUpdateStatus ? (
+          isClosed ? (
+            <MenuAction label="Order is closed" disabled onPress={() => undefined} />
+          ) : (
+            actions.map((action) => (
+              <MenuAction
+                key={action.title}
+                label={action.title}
+                danger={action.variant === "danger"}
+                disabled={saving}
+                onPress={() => runMenuAction(action.onPress)}
+              />
+            ))
+          )
         ) : (
-          actions.map((action) => (
-            <MenuAction
-              key={action.title}
-              label={action.title}
-              danger={action.variant === "danger"}
-              disabled={saving}
-              onPress={() => runMenuAction(action.onPress)}
-            />
-          ))
-        )
-      ) : (
-        <MenuAction label="View only" disabled onPress={() => undefined} />
-      )}
-    </View>
+          <MenuAction label="View only" disabled onPress={() => undefined} />
+        )}
+      </View>
+    </>
   ) : null;
 
   const overviewHeader = (
