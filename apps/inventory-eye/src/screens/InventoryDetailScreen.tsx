@@ -48,11 +48,6 @@ type Response = { ok: true; item: InventoryItem };
 
 type Props = NativeStackScreenProps<InventoryStackParamList, "InventoryDetail">;
 
-type FlowChip = {
-  label: string;
-  tone?: "default" | "primary" | "success" | "warning" | "danger";
-};
-
 type FlowBoardRow = {
   key: string;
   label: string;
@@ -60,7 +55,6 @@ type FlowBoardRow = {
   secondary?: string;
   progressValue?: number;
   progressTotal?: number;
-  chips?: FlowChip[];
 };
 
 type StepStage = {
@@ -365,7 +359,6 @@ function FlowMetricRow({
   secondary,
   progressValue,
   progressTotal,
-  chips,
   divider = true,
 }: {
   label: string;
@@ -373,7 +366,6 @@ function FlowMetricRow({
   secondary?: string;
   progressValue?: number;
   progressTotal?: number;
-  chips?: FlowChip[];
   divider?: boolean;
 }) {
   const showProgress = typeof progressValue === "number" && typeof progressTotal === "number";
@@ -415,14 +407,6 @@ function FlowMetricRow({
           />
         </View>
       ) : null}
-
-      {chips?.length ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {chips.map((chip) => (
-            <Badge key={`${label}-${chip.label}`} label={chip.label} tone={chip.tone ?? "default"} responsive={false} />
-          ))}
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -450,8 +434,6 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
   const reservedUnits = flow?.reservedUnits ?? 0;
   const pickedUnits = flow?.pickedUnits ?? 0;
   const dispatchedUnits = flow?.dispatchedUnits ?? 0;
-  const activeExitAuthorizations = flow?.activeExitAuthorizations ?? 0;
-  const awaitingUnits = (flow?.awaitingTagUnits ?? 0) + (flow?.untrackedUnits ?? 0);
   const gateFlowUnits = Math.min(quantity, reservedUnits + pickedUnits);
 
   const canDelete = effectiveRole === "manager" || effectiveRole === "admin";
@@ -468,20 +450,12 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
           label: "Next step",
           value: flow.nextStep || "Receive stock",
           secondary: "Open RFID Hub, arm this item, then scan the first product tag.",
-          chips: [
-            { label: "Qty 0" },
-            { label: "Awaiting RFID", tone: "warning" as const },
-          ] satisfies FlowChip[],
         },
         {
           key: "receiving-state",
           label: "Receiving state",
           value: "Waiting for first tag",
           secondary: "Stock will appear here only after hardware sends a product RFID tag.",
-          chips: [
-            { label: "No units yet" },
-            { label: "No tag assigned" },
-          ] satisfies FlowChip[],
         },
       ];
     }
@@ -498,11 +472,6 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
         label: "Next step",
         value: flow.nextStep,
         secondary: item.status?.toLowerCase() === "inactive" ? "Item is inactive until stock handling resumes." : undefined,
-        chips: [
-          { label: `Qty ${quantity}` },
-          ...(quantity > 0 && item.quantity <= item.reorderLevel ? [{ label: "Low stock", tone: "warning" as const }] : []),
-          ...(activeExitAuthorizations > 0 ? [{ label: `Gate live ${activeExitAuthorizations}`, tone: "primary" as const }] : []),
-        ] satisfies FlowChip[],
       },
       {
         key: "tracked",
@@ -511,7 +480,6 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
         secondary: flow.untrackedUnits > 0 ? `${flow.untrackedUnits} still bulk-only` : "All stock has unit tracking.",
         progressValue: trackedUnits,
         progressTotal: quantity,
-        chips: [{ label: `Untracked ${flow.untrackedUnits}`, tone: flow.untrackedUnits > 0 ? "warning" : "success" as const }],
       },
       {
         key: "tagged",
@@ -520,11 +488,6 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
         secondary: taggedSecondary,
         progressValue: exitReadyUnits,
         progressTotal: quantity,
-        chips: [
-          { label: `Tagged ${taggedUnits}`, tone: taggedUnits > 0 ? "success" : "default" as const },
-          { label: flow.barcodeReady ? "Barcode ready" : "Barcode missing", tone: flow.barcodeReady ? "success" : "warning" as const },
-          { label: `Awaiting ${awaitingUnits}`, tone: awaitingUnits > 0 ? "warning" : "default" as const },
-        ] satisfies FlowChip[],
       },
       {
         key: "reserved",
@@ -533,11 +496,6 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
         secondary: reservedSecondary,
         progressValue: gateFlowUnits,
         progressTotal: quantity,
-        chips: [
-          { label: `Reserved ${reservedUnits}`, tone: reservedUnits > 0 ? "primary" : "default" as const },
-          { label: `Picked ${pickedUnits}`, tone: pickedUnits > 0 ? "warning" : "default" as const },
-          { label: `Gate live ${activeExitAuthorizations}`, tone: activeExitAuthorizations > 0 ? "primary" : "default" as const },
-        ] satisfies FlowChip[],
       },
       {
         key: "dispatched",
@@ -546,15 +504,9 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
         secondary: dispatchedSecondary,
         progressValue: dispatchedUnits,
         progressTotal: quantity,
-        chips: [
-          {
-            label: flow.missingExitTrackingUnits > 0 ? `${flow.missingExitTrackingUnits} need exit tracking` : "Exit tracking clear",
-            tone: flow.missingExitTrackingUnits > 0 ? "warning" : "success",
-          },
-        ] satisfies FlowChip[],
       },
     ];
-  }, [activeExitAuthorizations, awaitingUnits, dispatchedUnits, flow, gateFlowUnits, item, pickedUnits, quantity, reservedUnits, taggedUnits, trackedUnits, exitReadyUnits]);
+  }, [dispatchedUnits, flow, gateFlowUnits, item, pickedUnits, quantity, reservedUnits, taggedUnits, trackedUnits, exitReadyUnits]);
 
   useEffect(() => {
     return () => {
@@ -724,31 +676,33 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
         iconName="ellipsis-horizontal"
         iconOnly
       />
-      {actionMenuOpen ? (
-        <View
-          style={{
-            position: "absolute",
-            top: 52,
-            right: 0,
-            width: 220,
-            borderRadius: theme.radius.sm,
-            borderWidth: 1,
-            borderColor: theme.colors.border,
-            backgroundColor: theme.colors.surface,
-            overflow: "hidden",
-            zIndex: 1000,
-            elevation: 24,
-            ...shadow(2),
-          }}
-        >
-          <MenuAction label="Edit" onPress={() => runMenuAction(() => navigation.navigate("InventoryEdit", { id }))} />
-          <MenuAction label="Adjust quantity" onPress={() => runMenuAction(() => navigation.navigate("InventoryAdjust", { id }))} />
-          <MenuAction label="View logs" onPress={() => runMenuAction(() => navigation.navigate("InventoryLogs", { id }))} />
-          <MenuAction label="Delete" danger disabled={!canDelete} onPress={() => runMenuAction(() => void onDelete())} />
-        </View>
-      ) : null}
     </View>
   );
+
+  const actionMenu = actionMenuOpen ? (
+    <View
+      style={{
+        position: "absolute",
+        top: isDesktopWeb ? 66 : 128,
+        right: theme.spacing.md,
+        left: isDesktopWeb ? undefined : theme.spacing.md,
+        width: isDesktopWeb ? 220 : undefined,
+        borderRadius: theme.radius.sm,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.surface,
+        overflow: "hidden",
+        zIndex: 10000,
+        elevation: 40,
+        ...shadow(2),
+      }}
+    >
+      <MenuAction label="Edit" onPress={() => runMenuAction(() => navigation.navigate("InventoryEdit", { id }))} />
+      <MenuAction label="Adjust quantity" onPress={() => runMenuAction(() => navigation.navigate("InventoryAdjust", { id }))} />
+      <MenuAction label="View logs" onPress={() => runMenuAction(() => navigation.navigate("InventoryLogs", { id }))} />
+      <MenuAction label="Delete" danger disabled={!canDelete} onPress={() => runMenuAction(() => void onDelete())} />
+    </View>
+  ) : null;
 
   const headerCard = (
     <Card style={{ padding: 0, overflow: "visible", zIndex: actionMenuOpen ? 20 : 1 }}>
@@ -794,21 +748,13 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
       </View>
 
       <FlowStepper stages={stages} compact={!isDesktopWeb} />
+      {actionMenu}
     </Card>
   );
 
   const flowBoard = (
     <Card style={{ padding: 0 }}>
-      <SectionLabel
-        label="Flow board"
-        right={
-          flow ? (
-            <Text style={[theme.typography.label, { color: exitReadyUnits >= quantity && quantity > 0 ? theme.colors.success : theme.colors.textMuted }]}>
-              {quantity > 0 ? `${exitReadyUnits}/${quantity} ready` : "Awaiting receipt"}
-            </Text>
-          ) : null
-        }
-      />
+      <SectionLabel label="Flow board" />
 
       {flowBoardRows.length ? (
         flowBoardRows.map((row, index) => (
@@ -819,7 +765,6 @@ export function InventoryDetailScreen({ navigation, route }: Props) {
             secondary={row.secondary}
             progressValue={row.progressValue}
             progressTotal={row.progressTotal}
-            chips={row.chips}
             divider={index < flowBoardRows.length - 1}
           />
         ))
